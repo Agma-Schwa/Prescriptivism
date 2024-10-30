@@ -1,0 +1,34 @@
+module;
+#include <format>
+#include <chrono>
+#include <print>
+export module pr.utils;
+export import base;
+export namespace pr {
+using namespace base;
+
+struct Profile;
+
+template <typename ...Args>
+void Log(std::format_string<Args...> fmt, Args&&... args);
+}
+
+namespace pr {
+void LogImpl(std::string);
+}
+
+struct pr::Profile {
+    std::string name;
+    chr::system_clock::time_point start = chr::system_clock::now();
+    Profile(std::string name) : name(name) {}
+    ~Profile() {
+        auto end = chr::system_clock::now();
+        auto duration = chr::duration_cast<chr::milliseconds>(end - start);
+        std::println("Profile ({}): {}ms", name, duration.count());
+    }
+};
+
+template <typename ...Args>
+void pr::Log(std::format_string<Args...> fmt, Args&&... args) {
+    pr::LogImpl(std::format(fmt, std::forward<Args>(args)...));
+}

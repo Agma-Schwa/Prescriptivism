@@ -1,0 +1,130 @@
+module;
+#include <base/Macros.hh>
+#include <memory>
+#include <span>
+#include <type_traits>
+#include <optional>
+#include <cstring>
+#include <vector>
+export module pr.tcp;
+import pr.utils;
+
+export namespace pr::net {
+class TCPCallbacks;
+class TCPServer;
+class TCPConnexion;
+class ReceiveBuffer;
+
+constexpr u16 DefaultPort = 33'014;
+}
+
+class pr::net::ReceiveBuffer {
+    std::span<std::byte> data;
+
+public:
+    ReceiveBuffer(std::vector<std::byte>& buffer) : data(buffer) {}
+
+    /// Read data from the buffer and discard it.
+    ///
+    /// If there are fewer bytes in the buffer than requested,
+    /// nothing is read and the remains unchanged. Otherwise,
+    /// \p n bytes are removed from the start of the buffer and
+    /// returned.
+    ///
+    /// \param n The number of bytes to read.
+    auto read(usz n) -> std::span<std::byte> {
+        if (n > data.size()) return {};
+        auto result = data.subspan(0, n);
+        data = data.subspan(n);
+        return result;
+    }
+
+    /// As read(), but attempts to read a value of a specific type
+    /// instead, returning an empty optional if there are not enough
+    /// bytes in the buffer.
+    template <typename T>
+    requires std::is_trivially_copyable_v<T> and std::is_default_constructible_v<T>
+    auto read() -> std::optional<T> {
+        if (data.size() < sizeof(T)) return std::nullopt;
+        auto n = read(sizeof(T));
+        T result;
+        std::memcpy(&result, n.data(), sizeof(T));
+        return result;
+    }
+
+    /// How many bytes are in the buffer.
+    auto size() const -> usz {
+        return data.size();
+    }
+};
+
+/// Class that implements common functionality for TCP connexions
+/// that must be implemented by users.
+class pr::net::TCPCallbacks {
+    LIBBASE_IMMOVABLE(TCPCallbacks);
+
+protected:
+    TCPCallbacks() = default;
+
+public:
+    virtual ~TCPCallbacks() = default;
+
+    /// Called from TCPServer::receive().
+    ///
+    /// \param connexion The connexion that sent the data.
+    /// \param data A buffer that contains any unprocessed data since
+    /// the last call to receive(). The buffer should be updated to
+    /// remove any data that has been processed.
+    virtual void receive(TCPConnexion& connexion, ReceiveBuffer& data) = 0;
+};
+
+/// A reference type that holds a TCP connexion that can be
+/// used to communicate with a remote peer. This can be a
+/// connexion to a server or to a client.
+class pr::net::TCPConnexion {
+    LIBBASE_DECLARE_HIDDEN_IMPL(TCPConnexion);
+
+    friend TCPServer; // Server needs to create client connexions.
+
+public:
+    /// Connect to a server.
+    static auto Connect(std::string_view remote_ip, u16 port) -> Result<TCPConnexion>;
+
+    /// Get the ip address of the remote peer.
+    auto address() const -> std::string_view;
+
+    /// Close the connexion.
+    void disconnect();
+};
+
+/// A reference type that holds a TCP server that can accept
+/// incoming connexions.
+class pr::net::TCPServer {
+    LIBBASE_DECLARE_HIDDEN_IMPL(TCPServer);
+
+public:
+    /// Create a server socket that listens on the given port.
+    static auto Create(u16 port, u32 max_connexions) -> Result<TCPServer>;
+
+    /// Get the connexions that we have accepted.
+    auto connexions() -> std::span<TCPConnexion>;
+
+    /// Receive data from existing connexions. Calls
+    /// TCPEventHandler::Receive() with the data.
+    void receive();
+
+    /// Get the server port.
+    auto port() const -> u16;
+
+    /// Set the server callback handler.
+    void set_callbacks(TCPCallbacks& callbacks);
+
+    /// Accept incoming connexions and throw away any that have
+    /// gone stale. If there is an error with a connexion, it
+    /// is logged and the connexion is thrown away.
+    ///
+    /// Any references to connexions that have been closed must
+    /// be cleaned up before this is called, as this deletes any
+    /// closed connexions.
+    void update_connexions();
+};

@@ -1,0 +1,14 @@
+## IDE and editor files.
+.idea/
+.vscode/
+.cache/
+
+## Build files.
+/out/
+/Prescriptivism
+/PrescriptivismServer
+/Prescriptivism.exe
+/PrescriptivismServer.exe
+
+## Valgrind.
+callgrind.out.*

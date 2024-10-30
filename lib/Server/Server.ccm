@@ -1,0 +1,22 @@
+module;
+#include <base/Macros.hh>
+#include <memory>
+export module pr.server;
+
+import base;
+import pr.utils;
+
+export namespace pr::server {
+class Server;
+}
+
+/// Prescriptivism server instance.
+class pr::server::Server {
+    LIBBASE_DECLARE_HIDDEN_IMPL(Server);
+
+public:
+    static auto Create(u16 port) -> Result<Server>;
+
+    /// Run the server for ever.
+    [[noreturn]] void Run();
+};
