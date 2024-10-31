@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(Prescriptivism VERSION 0.1.0 LANGUAGES CXX)
+project(Prescriptivism VERSION 0.1.0 LANGUAGES CXX C)
 
 ## ============================================================================
 ##  Global CMake Variables.
@@ -41,12 +41,13 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clan
         -Wundef           # Invalid #undef or undefined macro in #if.
         -Wcast-align      # Casting that changes alignment.
         -Wconversion      # Implicit conversions.
-        -Wsign-conversion # Implicit sign conversions.
         -Wformat=2        # Stricter format checking.
 
         ## Disabled warnings.
+        -Wno-sign-conversion
         -Wno-unused-function
         -Wno-unused-local-typedefs
+        -Wno-implicit-int-float-conversion
 
         ## NULL Errors.
         -Werror=nonnull # Passing NULL to nonnull parameter.
@@ -220,6 +221,12 @@ set_source_files_properties(${imgui_sources}
     "-Wno-conversion -Wno-sign-conversion -Wno-implicit-int-float-conversion"
 )
 
+set_source_files_properties(libs/Client/impl.c
+    PROPERTIES
+    COMPILE_FLAGS
+    -Wno-error=implicit-fallthrough
+)
+
 add_executable(Prescriptivism ${client_sources} ${imgui_sources})
 target_sources(Prescriptivism PUBLIC FILE_SET CXX_MODULES FILES ${client_modules})
 target_link_libraries(Prescriptivism PRIVATE
@@ -230,9 +237,15 @@ target_link_libraries(Prescriptivism PRIVATE
     webp
 )
 
+target_compile_options(Prescriptivism PRIVATE
+    "--embed-dir=${PROJECT_SOURCE_DIR}/assets"
+    -Wno-c23-extensions
+)
+
 target_include_directories(Prescriptivism PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui"
     "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends"
+    "${PROJECT_SOURCE_DIR}/libs/Client"
 )
 
 ## ============================================================================

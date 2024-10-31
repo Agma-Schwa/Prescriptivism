@@ -21,7 +21,7 @@ void MenuScreen::render(Renderer& renderer) {
 // =============================================================================
 //  API
 // =============================================================================
-Client::Client(): renderer(Renderer::Create(800, 600)) {}
+Client::Client(): renderer(Renderer::Create(1920, 1080)) {}
 
 void Client::Run() {
     constexpr chr::milliseconds ClientTickDuration = 16ms;

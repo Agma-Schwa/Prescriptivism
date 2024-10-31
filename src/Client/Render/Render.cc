@@ -1,4 +1,5 @@
 module;
+#include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <glbinding-aux/debug.h>
 #include <glbinding/gl/gl.h>
@@ -9,6 +10,7 @@ module;
 #include <libassert/assert.hpp>
 #include <memory>
 #include <SDL3/SDL.h>
+#include <stb_truetype.h>
 module pr.client.render;
 
 using namespace gl;
@@ -26,6 +28,146 @@ struct SDLCallImpl {
         if (not ptr) Log("SDL call failed: {}", SDL_GetError());
         return ptr;
     }
+};
+
+constexpr char IdentityVertexShaderData[]{
+#embed "Shaders/Identity.vert"
+};
+
+constexpr char IdentityFragmentShaderData[]{
+#embed "Shaders/Identity.frag"
+};
+
+// =============================================================================
+//  OpenGL Wrappers
+// =============================================================================
+template <auto deleter>
+class Descriptor {
+protected:
+    GLuint descriptor{};
+    Descriptor() {}
+
+public:
+    Descriptor(const Descriptor&) = delete;
+    Descriptor(Descriptor&& other) : descriptor(std::exchange(other.descriptor, 0)) {}
+    Descriptor& operator=(const Descriptor&) = delete;
+    Descriptor& operator=(Descriptor&& other) {
+        std::swap(descriptor, other.descriptor);
+        return *this;
+    }
+
+    ~Descriptor() {
+        if (descriptor) {
+            if constexpr (requires { deleter(1, &descriptor); }) deleter(1, &descriptor);
+            else deleter(descriptor);
+        }
+    }
+};
+
+enum class VertexLayout {
+    Position2D, /// vec2f position
+};
+
+class VertexArrays;
+class VertexBuffer : Descriptor<glDeleteBuffers> {
+    friend VertexArrays;
+
+public:
+    VertexBuffer() { glGenBuffers(1, &descriptor); }
+
+    /// Binds the buffer.
+    void bind() const { glBindBuffer(GL_ARRAY_BUFFER, descriptor); }
+
+    /// Copies data to the buffer.
+    void copy_data(std::span<const f32> data, GLenum usage = GL_STATIC_DRAW) {
+        bind();
+        glBufferData(GL_ARRAY_BUFFER, data.size_bytes(), data.data(), usage);
+    }
+};
+
+class VertexArrays : Descriptor<glDeleteVertexArrays> {
+    VertexLayout layout;
+
+public:
+    VertexArrays(VertexLayout layout) : layout{layout} { glGenVertexArrays(1, &descriptor); }
+
+    /// Creates a new buffer and attaches it to the vertex array.
+    ///
+    /// This function binds both the buffer and the VAO.
+    auto add_buffer() -> VertexBuffer {
+        VertexBuffer vbo;
+        bind();
+        glBindBuffer(GL_ARRAY_BUFFER, vbo.descriptor);
+        ApplyLayout();
+        return vbo;
+    }
+
+    /// Binds the vertex array.
+    void bind() const { glBindVertexArray(descriptor); }
+
+    /// Unbinds the vertex array.
+    void unbind() const { glBindVertexArray(0); }
+
+private:
+    void ApplyLayout() {
+        switch (layout) {
+            case VertexLayout::Position2D:
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+                return;
+        }
+
+        Unreachable("Invalid vertex layout");
+    }
+};
+
+class ShaderProgram : Descriptor<glDeleteProgram> {
+    struct Shader : Descriptor<glDeleteShader> {
+        friend ShaderProgram;
+        Shader(GLenum type, std::span<const char> source) {
+            descriptor = glCreateShader(type);
+            auto size = GLint(source.size());
+            auto data = source.data();
+            glShaderSource(descriptor, 1, &data, &size);
+            glCompileShader(descriptor);
+
+            GLint success;
+            glGetShaderiv(descriptor, GL_COMPILE_STATUS, &success);
+            if (not success) {
+                // Throw this on the heap since it’s huge.
+                auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
+                glGetShaderInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
+                Log("Shader compilation failed: {}", info_log.get());
+            }
+        }
+    };
+
+public:
+    ShaderProgram() = default;
+    ShaderProgram(
+        std::span<const char> vertex_shader_source,
+        std::span<const char> fragment_shader_source
+    ) {
+        Shader vertex_shader(GL_VERTEX_SHADER, vertex_shader_source);
+        Shader fragment_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
+
+        descriptor = glCreateProgram();
+        glAttachShader(descriptor, vertex_shader.descriptor);
+        glAttachShader(descriptor, fragment_shader.descriptor);
+        glLinkProgram(descriptor);
+
+        GLint success;
+        glGetProgramiv(descriptor, GL_LINK_STATUS, &success);
+        if (not success) {
+            // Throw this on the heap since it’s huge.
+            auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
+            glGetProgramInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
+            Log("Shader program linking failed: {}", info_log.get());
+        }
+    }
+
+    /// Set this as the active shader.
+    void use() const { glUseProgram(descriptor); }
 };
 
 // ============================================================================
@@ -49,6 +191,8 @@ struct Renderer::Impl {
     SDL_Window* window;
     SDL_GLContextState* context;
     ImGuiContext* imgui;
+
+    ShaderProgram default_shader;
 
     Impl(int initial_wd, int initial_ht);
     ~Impl();
@@ -86,6 +230,12 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
 
     // Enable VSync.
     check SDL_GL_SetSwapInterval(1);
+
+    // Load the default shader.
+    default_shader = ShaderProgram(
+        std::span{IdentityVertexShaderData},
+        std::span{IdentityFragmentShaderData}
+    );
 
     // Initialise ImGui.
     IMGUI_CHECKVERSION();
@@ -151,6 +301,20 @@ Renderer::Frame::~Frame() {
     // Render ImGui data.
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Draw a triangle.
+    f32 points[] { // clang-format off
+        -0.5f, -0.5f,
+        0.0f, 0.5f,
+        0.5f, -0.5f
+    }; // clang-format on
+
+    VertexArrays vao{VertexLayout::Position2D};
+    VertexBuffer vbo = vao.add_buffer();
+    vbo.copy_data(points);
+    r.impl->default_shader.use();
+    vao.bind();
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 
     // Swap buffers.
     check SDL_GL_SwapWindow(r.impl->window);
