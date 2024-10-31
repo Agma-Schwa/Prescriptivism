@@ -1,5 +1,6 @@
 module;
 #include <base/Macros.hh>
+#include <memory>
 export module pr.client;
 import pr.client.render;
 
@@ -7,8 +8,36 @@ export namespace pr::client {
 class Client;
 }
 
+namespace pr::client {
+class Screen;
+class MenuScreen;
+}
+
+class pr::client::Screen {
+    LIBBASE_IMMOVABLE(Screen);
+
+protected:
+    Screen() = default;
+
+public:
+    virtual ~Screen() = default;
+
+    /// Render this screen.
+    virtual void render(Renderer& r) = 0;
+};
+
+class pr::client::MenuScreen : public Screen {
+public:
+    MenuScreen() = default;
+
+    void render(Renderer& r) override;
+};
+
 class pr::client::Client {
     LIBBASE_IMMOVABLE(Client);
+
+    std::unique_ptr<MenuScreen> menu_screen = std::make_unique<MenuScreen>();
+    Screen* current_screen = menu_screen.get();
 
 public:
     Renderer renderer;

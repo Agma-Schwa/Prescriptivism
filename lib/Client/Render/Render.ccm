@@ -49,16 +49,19 @@ public:
         LIBBASE_IMMOVABLE(Frame);
         Renderer& r;
         friend Renderer;
-        explicit Frame(Renderer& r) : r(r) {}
+        explicit Frame(Renderer& r);
     public:
         ~Frame();
     };
 
     static auto Create(int initial_wd, int initial_ht) -> Renderer;
 
-    /// Start a new frame.
-    auto frame() -> Frame;
-
     /// Clear the screen.
     void clear(Colour c = Colour::White);
+
+    /// Draw text at a position.
+    void draw_text(std::string_view text, int x, int y, u32 font_size, Colour c = Colour::White);
+
+    /// Start a new frame.
+    auto frame() -> Frame;
 };

@@ -165,7 +165,13 @@ FetchContent_Declare(glbinding
     GIT_TAG v3.3.0
 )
 
-FetchContent_MakeAvailable(base sdl3 webp glbinding)
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui
+    GIT_TAG v1.91.4
+    SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui"
+)
+
+FetchContent_MakeAvailable(base sdl3 webp glbinding imgui)
 
 ## ============================================================================
 ##  Shared
@@ -195,7 +201,26 @@ target_link_libraries(PrescriptivismServer PRIVATE
 file(GLOB_RECURSE client_sources src/Client/*.cc)
 file(GLOB_RECURSE client_modules lib/Client/*.ccm)
 
-add_executable(Prescriptivism ${client_sources})
+## ImGui doesn’t use CMake for some ungodly reason, so
+## we’ve added it as a submodule. It also just doesn’t
+## work to compile this as a separate library, so we’re
+## just going to add the source files to the main exe.
+file(GLOB imgui_sources
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/*.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/*.cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_sdl3.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_sdl3.cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_opengl3.cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_opengl3.h"
+)
+
+set_source_files_properties(${imgui_sources}
+    PROPERTIES
+    COMPILE_FLAGS
+    "-Wno-conversion -Wno-sign-conversion -Wno-implicit-int-float-conversion"
+)
+
+add_executable(Prescriptivism ${client_sources} ${imgui_sources})
 target_sources(Prescriptivism PUBLIC FILE_SET CXX_MODULES FILES ${client_modules})
 target_link_libraries(Prescriptivism PRIVATE
     PrescriptivismShared
@@ -203,6 +228,11 @@ target_link_libraries(Prescriptivism PRIVATE
     glbinding::glbinding
     glbinding::glbinding-aux
     webp
+)
+
+target_include_directories(Prescriptivism PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui"
+    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends"
 )
 
 ## ============================================================================
