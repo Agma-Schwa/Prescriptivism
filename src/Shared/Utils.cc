@@ -20,11 +20,13 @@ std::jthread LoggerThread([](std::stop_token tok) {
     std::atexit([] {
         LoggerThread.request_stop();
         LoggerQueue.emplace();
+        LoggerCV.notify_one();
     });
 
-    while (not tok.stop_requested()) {
+    for (;;) {
         std::unique_lock lock(LoggerMutex);
         LoggerCV.wait(lock, [&] { return not LoggerQueue.empty(); });
+        if (tok.stop_requested()) return;
         auto [time, msg] = std::move(LoggerQueue.front());
         LoggerQueue.pop();
         lock.unlock();

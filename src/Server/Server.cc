@@ -15,24 +15,7 @@ using namespace pr::server;
 // =============================================================================
 //  Impl
 // =============================================================================
-struct Server::Impl : net::TCPCallbacks {
-    LIBBASE_IMMOVABLE(Impl);
-
-    net::TCPServer server;
-
-    /// Create and start the server.
-    Impl(net::TCPServer srv) : server(std::move(srv)) {
-        server.set_callbacks(*this);
-    }
-
-    /// Receive data from a connexion.
-    void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;
-
-    /// Run the server for ever.
-    [[noreturn]] void Run();
-};
-
-void Server::Impl::receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) {
+void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) {
     auto sz = buffer.size();
     auto data = buffer.read(sz);
     Log(
@@ -43,7 +26,13 @@ void Server::Impl::receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer
     );
 }
 
-void Server::Impl::Run() {
+// =============================================================================
+//  API
+// =============================================================================
+Server::Server(u16 port): server(net::TCPServer::Create(port, 200).value()) {}
+
+
+void Server::Run() {
     constexpr chr::milliseconds ServerTickDuration = 33ms;
     Log("Server listening on port {}", server.port());
     for (;;) {
@@ -67,17 +56,3 @@ void Server::Impl::Run() {
         }
     }
 }
-
-// =============================================================================
-//  API
-// =============================================================================
-LIBBASE_DEFINE_HIDDEN_IMPL(Server);
-
-auto Server::Create(u16 port) -> Result<Server> {
-    Server srv;
-    auto tcp = Try(net::TCPServer::Create(port, 200));
-    srv.impl = std::make_unique<Impl>(std::move(tcp));
-    return srv;
-}
-
-void Server::Run() { impl->Run(); }

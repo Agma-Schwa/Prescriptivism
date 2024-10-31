@@ -1,0 +1,64 @@
+module;
+#include <base/Macros.hh>
+#include <memory>
+export module pr.client.render;
+import pr.utils;
+
+export namespace pr::client {
+struct Colour;
+
+class Renderer;
+}
+
+struct pr::client::Colour {
+    u8 r;
+    u8 g;
+    u8 b;
+    u8 a;
+
+    /// Create a new colour.
+    constexpr Colour(u8 r, u8 g, u8 b, u8 a = 255) : r(r), g(g), b(b), a(a) {}
+    constexpr static auto ABGR(u32 abgr) -> Colour {
+        if constexpr (std::endian::native == std::endian::big)
+            abgr = std::byteswap(abgr);
+
+        return {
+            u8(abgr & 0xFF),
+            u8(abgr >> 8 & 0xFF),
+            u8(abgr >> 16 & 0xFF),
+            u8(abgr >> 24 & 0xFF),
+        };
+    }
+
+    f32 red() const { return r / 255.0f; }
+    f32 green() const { return g / 255.0f; }
+    f32 blue() const { return b / 255.0f; }
+    f32 alpha() const { return a / 255.0f; }
+
+    static constinit const Colour White;
+};
+
+constexpr pr::client::Colour pr::client::Colour::White = {255, 255, 255, 255};
+
+/// A renderer that renders to a window.
+class pr::client::Renderer {
+    LIBBASE_DECLARE_HIDDEN_IMPL(Renderer);
+
+public:
+    class Frame {
+        LIBBASE_IMMOVABLE(Frame);
+        Renderer& r;
+        friend Renderer;
+        explicit Frame(Renderer& r) : r(r) {}
+    public:
+        ~Frame();
+    };
+
+    static auto Create(int initial_wd, int initial_ht) -> Renderer;
+
+    /// Start a new frame.
+    auto frame() -> Frame;
+
+    /// Clear the screen.
+    void clear(Colour c = Colour::White);
+};

@@ -1,0 +1,21 @@
+module;
+#include <base/Macros.hh>
+export module pr.client;
+import pr.client.render;
+
+export namespace pr::client {
+class Client;
+}
+
+class pr::client::Client {
+    LIBBASE_IMMOVABLE(Client);
+
+public:
+    Renderer renderer;
+
+    /// Create a new client.
+    explicit Client();
+
+    /// Run the client for ever.
+    void Run();
+};

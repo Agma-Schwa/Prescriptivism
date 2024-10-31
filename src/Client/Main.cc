@@ -1,5 +1,5 @@
-#include <print>
+import pr.client;
 
 int main() {
-    std::println("Client");
+    pr::client::Client().Run();
 }

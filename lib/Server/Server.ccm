@@ -2,6 +2,7 @@ module;
 #include <base/Macros.hh>
 #include <memory>
 export module pr.server;
+import pr.tcp;
 
 import base;
 import pr.utils;
@@ -11,12 +12,18 @@ class Server;
 }
 
 /// Prescriptivism server instance.
-class pr::server::Server {
-    LIBBASE_DECLARE_HIDDEN_IMPL(Server);
+class pr::server::Server : net::TCPCallbacks {
+    LIBBASE_IMMOVABLE(Server);
+
+    net::TCPServer server;
 
 public:
-    static auto Create(u16 port) -> Result<Server>;
+    /// Create and start the server.
+    Server(u16 port);
 
     /// Run the server for ever.
     [[noreturn]] void Run();
+
+private:
+    void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;
 };

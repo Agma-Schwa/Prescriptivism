@@ -158,7 +158,14 @@ FetchContent_Declare(webp
     GIT_TAG v1.4.0
 )
 
-FetchContent_MakeAvailable(base sdl3 webp)
+set(OPTION_BUILD_TOOLS OFF)
+set(OPTION_BUILD_EXAMPLES OFF)
+FetchContent_Declare(glbinding
+    GIT_REPOSITORY https://github.com/cginternals/glbinding
+    GIT_TAG v3.3.0
+)
+
+FetchContent_MakeAvailable(base sdl3 webp glbinding)
 
 ## ============================================================================
 ##  Shared
@@ -193,6 +200,8 @@ target_sources(Prescriptivism PUBLIC FILE_SET CXX_MODULES FILES ${client_modules
 target_link_libraries(Prescriptivism PRIVATE
     PrescriptivismShared
     SDL3::SDL3
+    glbinding::glbinding
+    glbinding::glbinding-aux
     webp
 )
 
