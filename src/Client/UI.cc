@@ -1,5 +1,6 @@
 module;
 #include <algorithm>
+#include <base/Assert.hh>
 #include <cmath>
 #include <ranges>
 #include <SDL3/SDL.h>
@@ -113,7 +114,8 @@ void TextEdit::draw(Renderer& r) {
     if (no_blink_ticks) no_blink_ticks--;
     if (selected and not clusters.empty() and (no_blink_ticks or r.blink_cursor())) {
         cursor_offs = [&] -> i32 {
-            // Cursor is at the end of the text.
+            // Cursor is at the start/end of the text.
+            if (cursor == 0) return 0;
             if (cursor == i32(text.size())) return i32(label.width());
 
             // Cursor is too far right. Put it at the very end.
@@ -123,12 +125,16 @@ void TextEdit::draw(Renderer& r) {
             // Cursor is right before a character.
             if (it->index == cursor) return i32(it->xoffs);
 
-            // Cursor is in the middle of a character; interpolate into it.
-            auto next = std::next(it);
-            auto x1 = it->xoffs;
-            auto x2 = next == clusters.end() ? label.width() : next->xoffs;
-            auto ni = next == clusters.end() ? text.size() : next->index;
-            auto x = i32(std::lerp(x1, x2, f32(cursor - it->index) / f32(ni - it->index)));
+            // Cursor is in the middle of a character; interpolate into it. If we
+            // get here, lower_bound will have returned something that is larger.
+            Assert(it->index > cursor, "lower_bound didn’t do what we expected?");
+            Assert(it != clusters.begin(), "lower_bound returned the first element?");
+            auto prev = std::prev(it);
+            auto x1 = prev->xoffs;
+            auto x2 = it->xoffs;
+            auto i1 = prev->index;
+            auto i2 = it->index;
+            auto x = i32(std::lerp(x1, x2, f32(cursor - i1) / f32(i2 - i1)));
             return x;
         }();
     } else {
@@ -147,27 +153,48 @@ void TextEdit::event_click(InputSystem& input) {
     // we do this by iterating over all clusters; as soon as we find
     // one whose offset brings us further away from the click position,
     // we stop and go back to the one before it.
-    auto pos = TextPos(input.renderer);
+    no_blink_ticks = 20;
     i32 mx = input.mouse.pos.x;
-    i32 x0 = pos.x;
+    i32 x0 = TextPos(input.renderer).x;
     i32 x1 = x0 + i32(label.width());
     if (mx < x0) cursor = 0;
     else if (mx > x1) cursor = i32(text.size());
     else if (clusters.size() < 2) cursor = 0;
     else {
+        cursor = 0;
         i32 x = x0;
         i32 d = std::abs(x - mx);
-        for (ShapedText::Cluster* prev = nullptr; auto& c : clusters) {
-            auto nd = std::abs(x + c.xoffs - mx);
+        auto it = clusters.begin();
+
+        // A cluster might correspond to multiple glyphs, in which case
+        // we need to interpolate into it.
+        ShapedText::Cluster* prev = nullptr;
+        while (cursor < i32(text.size()) and it != clusters.end()) {
+            auto xoffs = [&] {
+                // Cluster matches cursor index; we can use the x
+                // offset exactly.
+                if (cursor == it->index) return it->xoffs;
+
+                // Cluster index is too large; interpolate between the
+                // previous index and this one.
+                auto prev_x = prev ? prev->xoffs : 0;
+                auto prev_i = prev ? prev->index : 0;
+                return i32(std::lerp(prev_x, it->xoffs, f32(cursor - prev_i) / f32(it->index - prev_i)));
+            }();
+
+            auto nd = std::abs(x + xoffs - mx);
             if (nd > d) {
-                if (not prev) cursor = 0;
-                else cursor = prev->index;
-                return;
+                cursor--;
+                break;
             }
+
             d = nd;
-            prev = &c;
+            prev = &*it;
+            cursor++;
+            if (cursor > it->index) ++it;
         }
-        cursor = i32(text.size());
+
+        cursor = std::clamp(cursor, 0, i32(text.size()));
     }
 }
 
@@ -175,7 +202,7 @@ void TextEdit::event_click(InputSystem& input) {
 void TextEdit::event_input(InputSystem& input) {
     // Copy text into the buffer.
     if (not input.text_input.empty()) {
-        no_blink_ticks = 10;
+        no_blink_ticks = 20;
         dirty = true;
         for (auto c : input.text_input) {
             switch (c) {
