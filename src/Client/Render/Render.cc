@@ -504,3 +504,9 @@ auto Renderer::size() -> Size {
     return {wd, ht};
 }
 
+// =============================================================================
+//  Utils
+// =============================================================================
+auto AABB::contains(xy pos) const -> bool {
+    return pos.x >= min.x and pos.x <= max.x and pos.y >= min.y and pos.y <= max.y;
+}

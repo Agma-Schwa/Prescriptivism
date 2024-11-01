@@ -10,6 +10,8 @@ import pr.client.render.gl;
 using namespace pr;
 using namespace pr::client;
 
+constexpr Colour DefaultButtonColour{36, 36, 36, 255};
+
 auto Position::absolute(Size screen_size, Size object_size) -> xy {
     return relative(vec2(), screen_size, object_size);
 }
@@ -43,6 +45,25 @@ Button::Button(
 void Button::draw(Renderer& r) {
     auto bg = pos.absolute(r.size(), sz);
     auto text = Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
-    r.draw_rect(bg, sz, Colour{255, 0, 0, 255});
+    r.draw_rect(bg, sz, DefaultButtonColour);
     r.draw_text(label, text);
+}
+
+void Button::refresh(Size screen_size) {
+    SetBoundingBox(AABB(pos.absolute(screen_size, sz), sz));
+}
+
+void Screen::refresh(Size screen_size) {
+    for (auto& e: children) e->refresh(screen_size);
+}
+
+void Screen::render(Renderer& r) {
+    for (auto& e: children) e->draw(r);
+}
+
+void Screen::tick(MouseState st) {
+    for (auto& e : children) {
+        if (e->bounding_box().contains(st.pos) and st.left)
+            e->clicked();
+    }
 }

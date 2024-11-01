@@ -14,26 +14,11 @@ class Client;
 
 namespace pr::client {
 class Text;
-class Screen;
 class MenuScreen;
 }
 
-class pr::client::Screen {
-    LIBBASE_IMMOVABLE(Screen);
-
-protected:
-    Screen() = default;
-
-public:
-    virtual ~Screen() = default;
-
-    /// Render this screen.
-    virtual void render(Renderer& r) = 0;
-};
-
 class pr::client::MenuScreen : public Screen {
     ShapedText title;
-    Button quit;
 
 public:
     MenuScreen(Renderer& r);
@@ -45,7 +30,14 @@ class pr::client::Client {
     LIBBASE_IMMOVABLE(Client);
 
 public:
+    /// The main renderer.
     Renderer renderer;
+
+    /// The current mouse state.
+    static MouseState mouse;
+
+    /// Whether we should quit the game.
+    static bool quit;
 
 private:
     std::unique_ptr<MenuScreen> menu_screen;

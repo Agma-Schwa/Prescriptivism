@@ -13,19 +13,31 @@ using namespace pr::client;
 //  Main Menu Screen
 // =============================================================================
 MenuScreen::MenuScreen(Renderer& r)
-    : title{r.make_text("Prescriptivism", FontSize::Huge)},
-      quit{Button{r.make_text("Quit", FontSize::Large), Position::HCenter(200), 10, 125}} {
+    : title{r.make_text("Prescriptivism", FontSize::Huge)} {
+    auto& quit = Create<Button>(
+        r.make_text("Quit", FontSize::Large),
+        Position::HCenter(150),
+        10,
+        125
+    );
+
+    quit.on_click = [] {
+        Client::quit = true;
+    };
 }
 
 void MenuScreen::render(Renderer& r) {
     r.clear(Colour{45, 42, 46, 255});
     r.draw_text(title, Position::HCenter(-50).absolute(r.size(), title.size()));
-    quit.draw(r);
+    Screen::render(r);
 }
 
 // =============================================================================
 //  API
 // =============================================================================
+MouseState Client::mouse;
+bool Client::quit = false;
+
 Client::Client() : renderer(Renderer(800, 600)) {
     menu_screen = std::make_unique<MenuScreen>(renderer);
     current_screen = menu_screen.get();
@@ -33,10 +45,15 @@ Client::Client() : renderer(Renderer(800, 600)) {
 
 void Client::Run() {
     constexpr chr::milliseconds ClientTickDuration = 16ms;
-    bool quit = false;
     while (not quit) {
         Renderer::Frame _ = renderer.frame();
         auto start_of_tick = chr::system_clock::now();
+
+        // Get mouse state.
+        mouse = {};
+        f32 x, y;
+        SDL_GetMouseState(&x, &y);
+        mouse.pos = {x, renderer.size().ht - y};
 
         // Process events.
         SDL_Event event;
@@ -46,10 +63,24 @@ void Client::Run() {
                 case SDL_EVENT_QUIT:
                     quit = true;
                     break;
+
+                // Record the button presses instead of acting on them immediately; this
+                // has the effect of debouncing clicks within a single tick.
+                case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                    if (event.button.button == SDL_BUTTON_LEFT) mouse.left = true;
+                    if (event.button.button == SDL_BUTTON_RIGHT) mouse.right = true;
+                    if (event.button.button == SDL_BUTTON_MIDDLE) mouse.middle = true;
+                    break;
             }
         }
 
-        // Draw the current screen.
+        // Refresh screen info.
+        current_screen->refresh(renderer.size());
+
+        // Tick the screen.
+        current_screen->tick(mouse);
+
+        // Draw it.
         current_screen->render(renderer);
 
         const auto end_of_tick = chr::system_clock::now();

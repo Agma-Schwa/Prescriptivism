@@ -1,5 +1,8 @@
 module;
+#include <functional>
+#include <base/Macros.hh>
 #include <limits>
+#include <memory>
 export module pr.client.ui;
 
 import pr.utils;
@@ -7,7 +10,10 @@ import pr.client.render;
 
 export namespace pr::client {
 struct Position;
+struct MouseState;
+class Element;
 class Button;
+class Screen;
 }
 
 /// A position of an element, which may be absolute or relative
@@ -52,13 +58,91 @@ struct pr::client::Position {
     }
 };
 
-class pr::client::Button {
+/// Mouse button state.
+struct pr::client::MouseState {
+    xy pos{};
+    bool left{};
+    bool right{};
+    bool middle{};
+};
+
+class pr::client::Element {
+    AABB box;
+
+protected:
+    Element() = default;
+    void SetBoundingBox(AABB aabb) { box = aabb; }
+
+public:
+    virtual ~Element() = default;
+
+    /// Get the bounding box of this element.
+    auto bounding_box() const -> AABB { return box; }
+
+    /// Event handler for when the mouse is clicked on this element.
+    virtual void clicked() {}
+
+    /// Draw this element.
+    virtual void draw(Renderer& r) = 0;
+
+    /// Recompute bounding box etc.
+    virtual void refresh(Size screen_size) = 0;
+};
+
+class pr::client::Screen {
+    LIBBASE_IMMOVABLE(Screen);
+
+    /// List of children.
+    std::vector<std::unique_ptr<Element>> children;
+
+protected:
+    Screen() = default;
+
+public:
+    virtual ~Screen() = default;
+
+    /// Create an element.
+    template <std::derived_from<Element> El, typename ...Args>
+    auto Create(Args&&... args) -> El& {
+        auto el = std::make_unique<El>(std::forward<Args>(args)...);
+        auto& ref = *el;
+        children.push_back(std::move(el));
+        return ref;
+    }
+
+    /// Refresh all element positions.
+    ///
+    /// This recomputes the position of each element after the screen
+    /// has been resized and before ticking/rendering.
+    void refresh(Size screen_size);
+
+    /// Render this screen.
+    ///
+    /// The default renderer renders all UI elements that are part of
+    /// this screen.
+    virtual void render(Renderer& r);
+
+    /// Tick this screen.
+    ///
+    /// The default tick handler visits all elements and performs UI
+    /// interactions on them; thus, calling this handler is recommended
+    /// if you override it.
+    virtual void tick(MouseState state);
+};
+
+class pr::client::Button : public Element {
 public:
     ShapedText label;
     Position pos{};
     Size sz{};
+    std::function<void()> on_click{};
 
     explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
 
-    void draw(Renderer& r);
+    void clicked() override {
+        if (on_click) on_click();
+    }
+
+    void draw(Renderer& r) override;
+    void refresh(Size screen_size) override;
 };

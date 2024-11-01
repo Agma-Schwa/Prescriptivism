@@ -15,6 +15,7 @@ import pr.client.render.gl;
 export namespace pr::client {
 struct Colour;
 struct Size;
+struct AABB;
 struct xy;
 
 class Renderer;
@@ -83,6 +84,20 @@ struct pr::client::xy {
     xy(f32 x, f32 y) : x(i32(x)), y(i32(y)) {}
 
     auto vec() const -> vec2 { return {f32(x), f32(y)}; }
+};
+
+/// Axis-aligned bounding box.
+struct pr::client::AABB {
+    xy min;
+    xy max;
+
+    AABB() = default;
+    AABB(i32 x, i32 y, i32 wd, i32 ht) : min(x, y), max(x + wd, y + ht) {}
+    AABB(xy min, xy max) : min(min), max(max) {}
+    AABB(xy pos, Size sz) : min(pos), max(pos.x + sz.wd, pos.y + sz.ht) {}
+
+    /// Check if this box contains a point.
+    auto contains(xy) const -> bool;
 };
 
 // =============================================================================
