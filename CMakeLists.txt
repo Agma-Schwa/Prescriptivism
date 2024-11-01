@@ -166,12 +166,6 @@ FetchContent_Declare(glbinding
     GIT_TAG v3.3.0
 )
 
-FetchContent_Declare(imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui
-    GIT_TAG v1.91.4
-    SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui"
-)
-
 FetchContent_Declare(freetype
     GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype
     GIT_TAG VER-2-13-3
@@ -187,7 +181,7 @@ FetchContent_Declare(glm
     GIT_TAG 1.0.1
 )
 
-FetchContent_MakeAvailable(base sdl3 webp glbinding imgui freetype harfbuzz glm)
+FetchContent_MakeAvailable(base sdl3 webp glbinding freetype harfbuzz glm)
 
 ## ============================================================================
 ##  Shared

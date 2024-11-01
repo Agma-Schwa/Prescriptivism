@@ -14,6 +14,12 @@ struct MouseState;
 class Element;
 class Button;
 class Screen;
+class TextEdit;
+}
+
+namespace pr::client {
+/// Intermediate widget that consists of a box that wraps some text.
+class TextBox;
 }
 
 /// A position of an element, which may be absolute or relative
@@ -133,19 +139,37 @@ public:
     virtual void tick(MouseState state);
 };
 
-class pr::client::Button : public Element {
-public:
+class pr::client::TextBox : public Element {
+protected:
     ShapedText label;
     Position pos{};
     Size sz{};
+
+    explicit TextBox(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
+
+public:
+    void draw(Renderer& r) override;
+    void refresh(Size screen_size) override;
+};
+
+class pr::client::Button : public TextBox {
+public:
     std::function<void()> on_click{};
 
-    explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
+    explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
+        : TextBox(std::move(label), pos, padding, min_wd, min_ht) {}
 
     void clicked() override {
         if (on_click) on_click();
     }
 
     void draw(Renderer& r) override;
-    void refresh(Size screen_size) override;
 };
+
+/*class pr::client::TextEdit : public TextBox {
+    std::string text;
+    ShapedText rendered;
+    Position pos{};
+    Size sz{};
+}
+*/

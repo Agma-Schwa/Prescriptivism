@@ -31,7 +31,7 @@ auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
     return {x, y};
 }
 
-Button::Button(
+TextBox::TextBox(
     ShapedText text,
     Position pos,
     i32 padding,
@@ -43,15 +43,20 @@ Button::Button(
     sz.ht = std::max(min_ht, i32(label.height() + label.depth())) + 2 * padding;
 }
 
-void Button::draw(Renderer& r) {
+void TextBox::draw(Renderer& r) {
     auto bg = pos.absolute(r.size(), sz);
     auto text = Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
-    r.draw_rect(bg, sz, hovered ? HoverButtonColour : DefaultButtonColour);
     r.draw_text(label, text);
 }
 
-void Button::refresh(Size screen_size) {
+void TextBox::refresh(Size screen_size) {
     SetBoundingBox(AABB(pos.absolute(screen_size, sz), sz));
+}
+
+void Button::draw(Renderer& r) {
+    auto bg = pos.absolute(r.size(), sz);
+    r.draw_rect(bg, sz, hovered ? HoverButtonColour : DefaultButtonColour);
+    TextBox::draw(r);
 }
 
 void Screen::refresh(Size screen_size) {
