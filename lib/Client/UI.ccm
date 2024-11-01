@@ -178,6 +178,7 @@ protected:
     i32 padding{};
     i32 min_wd{};
     i32 min_ht{};
+    i32 cursor = -1; // Cursor offset relative to left bound; -1 to disable.
 
     explicit TextBox(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
 
@@ -211,6 +212,7 @@ public:
     TextEdit(Position pos, FontSize size, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
         : TextBox(ShapedText(), pos, padding, min_wd, min_ht), size{size} {
         selectable = true;
+        cursor = 0;
     }
 
     void draw(Renderer& r) override;

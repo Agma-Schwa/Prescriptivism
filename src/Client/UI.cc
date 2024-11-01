@@ -72,6 +72,11 @@ void TextBox::draw(Renderer& r) {
     auto bg = pos.absolute(r.size(), sz);
     auto text = Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
     r.draw_text(label, text);
+    if (cursor != -1 and selected and not r.blink_cursor()) r.draw_line(
+        xy(text.x + 1 + i32(label.width()), text.y),
+        xy(text.x + 1 + i32(label.width()), text.y + i32(label.height())),
+        Colour::White
+    );
 }
 
 void TextBox::refresh(Size screen_size) {

@@ -82,6 +82,7 @@ struct pr::client::xy {
     xy(i32 x, i32 y) : x(x), y(y) {}
     xy(vec2 v) : x(i32(v.x)), y(i32(v.y)) {}
     xy(f32 x, f32 y) : x(i32(x)), y(i32(y)) {}
+    xy(Size sz) : x(sz.wd), y(sz.ht) {}
 
     auto vec() const -> vec2 { return {f32(x), f32(y)}; }
 };
@@ -233,8 +234,16 @@ public:
     /// Clean up resources.
     ~Renderer();
 
+    /// Whether to render blinking cursors.
+    ///
+    /// \return True to render the cursor, false to hide it.
+    bool blink_cursor();
+
     /// Clear the screen.
     void clear(Colour c = Colour::White);
+
+    /// Draw a line between two points.
+    void draw_line(xy start, xy end, Colour c = Colour::White);
 
     /// Draw a rectangle at a position in world coordinates.
     void draw_rect(xy pos, Size size, Colour c = Colour::White);

@@ -386,6 +386,16 @@ void Renderer::clear(Colour c) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
+void Renderer::draw_line(xy start, xy end, Colour c) {
+    use(primitive_shader);
+    primitive_shader.uniform("in_colour", c.vec4());
+    VertexArrays vao{VertexLayout::Position2D};
+    vec2 verts[]{start.vec(), end.vec()};
+    vao.add_buffer(verts, GL_LINES);
+    vao.draw();
+}
+
+
 void Renderer::draw_rect(xy pos, Size size, Colour c) {
     use(primitive_shader);
     primitive_shader.uniform("in_colour", c.vec4());
@@ -505,6 +515,10 @@ auto Renderer::make_text(std::u32string_view text, FontSize size) -> ShapedText 
 // =============================================================================
 //  Querying State
 // =============================================================================
+bool Renderer::blink_cursor() {
+    return SDL_GetTicks() % 1'500 < 750;
+}
+
 auto Renderer::size() -> Size {
     i32 wd, ht;
     check SDL_GetWindowSize(window, &wd, &ht);
