@@ -172,6 +172,11 @@ FetchContent_Declare(imgui
     SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui"
 )
 
+FetchContent_Declare(freetype
+    GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype
+    GIT_TAG VER-2-13-3
+)
+
 FetchContent_Declare(harfbuzz
     GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz
     GIT_TAG 10.0.1
@@ -182,12 +187,7 @@ FetchContent_Declare(glm
     GIT_TAG 1.0.1
 )
 
-FetchContent_Declare(freetype
-    GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype
-    GIT_TAG VER-2-13-3
-)
-
-FetchContent_MakeAvailable(base sdl3 webp glbinding imgui harfbuzz glm freetype)
+FetchContent_MakeAvailable(base sdl3 webp glbinding imgui freetype harfbuzz glm)
 
 ## ============================================================================
 ##  Shared
@@ -233,6 +233,16 @@ target_link_libraries(Prescriptivism PRIVATE
 target_compile_options(Prescriptivism PRIVATE
     "--embed-dir=${PROJECT_SOURCE_DIR}/assets"
     -Wno-c23-extensions
+)
+
+## Allow overriding the default font w/o having to make it part of the project;
+## the path must be absolute or relative to the assets directory.
+if (NOT DEFINED PRESCRIPTIVISM_DEFAULT_FONT_PATH)
+    set(PRESCRIPTIVISM_DEFAULT_FONT_PATH "NotoSans-Medium.ttf")
+endif()
+
+target_compile_definitions(Prescriptivism PRIVATE
+    "PRESCRIPTIVISM_DEFAULT_FONT_PATH=\"${PRESCRIPTIVISM_DEFAULT_FONT_PATH}\""
 )
 
 ## ============================================================================

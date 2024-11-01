@@ -6,7 +6,7 @@ module;
 #include <glbinding/glbinding.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <hb-ot.h>
+#include <hb-ft.h>
 #include <hb.h>
 #include <libassert/assert.hpp>
 #include <memory>
@@ -22,9 +22,12 @@ module;
 // clang-format on
 module pr.client.render;
 
+import base.text;
+
 using namespace gl;
 using namespace pr;
 using namespace pr::client;
+using namespace base;
 
 using glm::ivec2;
 using glm::mat4;
@@ -71,7 +74,7 @@ constexpr char TextFragmentShaderData[]{
 };
 
 constexpr char DefaultFontRegular[]{
-#embed "NotoSans-Medium.ttf"
+#embed PRESCRIPTIVISM_DEFAULT_FONT_PATH
 };
 
 // =============================================================================
@@ -280,22 +283,30 @@ private:
 
 /// Text to be rendered.
 static constexpr u32 FontSize = 96;
-static constexpr u32 Chars = 128;
-/*class ShapedText {
+static constexpr u32 Glyphs = 5'000;
+class ShapedText {
     friend Renderer;
 
     VertexArrays vao{VertexLayout::PositionTexture4D};
 
 public:
-    struct Char {
-        char32_t codepoint;
-        f32 x0;
-        f32 x1;
+    struct Glyph {
+        char32_t index;
+        f32 xoffs;
+        f32 xadv;
+        f32 yoffs;
     };
 
-    std::vector<Char> characters;
+    std::vector<Glyph> glyphs;
 
     ShapedText(hb_font_t* font, std::string_view text, i32 font_size) {
+        // Convert to UTF-32 in canonical decomposition form; this helps
+        // with fonts that may not have certain precombined characters, but
+        // which *do* support the individual components.
+        //
+        // Normalisation can fail if the input was nonsense; just render an
+        // error string in that case.
+        auto norm = Normalise(text::ToUTF32(text), text::NormalisationForm::NFD).value_or(U"<ERROR>");
         auto buf = hb_buffer_create();
         if (not buf) {
             Log("Failed to create HarfBuzz buffer");
@@ -304,11 +315,12 @@ public:
 
         // Add the text and compute properties.
         defer { hb_buffer_destroy(buf); };
-        hb_buffer_add_utf8(buf, text.data(), int(text.size()), 0, int(text.size()));
-        hb_buffer_guess_segment_properties(buf);
-        // hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-        // hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-        // hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+        hb_buffer_add_utf32(buf, reinterpret_cast<const u32*>(norm.data()), int(norm.size()), 0, int(norm.size()));
+        // hb_buffer_guess_segment_properties(buf);
+        hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+        hb_buffer_set_script(buf, HB_SCRIPT_COMMON);
+        hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+        hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
 
         // Scale the font; HarfBuzz uses integers for position values,
         // so this is used so we can get fractional values out of it.
@@ -316,42 +328,68 @@ public:
         hb_font_set_scale(font, font_size * Scale, font_size * Scale);
 
         // Shape it.
-        hb_shape(font, buf, nullptr, 0);
+        hb_feature_t ligatures{};
+        ligatures.tag = HB_TAG('l', 'i', 'g', 'a');
+        ligatures.value = 1;
+        ligatures.start = HB_FEATURE_GLOBAL_START;
+        ligatures.end = HB_FEATURE_GLOBAL_END;
+        hb_shape(font, buf, &ligatures, 1);
         unsigned count;
         auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
         auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
+        if (not info_ptr or not pos_ptr) count = 0;
         auto infos = std::span{info_ptr, count};
         auto positions = std::span{pos_ptr, count};
 
-        // Record character data for later.
-        f32 x = 0, y = 0;
+        // Record glyph data for later.
         for (unsigned i = 0; i < count; ++i) {
-            [[maybe_unused]] auto& info = infos[i];
+            auto& info = infos[i];
             auto& pos = positions[i];
-            auto& c = characters.emplace_back();
-            c.codepoint = char32_t(info.codepoint);
-            c.x0 = x + pos.x_offset / f32(Scale);
-            x = c.x1 = x + pos.x_advance / f32(Scale);
+            auto& c = glyphs.emplace_back();
+
+            // Note: 'codepoint' here is actually a glyph index in the
+            // font after shaping, and not a codepoint.
+            c.index = char32_t(info.codepoint);
+            c.xoffs = pos.x_offset / f32(Scale);
+            c.xadv = pos.x_advance / f32(Scale);
+            c.yoffs = pos.y_offset / f32(Scale);
         }
 
         // Create VAO.
         auto& vbo = vao.add_buffer();
         vbo.reserve<vec4>(6, GL_DYNAMIC_DRAW);
     }
-};*/
+
+    /// Debugging function that dumps the contents of a HarfBuzz buffer;
+    /// must be called after shaping.
+    static auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
+        std::string debug;
+        debug.resize(10000);
+        hb_buffer_serialize_glyphs(
+            buf,
+            0,
+            hb_buffer_get_length(buf),
+            debug.data(),
+            debug.size(),
+            nullptr,
+            font,
+            HB_BUFFER_SERIALIZE_FORMAT_TEXT,
+            HB_BUFFER_SERIALIZE_FLAG_DEFAULT
+        );
+        Log("Buffer: {}", debug);
+    }
+};
 
 // =============================================================================
 //  Impl
 // =============================================================================
-struct Character {
+struct Glyph {
     GLuint texture;
     vec2 size;
     vec2 bearing;
     i32 advance;
 };
 
-using HarfBuzzFont = std::unique_ptr<hb_font_t, decltype(&hb_font_destroy)>;
-using HarfBuzzFace = std::unique_ptr<hb_face_t, decltype(&hb_face_destroy)>;
 struct Renderer::Impl {
     LIBBASE_IMMOVABLE(Impl);
 
@@ -360,18 +398,17 @@ struct Renderer::Impl {
 
     ShaderProgram default_shader;
     ShaderProgram text_shader;
-    HarfBuzzFace default_face{nullptr, hb_face_destroy};
-    HarfBuzzFont default_font{nullptr, hb_font_destroy};
+    hb_font_t* default_font;
     FT_Library ft;
     FT_Face ft_face;
-    std::array<Character, Chars> characters{};
+    std::array<Glyph, Glyphs> glyphs{};
 
     Impl(int initial_wd, int initial_ht);
     ~Impl();
 
     // TODO: Colour and position (matrix) as uniforms.
     void draw_text(
-        std::string_view,
+        const ShapedText& text,
         i32 x,
         i32 y,
         Colour c
@@ -465,22 +502,7 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Create a HarfBuzz shaper using the default font.
-    auto blob = hb_blob_create(
-        DefaultFontRegular,
-        sizeof DefaultFontRegular,
-        HB_MEMORY_MODE_READONLY,
-        nullptr,
-        nullptr
-    );
-
-    defer { hb_blob_destroy(blob); };
-    default_face.reset(hb_face_create(blob, 0));
-    default_font.reset(hb_font_create(default_face.get()));
-    hb_ot_font_set_funcs(default_font.get());
-    Assert(default_face and default_font, "Failed to create HarfBuzz font");
-
-    // Load the font itself.
+    // Load the font.
     ftcall FT_Init_FreeType(&ft);
     ftcall FT_New_Memory_Face(
         ft,
@@ -493,11 +515,27 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, FontSize);
 
+    // Create a HarfBuzz font for it.
+    auto blob = hb_blob_create(
+        DefaultFontRegular,
+        sizeof DefaultFontRegular,
+        HB_MEMORY_MODE_READONLY,
+        nullptr,
+        nullptr
+    );
+
+    defer { hb_blob_destroy(blob); };
+    default_font = hb_ft_font_create(ft_face, nullptr);
+    hb_ft_font_set_funcs(default_font);
+    Assert(default_font, "Failed to create HarfBuzz font");
+
     // Generate the font textures.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    for (u32 c = 0; c < Chars; c++) {
+    u32 loaded = 0;
+    for (u32 c = 0; c < Glyphs; c++) {
         // Not all chars need to exist in the font.
-        if (FT_Load_Char(ft_face, c, FT_LOAD_RENDER) != 0) continue;
+        if (FT_Load_Glyph(ft_face, c, FT_LOAD_RENDER) != 0) continue;
+        loaded++;
         GLuint texture;
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
@@ -517,19 +555,22 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        characters[c] = {
+        glyphs[c] = {
             texture,
             {ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows},
             {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
             i32(ft_face->glyph->advance.x)
         };
     }
+
+    Log("Loaded {} glyphs", loaded);
 }
 
 Renderer::Impl::~Impl() {
     SDL_GL_DestroyContext(context);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    hb_font_destroy(default_font);
     FT_Done_Face(ft_face);
     FT_Done_FreeType(ft);
 }
@@ -561,16 +602,16 @@ Renderer::Frame::~Frame() {
     // vao.draw();
 
     // Draw text.
-    constexpr std::string_view InputText = "Elersbd"; // "eééé́ẹ́ẹ́ʒ";
-    // ShapedText text(r.impl->default_font.get(), InputText, 96);
-    r.impl->draw_text(InputText, 200, 200, Colour{255, 255, 255, 255});
+    constexpr std::string_view InputText = "EÉÉẸ̣eééé́ẹ́ẹ́ʒffifl";
+    static ShapedText text(r.impl->default_font, InputText, 96);
+    r.impl->draw_text(text, 200, 200, Colour{255, 255, 255, 255});
 
     // Swap buffers.
     check SDL_GL_SwapWindow(r.impl->window);
 }
 
 void Renderer::Impl::draw_text(
-    std::string_view text,
+    const ShapedText& text,
     i32 x,
     i32 y,
     Colour colour
@@ -589,12 +630,13 @@ void Renderer::Impl::draw_text(
     vao.bind();
 
     // Draw each character.
-    for (auto c : text) {
-        if (usz(c) > characters.size() or characters[c].texture == 0) c = '?';
-        f32 xpos = x + characters[c].bearing.x;
-        f32 ypos = y - (characters[c].size.y - characters[c].bearing.y);
-        f32 w = characters[c].size.x;
-        f32 h = characters[c].size.y;
+    for (const auto& glyph : text.glyphs) {
+        auto c = glyph.index;
+        if (usz(c) > glyphs.size() or glyphs[c].texture == 0) c = U'?';
+        f32 xpos = x + glyphs[c].bearing.x + glyph.xoffs;
+        f32 ypos = y - (glyphs[c].size.y - glyphs[c].bearing.y) + glyph.yoffs;
+        f32 w = glyphs[c].size.x;
+        f32 h = glyphs[c].size.y;
 
         vec4 verts[]{
             {xpos, ypos + h, 0, 0},
@@ -605,24 +647,13 @@ void Renderer::Impl::draw_text(
             {xpos + w, ypos + h, 1, 0}
         };
 
-        static bool logged = false;
-        if (not logged) {
-            logged = true;
-            Log("V1: {}", verts[0]);
-            Log("V2: {}", verts[1]);
-            Log("V3: {}", verts[2]);
-            Log("V4: {}", verts[3]);
-            Log("V5: {}", verts[4]);
-            Log("V6: {}", verts[5]);
-        }
-
         // Bind the character's texture.
-        glBindTexture(GL_TEXTURE_2D, characters[c].texture);
+        glBindTexture(GL_TEXTURE_2D, glyphs[c].texture);
 
         // Upload the vertices.
         vbo.store(std::span<const vec4>{verts});
         vao.draw();
-        x += characters[c].advance / 64;
+        x += glyph.xadv;
     }
 }
 
