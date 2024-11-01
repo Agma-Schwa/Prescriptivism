@@ -1,10 +1,10 @@
 module;
 #include <algorithm>
 #include <cmath>
+#include <ranges>
 #include <SDL3/SDL.h>
 #include <string_view>
 #include <utility>
-#include <ranges>
 module pr.client.ui;
 
 import base.text;
@@ -20,6 +20,9 @@ using namespace pr::client;
 // =============================================================================
 constexpr Colour DefaultButtonColour{36, 36, 36, 255};
 constexpr Colour HoverButtonColour{23, 23, 23, 255};
+constexpr char32_t Backspace = U'\b';
+constexpr char32_t BackspaceWord = U'\x18';
+constexpr char32_t Delete = U'\x7F';
 
 // =============================================================================
 //  Helpers
@@ -138,17 +141,22 @@ void TextEdit::event_input(InputSystem& input) {
         no_blink_ticks = 10;
         dirty = true;
         for (auto c : input.text_input) {
-            if (c == U'\b') {
-                if (cursor != 0) text.erase(--cursor, 1);
-                continue;
+            switch (c) {
+                default: text.insert(cursor++, 1, c); break;
+                case Backspace:
+                    if (cursor != 0) text.erase(--cursor, 1);
+                    break;
+                case Delete:
+                    if (cursor != i32(text.size())) text.erase(cursor, 1);
+                    break;
+                case BackspaceWord: {
+                    static constexpr std::u32string_view ws = U" \t\n\r\v\f";
+                    u32stream segment{text.data(), usz(cursor)};
+                    auto pos = segment.trim_back().drop_back_until_any(ws).size();
+                    text.erase(pos, cursor - pos);
+                    cursor = i32(pos);
+                } break;
             }
-
-            if (c == U'\x7F') {
-                if (cursor != i32(text.size())) text.erase(cursor, 1);
-                continue;
-            }
-
-            text.insert(cursor++, 1, c);
         }
     }
 
@@ -173,6 +181,10 @@ void InputSystem::process_events() {
     SDL_GetMouseState(&x, &y);
     mouse.pos = {x, renderer.size().ht - y};
 
+    auto Paste = [&] {
+        if (SDL_HasClipboardText()) text_input += text::ToUTF32(SDL_GetClipboardText());
+    };
+
     // Process events.
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -194,14 +206,27 @@ void InputSystem::process_events() {
                 keyboard_input = true;
                 switch (event.key.key) {
                     default: break;
-                    case SDLK_BACKSPACE: text_input += U"\b"; break;
-                    case SDLK_DELETE: text_input += U'\x7F'; break;
+                    case SDLK_BACKSPACE:
+                        if (event.key.mod & SDL_KMOD_CTRL) text_input += BackspaceWord;
+                        else text_input += Backspace;
+                        break;
+                    case SDLK_DELETE:
+                        // if (event.key.mod & SDL_KMOD_CTRL) text_input += DeleteWord;
+                        // else
+                        text_input += Delete;
+                        break;
                     case SDLK_LEFT: mov.left = true; break;
                     case SDLK_RIGHT: mov.right = true; break;
                     case SDLK_UP: mov.up = true; break;
                     case SDLK_DOWN: mov.down = true; break;
                     case SDLK_HOME: mov.home = true; break;
                     case SDLK_END: mov.end = true; break;
+                    case SDLK_V:
+                        if (event.key.mod & SDL_KMOD_CTRL) Paste();
+                        break;
+                    case SDLK_INSERT:
+                        if (event.key.mod & SDL_KMOD_SHIFT) Paste();
+                        break;
                 }
                 break;
 
