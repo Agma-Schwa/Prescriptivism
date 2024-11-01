@@ -47,12 +47,12 @@ struct FTCallImpl {
     }
 };
 
-constexpr char IdentityVertexShaderData[]{
-#embed "Shaders/Identity.vert"
+constexpr char PrimitiveVertexShaderData[]{
+#embed "Shaders/Primitive.vert"
 };
 
-constexpr char IdentityFragmentShaderData[]{
-#embed "Shaders/Identity.frag"
+constexpr char PrimitiveFragmentShaderData[]{
+#embed "Shaders/Primitive.frag"
 };
 
 constexpr char TextVertexShaderData[]{
@@ -204,7 +204,7 @@ auto Font::shape(std::string_view text) -> ShapedText {
     // Compute the vertices for each glyph.
     std::vector<vec4> verts;
     f32 x = 0;
-    f32 max_y = 0;
+    f32 max_ht = 0, max_dp = 0;
     for (unsigned i = 0; i < count; ++i) {
         auto& info = infos[i];
         auto& pos = positions[i];
@@ -218,8 +218,9 @@ auto Font::shape(std::string_view text) -> ShapedText {
 
         // Compute the x and y position using the glyph’s metrics and
         // the shaping data provided by HarfBuzz.
+        f32 desc = glyphs[g].size.y - glyphs[g].bearing.y;
         f32 xpos = x + glyphs[g].bearing.x + xoffs;
-        f32 ypos = -(glyphs[g].size.y - glyphs[g].bearing.y) + yoffs;
+        f32 ypos = yoffs - desc;
         f32 w = glyphs[g].size.x;
         f32 h = glyphs[g].size.y;
 
@@ -239,7 +240,8 @@ auto Font::shape(std::string_view text) -> ShapedText {
 
         // Advance past the glyph.
         x += xadv;
-        max_y = std::max(max_y, ypos + h);
+        max_ht = std::max(max_ht, ypos + h);
+        max_dp = std::max(max_dp, desc);
 
         // Build vertices for the glyph’s position and texture coordinates.
         verts.push_back({xpos, ypos + h, u0, v0});
@@ -255,7 +257,7 @@ auto Font::shape(std::string_view text) -> ShapedText {
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
     vao.draw();
-    return ShapedText(std::move(vao), size, x, max_y);
+    return ShapedText(std::move(vao), size, x, max_ht, max_dp);
 }
 
 // =============================================================================
@@ -328,9 +330,9 @@ Renderer::Renderer(int initial_wd, int initial_ht) {
     check SDL_GL_SetSwapInterval(1);
 
     // Load shaders.
-    identity_shader = ShaderProgram(
-        std::span{IdentityVertexShaderData},
-        std::span{IdentityFragmentShaderData}
+    primitive_shader = ShaderProgram(
+        std::span{PrimitiveVertexShaderData},
+        std::span{PrimitiveFragmentShaderData}
     );
 
     text_shader = ShaderProgram(
@@ -381,18 +383,30 @@ void Renderer::clear(Colour c) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
+void Renderer::draw_rect(xy pos, Size size, Colour c) {
+    use(primitive_shader);
+    primitive_shader.uniform("in_colour", c.vec4());
+    auto [x, y] = pos;
+    VertexArrays vao{VertexLayout::Position2D};
+    vec2 verts[] {
+        {x, y},
+        {x + size.wd, y},
+        {x, y + size.ht},
+        {x + size.wd, y + size.ht}
+    };
+    vao.add_buffer(verts, GL_TRIANGLE_STRIP);
+    vao.draw();
+}
+
 void Renderer::draw_text(
     const ShapedText& text,
-    Position pos,
+    xy pos,
     Colour colour
 ) {
     // Initialise the text shader.
-    auto [sx, sy] = size();
-    auto [x, y] = absolute(pos, i32(text.width()), i32(text.height()));
-    text_shader.use();
+    use(text_shader);
     text_shader.uniform("text_colour", colour.vec4());
-    text_shader.uniform("projection", glm::ortho<f32>(0, sx, 0, sy));
-    text_shader.uniform("position", vec2(x, y));
+    text_shader.uniform("position", pos.vec());
 
     // Bind the font atlas.
     font(text.font_size()).use();
@@ -403,13 +417,10 @@ void Renderer::draw_text(
 
 void Renderer::draw_texture(
     const DrawableTexture& tex,
-    Position pos
+    xy pos
 ) {
-    auto [sx, sy] = size();
-    auto [x, y] = absolute(pos, tex.width(), tex.height());
-    image_shader.use();
-    image_shader.uniform("projection", glm::ortho<f32>(0, sx, 0, sy));
-    image_shader.uniform("position", vec2(x, y));
+    use(image_shader);
+    image_shader.uniform("position", pos.vec());
     tex.draw();
 }
 
@@ -435,8 +446,8 @@ void Renderer::frame_end() {
     }; // clang-format on
 
     auto sz = size();
-    identity_shader.use();
-    identity_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
+    primitive_shader.use();
+    primitive_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
     VertexArrays vao{VertexLayout::Position2D};
     vao.add_buffer(points);
     vao.draw();
@@ -462,6 +473,12 @@ void Renderer::frame_start() {
     }
 }
 
+void Renderer::use(ShaderProgram& shader) {
+    auto [sx, sy] = size();
+    shader.use_shader_program();
+    shader.uniform("projection", glm::ortho<f32>(0, sx, 0, sy));
+}
+
 // =============================================================================
 //  Creating Objects
 // =============================================================================
@@ -481,19 +498,6 @@ auto Renderer::make_text(std::string_view text, FontSize size) -> ShapedText {
 // =============================================================================
 //  Querying State
 // =============================================================================
-auto Renderer::absolute(Position pos, i32 obj_wd, i32 obj_ht) -> Size {
-    static auto Clamp = [](i32 val, i32 obj_size, i32 total_size) -> i32 {
-        if (val == Position::Centered) return (total_size - obj_size) / 2;
-        if (val < 0) return total_size + val - obj_size;
-        return val;
-    };
-
-    auto [sx, sy] = size();
-    auto x = Clamp(pos.x, obj_wd, sx);
-    auto y = Clamp(pos.y, obj_ht, sy);
-    return {x, y};
-}
-
 auto Renderer::size() -> Size {
     i32 wd, ht;
     check SDL_GetWindowSize(window, &wd, &ht);

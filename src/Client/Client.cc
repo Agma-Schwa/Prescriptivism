@@ -13,11 +13,14 @@ using namespace pr::client;
 //  Main Menu Screen
 // =============================================================================
 MenuScreen::MenuScreen(Renderer& r)
-    : title{r.make_text("Prescriptivism", FontSize::Huge)} {}
+    : title{r.make_text("Prescriptivism", FontSize::Huge)},
+      quit{Button{r.make_text("Quit", FontSize::Large), Position::HCenter(200), 10, 125}} {
+}
 
-void MenuScreen::render(Renderer& renderer) {
-    renderer.clear(Colour{45, 42, 46, 255});
-    renderer.draw_text(title, Position::HCenter(-50));
+void MenuScreen::render(Renderer& r) {
+    r.clear(Colour{45, 42, 46, 255});
+    r.draw_text(title, Position::HCenter(-50).absolute(r.size(), title.size()));
+    quit.draw(r);
 }
 
 // =============================================================================

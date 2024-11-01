@@ -253,7 +253,9 @@ public:
     }
 
     /// Set this as the active shader.
-    void use() const { glUseProgram(descriptor); }
+    ///
+    /// Prefer to call Renderer::use() instead.
+    void use_shader_program() const { glUseProgram(descriptor); }
 
 private:
     template <typename... T>

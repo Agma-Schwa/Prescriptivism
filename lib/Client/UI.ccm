@@ -1,0 +1,64 @@
+module;
+#include <limits>
+export module pr.client.ui;
+
+import pr.utils;
+import pr.client.render;
+
+export namespace pr::client {
+struct Position;
+class Button;
+}
+
+/// A position of an element, which may be absolute or relative
+/// to its parent element.
+struct pr::client::Position {
+    static constexpr i32 Centered = std::numeric_limits<i32>::min();
+
+    /// Base position.
+    xy base;
+
+    /// Separate adjustment fields since the position may be centered,
+    /// in which case adjustments can only be applied when the position
+    /// is computed. These are always relative to the base position.
+    i32 xadjust{};
+    i32 yadjust{};
+
+    Position() = default;
+    Position(xy base) : base(base) {}
+    Position(i32 x, i32 y) : base(x, y) {}
+
+    /// Create a position that is centered horizontally or vertically.
+    static auto HCenter(i32 y) -> Position { return {Centered, y}; }
+    static auto VCenter(i32 x) -> Position { return {x, Centered}; }
+    static auto Center() -> Position { return {Centered, Centered}; }
+
+    /// Convert to an absolute position.
+    auto absolute(Size screen_size, Size object_size) -> xy;
+
+    /// Offset horizontally.
+    auto hoffset(i32 offset) -> Position& {
+        xadjust += offset;
+        return *this;
+    }
+
+    /// Convert to a relative position.
+    auto relative(xy origin, Size parent_size, Size object_size) -> xy;
+
+    /// Offset vertically.
+    auto voffset(i32 offset) -> Position& {
+        yadjust += offset;
+        return *this;
+    }
+};
+
+class pr::client::Button {
+public:
+    ShapedText label;
+    Position pos{};
+    Size sz{};
+
+    explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
+
+    void draw(Renderer& r);
+};

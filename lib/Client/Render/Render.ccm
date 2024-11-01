@@ -6,6 +6,7 @@ module;
 #include <memory>
 #include <SDL3/SDL_video.h>
 #include <unordered_map>
+#include <vector>
 export module pr.client.render;
 
 import pr.utils;
@@ -14,7 +15,7 @@ import pr.client.render.gl;
 export namespace pr::client {
 struct Colour;
 struct Size;
-struct Position;
+struct xy;
 
 class Renderer;
 class Font;
@@ -28,6 +29,7 @@ enum struct FontSize : u8;
 // =============================================================================
 /// To keep font sizes uniform.
 enum struct pr::client::FontSize : base::u8 {
+    Large = 48,
     Huge = 96,
 };
 
@@ -70,21 +72,17 @@ struct pr::client::Size {
     Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
 };
 
-struct pr::client::Position {
-    static constexpr i32 Centered = std::numeric_limits<i32>::min();
-
+// XY position that is destructurable.
+struct pr::client::xy {
     i32 x{};
     i32 y{};
 
-    Position() = default;
-    Position(i32 x, i32 y) : x(x), y(y) {}
-    Position(Size s) : x(s.wd), y(s.ht) {}
-    Position(ivec2 xy) : x(xy.x), y(xy.y) {}
+    xy() = default;
+    xy(i32 x, i32 y) : x(x), y(y) {}
+    xy(vec2 v) : x(i32(v.x)), y(i32(v.y)) {}
+    xy(f32 x, f32 y) : x(i32(x)), y(i32(y)) {}
 
-    /// Create a position that is centered horizontally or vertically.
-    static auto HCenter(i32 y) -> Position { return {Centered, y}; }
-    static auto VCenter(i32 x) -> Position { return {x, Centered}; }
-    static auto Center() -> Position { return {Centered, Centered}; }
+    auto vec() const -> vec2 { return {f32(x), f32(y)}; }
 };
 
 // =============================================================================
@@ -99,20 +97,27 @@ class pr::client::ShapedText {
     u32 fsize;
     f32 wd;
     f32 ht;
+    f32 dp;
 
-    explicit ShapedText(VertexArrays vao, u32 fsize, f32 wd, f32 ht)
-        : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht) {}
+    explicit ShapedText(VertexArrays vao, u32 fsize, f32 wd, f32 ht, f32 dp)
+        : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht), dp(dp) {}
 
 public:
     /// Debugging function that dumps the contents of a HarfBuzz buffer;
     /// must be called after shaping.
     static auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf);
 
+    /// Get the depth of the text.
+    auto depth() const -> f32 { return dp; }
+
     /// Get the font size.
     auto font_size() const -> u32 { return fsize; }
 
     /// Get the height of the text.
     auto height() const -> f32 { return ht; }
+
+    /// Get the size of the text, including depth.
+    auto size() const -> Size { return {i32(wd), i32(ht + dp)}; }
 
     /// Get the vertices for this text.
     auto verts() const -> const VertexArrays& { return vao; }
@@ -187,7 +192,7 @@ class pr::client::Renderer {
     SDL_Window* window;
     SDL_GLContextState* context;
 
-    ShaderProgram identity_shader;
+    ShaderProgram primitive_shader;
     ShaderProgram text_shader;
     ShaderProgram image_shader;
     FT_Library ft;
@@ -213,14 +218,14 @@ public:
     /// Clear the screen.
     void clear(Colour c = Colour::White);
 
+    /// Draw a rectangle at a position in world coordinates.
+    void draw_rect(xy pos, Size size, Colour c = Colour::White);
+
     /// Draw text at a position in world coordinates.
-    ///
-    /// 'x' and 'y' can be PositionCentered, which will center the text
-    /// horizontally or vertically, respectively.
-    void draw_text(const ShapedText& text, Position pos, Colour c = Colour::White);
+    void draw_text(const ShapedText& text, xy pos, Colour c = Colour::White);
 
     /// Draw a texture at a position in world coordinates.
-    void draw_texture(const DrawableTexture& tex, Position pos);
+    void draw_texture(const DrawableTexture& tex, xy pos);
 
     /// Start a new frame.
     auto frame() -> Frame;
@@ -232,13 +237,13 @@ public:
     auto size() -> Size;
 
 private:
-    /// Convert a position to absolute coordinates.
-    auto absolute(Position pos, i32 obj_wd, i32 obj_ht) -> Size;
-
     /// Get a font of a given size.
     auto font(u32 size) -> Font&;
 
     /// Start/end a frame.
     void frame_end();
     void frame_start();
+
+    /// Set the active shader.
+    void use(ShaderProgram& shader);
 };

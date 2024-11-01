@@ -2,13 +2,18 @@ module;
 #include <base/Macros.hh>
 #include <memory>
 export module pr.client;
+
+import pr.utils;
+import pr.client.ui;
 import pr.client.render;
+import pr.client.render.gl;
 
 export namespace pr::client {
 class Client;
 }
 
 namespace pr::client {
+class Text;
 class Screen;
 class MenuScreen;
 }
@@ -28,6 +33,7 @@ public:
 
 class pr::client::MenuScreen : public Screen {
     ShapedText title;
+    Button quit;
 
 public:
     MenuScreen(Renderer& r);
