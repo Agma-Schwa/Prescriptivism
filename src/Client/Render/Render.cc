@@ -382,11 +382,9 @@ public:
 // =============================================================================
 //  Impl
 // =============================================================================
-struct Glyph {
-    GLuint texture;
+struct FontGlyph {
     vec2 size;
     vec2 bearing;
-    i32 advance;
 };
 
 struct Renderer::Impl {
@@ -400,7 +398,12 @@ struct Renderer::Impl {
     hb_font_t* default_font;
     FT_Library ft;
     FT_Face ft_face;
-    std::vector<Glyph> glyphs{};
+    std::vector<FontGlyph> glyphs{};
+    u32 atlas_entry_width{};
+    u32 atlas_entry_height{};
+    u32 atlas_columns{};
+    u32 atlas_rows{};
+    GLuint font_atlas{};
 
     Impl(int initial_wd, int initial_ht);
     ~Impl();
@@ -528,22 +531,63 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
     hb_ft_font_set_funcs(default_font);
     Assert(default_font, "Failed to create HarfBuzz font");
 
-    // Generate the font textures.
-    glyphs.resize(ft_face->num_glyphs);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    // Determine the maximum width and height amongst all glyphs.
     for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
-        // Not all chars need to exist in the font.
-        Assert(FT_Load_Glyph(ft_face, g, FT_LOAD_RENDER) == 0, "Failed to load glyph #{}?", g);
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexImage2D(
+        if (FT_Load_Glyph(ft_face, g, FT_LOAD_BITMAP_METRICS_ONLY) != 0) {
+            Log("Failed to load glyph #{}", g);
+            continue;
+        }
+
+        atlas_entry_width = std::max(atlas_entry_width, ft_face->glyph->bitmap.width);
+        atlas_entry_height = std::max(atlas_entry_height, ft_face->glyph->bitmap.rows);
+    }
+
+    // Determine how many characters we can fit in a single row since an
+    // entire font tends to exceed OpenGL’s texture size limits in terms
+    // of width.
+    GLint max_texture_size;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
+    atlas_columns = max_texture_size / atlas_entry_width;
+    atlas_rows = u32(std::ceil(f64(ft_face->num_glyphs) / atlas_columns));
+    u32 texture_width = atlas_columns * atlas_entry_width;
+    u32 texture_height = atlas_rows * atlas_entry_height;
+
+    // Allocate the atlas.
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glGenTextures(1, &font_atlas);
+    glBindTexture(GL_TEXTURE_2D, font_atlas);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RED,
+        texture_width,
+        texture_height,
+        0,
+        GL_RED,
+        GL_UNSIGNED_BYTE,
+        nullptr
+    );
+
+    // And copy each glyph.
+    glyphs.resize(ft_face->num_glyphs);
+    for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
+        // This *should* never fail because we're loading glyphs and
+        // not codepoints, but prefer not to crash if it does fail.
+        if (FT_Load_Glyph(ft_face, g, FT_LOAD_RENDER) != 0) {
+            Log("Failed to load glyph #{}", g);
+            continue;
+        }
+
+        u32 x = g % atlas_columns;
+        u32 y = g / atlas_columns;
+
+        glTexSubImage2D(
             GL_TEXTURE_2D,
             0,
-            GL_RED,
+            x * atlas_entry_width,
+            y * atlas_entry_height,
             ft_face->glyph->bitmap.width,
             ft_face->glyph->bitmap.rows,
-            0,
             GL_RED,
             GL_UNSIGNED_BYTE,
             ft_face->glyph->bitmap.buffer
@@ -554,10 +598,8 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glyphs[g] = {
-            texture,
             {ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows},
             {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
-            i32(ft_face->glyph->advance.x)
         };
     }
 }
@@ -600,7 +642,7 @@ Renderer::Frame::~Frame() {
     // Draw text.
     constexpr std::string_view InputText = "EÉÉẸ̣eééé́ẹ́ẹ́ʒffifl";
     static ShapedText text(r.impl->default_font, InputText, 96);
-    r.impl->draw_text(text, 200, 200, Colour{255, 255, 255, 255});
+    r.impl->draw_text(text, 20, r.impl->size().y - 200, Colour{255, 255, 255, 255});
 
     // Swap buffers.
     check SDL_GL_SwapWindow(r.impl->window);
@@ -620,7 +662,10 @@ void Renderer::Impl::draw_text(
     text_shader.use();
     text_shader.uniform("text_colour", colour.vec4());
     text_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
+
+    // Bind the font atlas.
     glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, font_atlas);
 
     // Create the VAO for the text.
     VertexArrays vao{VertexLayout::PositionTexture4D};
@@ -630,25 +675,38 @@ void Renderer::Impl::draw_text(
 
     // Draw each character.
     for (const auto& glyph : text.glyphs) {
-        auto c = glyph.index;
-        if (usz(c) > glyphs.size() or glyphs[c].texture == 0) c = U'?';
-        f32 xpos = x + glyphs[c].bearing.x + glyph.xoffs;
-        f32 ypos = y - (glyphs[c].size.y - glyphs[c].bearing.y) + glyph.yoffs;
-        f32 w = glyphs[c].size.x;
-        f32 h = glyphs[c].size.y;
+        auto g = glyph.index;
+        if (usz(g) > glyphs.size()) g = U'?';
+
+        // Compute the x and y position using the glyph’s metrics and
+        // the shaping data provided by HarfBuzz.
+        f32 xpos = x + glyphs[g].bearing.x + glyph.xoffs;
+        f32 ypos = y - (glyphs[g].size.y - glyphs[g].bearing.y) + glyph.yoffs;
+        f32 w = glyphs[g].size.x;
+        f32 h = glyphs[g].size.y;
+
+        // Compute the offset of the glyph in the atlas.
+        f64 texx = f64(g % atlas_columns) * atlas_entry_width;
+        f64 texy = f64(g / atlas_columns) * atlas_entry_height;
+        f64 atlas_width = f64(atlas_columns * atlas_entry_width);
+        f64 atlas_height = f64(atlas_rows * atlas_entry_height);
+        f32 u0 = f32(f64(texx) / atlas_width);
+        f32 u1 = f32(f64(texx + w) / atlas_width);
+        f32 v0 = f32(f64(texy) / atlas_height);
+        f32 v1 = f32(f64(texy + h) / atlas_height);
+
+        // Advance past the glyph.
         x += glyph.xadv;
 
+        // Build vertices for the glyph’s position and texture coordinates.
         vec4 verts[]{
-            {xpos, ypos + h, 0, 0},
-            {xpos, ypos, 0, 1},
-            {xpos + w, ypos, 1, 1},
-            {xpos, ypos + h, 0, 0},
-            {xpos + w, ypos, 1, 1},
-            {xpos + w, ypos + h, 1, 0}
+            {xpos, ypos + h, u0, v0},
+            {xpos, ypos, u0, v1},
+            {xpos + w, ypos, u1, v1},
+            {xpos, ypos + h, u0, v0},
+            {xpos + w, ypos, u1, v1},
+            {xpos + w, ypos + h, u1, v0}
         };
-
-        // Bind the character's texture.
-        glBindTexture(GL_TEXTURE_2D, glyphs[c].texture);
 
         // Upload the vertices.
         vbo.store(std::span<const vec4>{verts});
