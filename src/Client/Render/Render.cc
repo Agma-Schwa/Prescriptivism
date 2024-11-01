@@ -621,7 +621,6 @@ struct Renderer::Impl {
     Impl(int initial_wd, int initial_ht);
     ~Impl();
 
-    // TODO: Colour as uniform.
     void draw_text(
         const ShapedText& text,
         i32 x,
@@ -768,7 +767,7 @@ Renderer::Frame::~Frame() {
     constexpr std::string_view InputText = "EÉÉẸ̣eééé́ẹ́ẹ́ʒffifl";
     static ShapedText text = r.impl->default_font.shape(InputText);
     r.impl->draw_text(text, 20, r.impl->size().y - 200, Colour{255, 255, 255, 255});
-    r.impl->draw_text(text, 20, r.impl->size().y - 400, Colour{255, 255, 255, 255});
+    r.impl->draw_text(text, 20, r.impl->size().y - 400, Colour{200, 120, 120, 255});
 
     // Swap buffers.
     check SDL_GL_SwapWindow(r.impl->window);
