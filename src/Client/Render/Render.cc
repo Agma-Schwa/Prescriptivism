@@ -163,7 +163,7 @@ Font::Font(FT_Face ft_face, u32 size) : size{size} {
 ///
 /// The resulting object is position-independent and can
 /// be drawn at any coordinates.
-auto Font::shape(std::string_view text) -> ShapedText {
+auto Font::shape(std::u32string_view text) -> ShapedText {
     auto buf = hb_buf.get();
     auto font = hb_font.get();
 
@@ -173,7 +173,7 @@ auto Font::shape(std::string_view text) -> ShapedText {
     //
     // Normalisation can fail if the input was nonsense; just render an
     // error string in that case.
-    auto norm = Normalise(text::ToUTF32(text), text::NormalisationForm::NFD).value_or(U"<ERROR>");
+    auto norm = Normalise(text, text::NormalisationForm::NFD).value_or(U"<ERROR>");
 
     // Add the text and compute properties.
     hb_buffer_clear_contents(buf);
@@ -260,7 +260,6 @@ auto Font::shape(std::string_view text) -> ShapedText {
     VertexArrays vao{VertexLayout::PositionTexture4D};
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
-    vao.draw();
     return ShapedText(std::move(vao), size, x, max_ht, max_dp);
 }
 
@@ -496,6 +495,10 @@ auto Renderer::frame() -> Frame { return Frame(*this); }
 
 
 auto Renderer::make_text(std::string_view text, FontSize size) -> ShapedText {
+    return font(+size).shape(text::ToUTF32(text));
+}
+
+auto Renderer::make_text(std::u32string_view text, FontSize size) -> ShapedText {
     return font(+size).shape(text);
 }
 

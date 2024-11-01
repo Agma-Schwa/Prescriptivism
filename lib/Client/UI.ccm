@@ -78,7 +78,7 @@ class pr::client::InputSystem {
     bool was_selected = false;
 
 public:
-    std::string text_input;
+    std::u32string text_input;
     MouseState mouse;
     bool quit = false;
 
@@ -110,7 +110,7 @@ public:
     virtual void event_click() {}
 
     /// Event handler for when a selected element is given text input.
-    virtual void event_text_input(std::string_view) {}
+    virtual void event_text_input(std::u32string_view) {}
 
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
@@ -203,7 +203,7 @@ public:
 };
 
 class pr::client::TextEdit : public TextBox {
-    std::string text;
+    std::u32string text;
     bool dirty = false;
     FontSize size;
 
@@ -214,5 +214,5 @@ public:
     }
 
     void draw(Renderer& r) override;
-    void event_text_input(std::string_view input) override;
+    void event_text_input(std::u32string_view input) override;
 };

@@ -5,6 +5,7 @@ module;
 #include <utility>
 module pr.client.ui;
 
+import base.text;
 import pr.client.utils;
 import pr.client.render;
 import pr.client.render.gl;
@@ -88,9 +89,16 @@ void TextEdit::draw(Renderer& r) {
     TextBox::draw(r);
 }
 
-void TextEdit::event_text_input(std::string_view input) {
-    text += input;
+void TextEdit::event_text_input(std::u32string_view input) {
     dirty = true;
+    for (auto c : input) {
+        if (c == U'\b') {
+            if (not text.empty()) text.pop_back();
+            continue;
+        }
+
+        text += c;
+    }
 }
 
 // =============================================================================
@@ -122,9 +130,15 @@ void InputSystem::process_events() {
                 if (event.button.button == SDL_BUTTON_MIDDLE) mouse.middle = true;
                 break;
 
+            case SDL_EVENT_KEY_DOWN:
+                if (event.key.key == SDLK_BACKSPACE) {
+                    if (not text_input.empty()) text_input.pop_back();
+                    else text_input = U"\b";
+                }
+                break;
+
             case SDL_EVENT_TEXT_INPUT:
-                text_input += event.text.text;
-                Log("Text: {}", text_input);
+                text_input += text::ToUTF32(event.text.text);
                 break;
         }
     }

@@ -182,7 +182,7 @@ public:
     ///
     /// The resulting object is position-independent and can
     /// be drawn at any coordinates.
-    auto shape(std::string_view text) -> ShapedText;
+    auto shape(std::u32string_view text) -> ShapedText;
 
     /// Activate the font for rendering.
     void use() const { atlas.bind(); }
@@ -250,6 +250,7 @@ public:
 
     /// Create a text object that can be drawn.
     auto make_text(std::string_view text, FontSize size) -> ShapedText;
+    auto make_text(std::u32string_view text, FontSize size) -> ShapedText;
 
     /// Get the SDL window.
     auto sdl_window() -> SDL_Window* { return window; }
