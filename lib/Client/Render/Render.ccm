@@ -1,11 +1,13 @@
 module;
 #include <base/Macros.hh>
 #include <memory>
+#include <glm/glm.hpp>
 export module pr.client.render;
 import pr.utils;
 
 export namespace pr::client {
 struct Colour;
+struct Size;
 
 class Renderer;
 }
@@ -34,6 +36,7 @@ struct pr::client::Colour {
     f32 green() const { return g / 255.0f; }
     f32 blue() const { return b / 255.0f; }
     f32 alpha() const { return a / 255.0f; }
+    auto vec4() const -> glm::vec4 { return {red(), green(), blue(), alpha()}; }
 
     static constinit const Colour White;
 };
@@ -64,4 +67,18 @@ public:
 
     /// Start a new frame.
     auto frame() -> Frame;
+};
+
+template <typename T, std::size_t n>
+struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(glm::vec<n, T> vec, FormatContext& ctx) const {
+        std::string s{"("};
+        s += std::to_string(vec.x);
+        if constexpr (n >= 2) s += std::format(", {}", vec.y);
+        if constexpr (n >= 3) s += std::format(", {}", vec.z);
+        if constexpr (n >= 4) s += std::format(", {}", vec.w);
+        s += ")";
+        return std::formatter<std::string_view>::format(s, ctx);
+    }
 };

@@ -1,6 +1,5 @@
 module;
 #include <chrono>
-#include <imgui_impl_sdl3.h>
 #include <SDL3/SDL.h>
 #include <thread>
 module pr.client;
@@ -15,13 +14,12 @@ using namespace pr::client;
 // =============================================================================
 void MenuScreen::render(Renderer& renderer) {
     renderer.clear(Colour{45, 42, 46, 255});
-    renderer.draw_text("Prescriptivism", 0, 0, 48, Colour{255, 255, 255, 255});
 }
 
 // =============================================================================
 //  API
 // =============================================================================
-Client::Client(): renderer(Renderer::Create(1920, 1080)) {}
+Client::Client(): renderer(Renderer::Create(800, 600)) {}
 
 void Client::Run() {
     constexpr chr::milliseconds ClientTickDuration = 16ms;
@@ -33,7 +31,6 @@ void Client::Run() {
         // Process events.
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            ImGui_ImplSDL3_ProcessEvent(&event);
             switch (event.type) {
                 default: break;
                 case SDL_EVENT_QUIT:

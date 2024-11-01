@@ -8,6 +8,7 @@ export namespace pr {
 using namespace base;
 
 struct Profile;
+struct ZTermString;
 
 void CloseLoggingThread();
 
@@ -28,6 +29,22 @@ struct pr::Profile {
         auto duration = chr::duration_cast<chr::milliseconds>(end - start);
         std::println("Profile ({}): {}ms", name, duration.count());
     }
+};
+
+/// Wrapper around a null-terminated string; this is non-owning
+/// and should only be used in function parameters.
+struct pr::ZTermString {
+private:
+    std::string_view data;
+
+public:
+    constexpr ZTermString() : data("") {}
+    constexpr ZTermString(std::string& str) : data(str) {}
+
+    template <usz n>
+    constexpr ZTermString(const char (&str)[n]) : data(str, n - 1) {}
+
+    auto c_str() const -> const char* { return data.data(); }
 };
 
 template <typename ...Args>

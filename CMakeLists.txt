@@ -172,7 +172,22 @@ FetchContent_Declare(imgui
     SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui"
 )
 
-FetchContent_MakeAvailable(base sdl3 webp glbinding imgui)
+FetchContent_Declare(harfbuzz
+    GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz
+    GIT_TAG 10.0.1
+)
+
+FetchContent_Declare(glm
+    GIT_REPOSITORY https://github.com/g-truc/glm
+    GIT_TAG 1.0.1
+)
+
+FetchContent_Declare(freetype
+    GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype
+    GIT_TAG VER-2-13-3
+)
+
+FetchContent_MakeAvailable(base sdl3 webp glbinding imgui harfbuzz glm freetype)
 
 ## ============================================================================
 ##  Shared
@@ -202,50 +217,22 @@ target_link_libraries(PrescriptivismServer PRIVATE
 file(GLOB_RECURSE client_sources src/Client/*.cc)
 file(GLOB_RECURSE client_modules lib/Client/*.ccm)
 
-## ImGui doesn’t use CMake for some ungodly reason, so
-## we’ve added it as a submodule. It also just doesn’t
-## work to compile this as a separate library, so we’re
-## just going to add the source files to the main exe.
-file(GLOB imgui_sources
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/*.h"
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/*.cpp"
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_sdl3.h"
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_sdl3.cpp"
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_opengl3.cpp"
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends/imgui_impl_opengl3.h"
-)
-
-set_source_files_properties(${imgui_sources}
-    PROPERTIES
-    COMPILE_FLAGS
-    "-Wno-conversion -Wno-sign-conversion -Wno-implicit-int-float-conversion"
-)
-
-set_source_files_properties(libs/Client/impl.c
-    PROPERTIES
-    COMPILE_FLAGS
-    -Wno-error=implicit-fallthrough
-)
-
-add_executable(Prescriptivism ${client_sources} ${imgui_sources})
+add_executable(Prescriptivism ${client_sources})
 target_sources(Prescriptivism PUBLIC FILE_SET CXX_MODULES FILES ${client_modules})
 target_link_libraries(Prescriptivism PRIVATE
     PrescriptivismShared
     SDL3::SDL3
     glbinding::glbinding
     glbinding::glbinding-aux
+    glm::glm
+    harfbuzz
+    freetype
     webp
 )
 
 target_compile_options(Prescriptivism PRIVATE
     "--embed-dir=${PROJECT_SOURCE_DIR}/assets"
     -Wno-c23-extensions
-)
-
-target_include_directories(Prescriptivism PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui"
-    "${CMAKE_CURRENT_BINARY_DIR}/libs/imgui/backends"
-    "${PROJECT_SOURCE_DIR}/libs/Client"
 )
 
 ## ============================================================================
