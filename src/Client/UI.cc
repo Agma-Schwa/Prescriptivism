@@ -11,6 +11,7 @@ using namespace pr;
 using namespace pr::client;
 
 constexpr Colour DefaultButtonColour{36, 36, 36, 255};
+constexpr Colour HoverButtonColour{23, 23, 23, 255};
 
 auto Position::absolute(Size screen_size, Size object_size) -> xy {
     return relative(vec2(), screen_size, object_size);
@@ -45,7 +46,7 @@ Button::Button(
 void Button::draw(Renderer& r) {
     auto bg = pos.absolute(r.size(), sz);
     auto text = Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
-    r.draw_rect(bg, sz, DefaultButtonColour);
+    r.draw_rect(bg, sz, hovered ? HoverButtonColour : DefaultButtonColour);
     r.draw_text(label, text);
 }
 
@@ -63,7 +64,7 @@ void Screen::render(Renderer& r) {
 
 void Screen::tick(MouseState st) {
     for (auto& e : children) {
-        if (e->bounding_box().contains(st.pos) and st.left)
-            e->clicked();
+        e->hovered = e->bounding_box().contains(st.pos);
+        if (e->hovered and st.left) if (st.left) e->clicked();
     }
 }
