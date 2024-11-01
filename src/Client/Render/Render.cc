@@ -283,7 +283,6 @@ private:
 
 /// Text to be rendered.
 static constexpr u32 FontSize = 96;
-static constexpr u32 Glyphs = 5'000;
 class ShapedText {
     friend Renderer;
 
@@ -370,7 +369,7 @@ public:
             0,
             hb_buffer_get_length(buf),
             debug.data(),
-            debug.size(),
+            u32(debug.size()),
             nullptr,
             font,
             HB_BUFFER_SERIALIZE_FORMAT_TEXT,
@@ -401,7 +400,7 @@ struct Renderer::Impl {
     hb_font_t* default_font;
     FT_Library ft;
     FT_Face ft_face;
-    std::array<Glyph, Glyphs> glyphs{};
+    std::vector<Glyph> glyphs{};
 
     Impl(int initial_wd, int initial_ht);
     ~Impl();
@@ -530,12 +529,11 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
     Assert(default_font, "Failed to create HarfBuzz font");
 
     // Generate the font textures.
+    glyphs.resize(ft_face->num_glyphs);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    u32 loaded = 0;
-    for (u32 c = 0; c < Glyphs; c++) {
+    for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
         // Not all chars need to exist in the font.
-        if (FT_Load_Glyph(ft_face, c, FT_LOAD_RENDER) != 0) continue;
-        loaded++;
+        Assert(FT_Load_Glyph(ft_face, g, FT_LOAD_RENDER) == 0, "Failed to load glyph #{}?", g);
         GLuint texture;
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
@@ -555,15 +553,13 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glyphs[c] = {
+        glyphs[g] = {
             texture,
             {ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows},
             {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
             i32(ft_face->glyph->advance.x)
         };
     }
-
-    Log("Loaded {} glyphs", loaded);
 }
 
 Renderer::Impl::~Impl() {
@@ -612,10 +608,13 @@ Renderer::Frame::~Frame() {
 
 void Renderer::Impl::draw_text(
     const ShapedText& text,
-    i32 x,
-    i32 y,
+    i32 xint,
+    i32 yint,
     Colour colour
 ) {
+    f32 x = xint;
+    f32 y = yint;
+
     // Activate the text shader.
     auto sz = size();
     text_shader.use();
@@ -637,6 +636,7 @@ void Renderer::Impl::draw_text(
         f32 ypos = y - (glyphs[c].size.y - glyphs[c].bearing.y) + glyph.yoffs;
         f32 w = glyphs[c].size.x;
         f32 h = glyphs[c].size.y;
+        x += glyph.xadv;
 
         vec4 verts[]{
             {xpos, ypos + h, 0, 0},
@@ -653,7 +653,6 @@ void Renderer::Impl::draw_text(
         // Upload the vertices.
         vbo.store(std::span<const vec4>{verts});
         vao.draw();
-        x += glyph.xadv;
     }
 }
 
