@@ -11,6 +11,7 @@ module;
 #include <libassert/assert.hpp>
 #include <memory>
 #include <SDL3/SDL.h>
+#include <webp/decode.h>
 
 // clang-format off
 // Include order matters here!
@@ -23,6 +24,7 @@ module;
 module pr.client.render;
 
 import base.text;
+import base.fs;
 
 using namespace gl;
 using namespace pr;
@@ -73,6 +75,14 @@ constexpr char TextFragmentShaderData[]{
 #embed "Shaders/Text.frag"
 };
 
+constexpr char ImageVertexShaderData[]{
+#embed "Shaders/Image.vert"
+};
+
+constexpr char ImageFragmentShaderData[]{
+#embed "Shaders/Image.frag"
+};
+
 constexpr char DefaultFontRegular[]{
 #embed PRESCRIPTIVISM_DEFAULT_FONT_PATH
 };
@@ -119,7 +129,8 @@ class VertexBuffer : Descriptor<glDeleteBuffers> {
     GLenum draw_mode;
     GLsizei size = 0;
 
-    VertexBuffer(Vertices<2> data, GLenum draw_mode = GL_TRIANGLES) : draw_mode{draw_mode} {
+    template <typename T>
+    VertexBuffer(std::span<const T> data, GLenum draw_mode) : draw_mode{draw_mode} {
         glGenBuffers(1, &descriptor);
         copy_data(data);
     }
@@ -174,12 +185,15 @@ public:
 
     /// Creates a new buffer and attaches it to the vertex array.
     auto add_buffer(Vertices<2> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
-        buffers.push_back(VertexBuffer{data, draw_mode});
-        auto& vbo = buffers.back();
-        bind();
-        glBindBuffer(GL_ARRAY_BUFFER, vbo.descriptor);
-        ApplyLayout();
-        return vbo;
+        return AddBufferImpl(data, draw_mode);
+    }
+
+    auto add_buffer(Vertices<3> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
+        return AddBufferImpl(data, draw_mode);
+    }
+
+    auto add_buffer(Vertices<4> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
+        return AddBufferImpl(data, draw_mode);
     }
 
     /// Creates a new buffer and attaches it to the vertex array.
@@ -200,6 +214,16 @@ public:
     void unbind() const { glBindVertexArray(0); }
 
 private:
+    template <typename T>
+    auto AddBufferImpl(std::span<const T> verts, GLenum draw_mode) -> VertexBuffer& {
+        buffers.push_back(VertexBuffer{verts, draw_mode});
+        auto& vbo = buffers.back();
+        bind();
+        glBindBuffer(GL_ARRAY_BUFFER, vbo.descriptor);
+        ApplyLayout();
+        return vbo;
+    }
+
     void ApplyLayout() {
         switch (layout) {
             case VertexLayout::Position2D:
@@ -297,6 +321,7 @@ public:
 
     /// Allocate a texture with the given width and height.
     Texture(
+        const void* data,
         u32 width,
         u32 height,
         GLenum format,
@@ -319,7 +344,7 @@ public:
             0,
             format,
             type,
-            nullptr
+            data
         );
 
         glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -327,6 +352,15 @@ public:
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
+
+    Texture(
+        u32 width,
+        u32 height,
+        GLenum format,
+        GLenum type,
+        GLenum target = GL_TEXTURE_2D,
+        GLenum unit = GL_TEXTURE0
+    ) : Texture(nullptr, width, height, format, type, target, unit) {}
 
     /// Get the maximum texture size.
     static auto MaxSize() -> GLint {
@@ -354,6 +388,42 @@ public:
             type,
             data
         );
+    }
+};
+
+class DrawableTexture : public Texture {
+    VertexArrays vao{VertexLayout::PositionTexture4D};
+
+public:
+    DrawableTexture(
+        const void* data,
+        u32 width,
+        u32 height,
+        GLenum format,
+        GLenum type,
+        GLenum target = GL_TEXTURE_2D,
+        GLenum unit = GL_TEXTURE0
+    ) : Texture(data, width, height, format, type, target, unit) {
+        // Flip the texture uv coordinates upside-down since the origin
+        // is in the bottom-left corner, but that’s not how images work.
+        vec4 verts[] {
+            {0, 0, 0, 1},
+            {width, 0, 1, 1},
+            {0, height, 0, 0},
+            {width, height, 1, 0},
+        };
+
+        Log("v0: {}", verts[0]);
+        Log("v1: {}", verts[1]);
+        Log("v2: {}", verts[2]);
+        Log("v3: {}", verts[3]);
+        vao.add_buffer(verts, GL_TRIANGLE_STRIP);
+    }
+
+    /// Draw the texture.
+    void draw() const {
+        bind();
+        vao.draw();
     }
 };
 
@@ -541,10 +611,10 @@ public:
 
             // Note: 'codepoint' here is actually a glyph index in the
             // font after shaping, and not a codepoint.
-            auto g = char32_t(info.codepoint);
-            auto xoffs = pos.x_offset / f32(Scale);
-            auto xadv = pos.x_advance / f32(Scale);
-            auto yoffs = pos.y_offset / f32(Scale);
+            u32 g = u32(info.codepoint);
+            f32 xoffs = pos.x_offset / f32(Scale);
+            f32 xadv = pos.x_advance / f32(Scale);
+            f32 yoffs = pos.y_offset / f32(Scale);
 
             // Compute the x and y position using the glyph’s metrics and
             // the shaping data provided by HarfBuzz.
@@ -612,8 +682,9 @@ struct Renderer::Impl {
     SDL_Window* window;
     SDL_GLContextState* context;
 
-    ShaderProgram default_shader;
+    ShaderProgram identity_shader;
     ShaderProgram text_shader;
+    ShaderProgram image_shader;
     FT_Library ft;
     FT_Face ft_face;
     Font default_font;
@@ -627,6 +698,8 @@ struct Renderer::Impl {
         i32 y,
         Colour c
     );
+
+    void draw_texture(const DrawableTexture& tex, i32 x, i32 y);
 
     auto size() -> ivec2 {
         int wd, ht;
@@ -702,7 +775,7 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
     check SDL_GL_SetSwapInterval(1);
 
     // Load shaders.
-    default_shader = ShaderProgram(
+    identity_shader = ShaderProgram(
         std::span{IdentityVertexShaderData},
         std::span{IdentityFragmentShaderData}
     );
@@ -710,6 +783,11 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
     text_shader = ShaderProgram(
         std::span{TextVertexShaderData},
         std::span{TextFragmentShaderData}
+    );
+
+    image_shader = ShaderProgram(
+        std::span{ImageVertexShaderData},
+        std::span{ImageFragmentShaderData}
     );
 
     // Enable blending.
@@ -752,16 +830,31 @@ Renderer::Frame::Frame(Renderer& r) : r(r) {
 }
 
 Renderer::Frame::~Frame() {
+    // Draw an image.
+    static auto image = [&] {
+        auto file = File::Read<std::vector<char>>("./assets/test.webp").value();
+        int wd, ht;
+        auto data = WebPDecodeRGBA(reinterpret_cast<const u8*>(file.data()), file.size(), &wd, &ht);
+        Assert(data, "Decoding error");
+        defer { WebPFree(data); };
+        return DrawableTexture(data, wd, ht, GL_RGBA, GL_UNSIGNED_BYTE);
+    }();
+
+    r.impl->draw_texture(image, 0, 0);
+
     // Draw a triangle.
     vec2 points[]{// clang-format off
-        {-0.5f, -0.5f},
-        {0.0f, 0.5f},
-        {0.5f, -0.5f}
+        {0, 0},
+        {50, 0},
+        {0, 50}
     }; // clang-format on
 
+    auto sz = r.impl->size();
+    r.impl->identity_shader.use();
+    r.impl->identity_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
     VertexArrays vao{VertexLayout::Position2D};
     vao.add_buffer(points);
-    // vao.draw();
+    vao.draw();
 
     // Draw text.
     constexpr std::string_view InputText = "EÉÉẸ̣eééé́ẹ́ẹ́ʒffifl";
@@ -791,6 +884,18 @@ void Renderer::Impl::draw_text(
 
     // Dew it.
     text.vao.draw();
+}
+
+void Renderer::Impl::draw_texture(
+    const DrawableTexture& tex,
+    i32 x,
+    i32 y
+) {
+    auto sz = size();
+    image_shader.use();
+    image_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
+    image_shader.uniform("position", vec2(x, y));
+    tex.draw();
 }
 
 // =============================================================================
