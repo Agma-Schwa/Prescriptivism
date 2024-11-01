@@ -5,6 +5,7 @@ module;
 module pr.client;
 
 import pr.utils;
+import base.text;
 
 using namespace pr;
 using namespace pr::client;
@@ -12,10 +13,10 @@ using namespace pr::client;
 // =============================================================================
 //  Main Menu Screen
 // =============================================================================
-MenuScreen::MenuScreen(Renderer& r)
-    : title{r.make_text("Prescriptivism", FontSize::Huge)} {
+MenuScreen::MenuScreen(Client& c)
+    : title{c.renderer.make_text("Prescriptivism", FontSize::Huge)} {
     auto& quit = Create<Button>(
-        r.make_text("Quit", FontSize::Large),
+        c.renderer.make_text("Quit", FontSize::Large),
         Position::HCenter(150),
         10,
         125
@@ -23,14 +24,13 @@ MenuScreen::MenuScreen(Renderer& r)
 
     Create<TextEdit>(
         Position::HCenter(250),
+        FontSize::Large,
         10,
         250,
         25
     );
 
-    quit.on_click = [] {
-        Client::quit = true;
-    };
+    quit.on_click = [&c] { c.input_system.quit = true; };
 }
 
 void MenuScreen::render(Renderer& r) {
@@ -42,50 +42,25 @@ void MenuScreen::render(Renderer& r) {
 // =============================================================================
 //  API
 // =============================================================================
-MouseState Client::mouse;
-bool Client::quit = false;
-
 Client::Client() : renderer(Renderer(800, 600)) {
-    menu_screen = std::make_unique<MenuScreen>(renderer);
+    menu_screen = std::make_unique<MenuScreen>(*this);
     current_screen = menu_screen.get();
 }
 
 void Client::Run() {
     constexpr chr::milliseconds ClientTickDuration = 16ms;
-    while (not quit) {
+    while (not input_system.quit) {
         Renderer::Frame _ = renderer.frame();
         auto start_of_tick = chr::system_clock::now();
 
-        // Get mouse state.
-        mouse = {};
-        f32 x, y;
-        SDL_GetMouseState(&x, &y);
-        mouse.pos = {x, renderer.size().ht - y};
-
-        // Process events.
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            switch (event.type) {
-                default: break;
-                case SDL_EVENT_QUIT:
-                    quit = true;
-                    break;
-
-                // Record the button presses instead of acting on them immediately; this
-                // has the effect of debouncing clicks within a single tick.
-                case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                    if (event.button.button == SDL_BUTTON_LEFT) mouse.left = true;
-                    if (event.button.button == SDL_BUTTON_RIGHT) mouse.right = true;
-                    if (event.button.button == SDL_BUTTON_MIDDLE) mouse.middle = true;
-                    break;
-            }
-        }
+        // Handle user input.
+        input_system.process_events();
 
         // Refresh screen info.
         current_screen->refresh(renderer.size());
 
         // Tick the screen.
-        current_screen->tick(mouse);
+        current_screen->tick(input_system);
 
         // Draw it.
         current_screen->render(renderer);

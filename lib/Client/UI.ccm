@@ -3,6 +3,7 @@ module;
 #include <base/Macros.hh>
 #include <limits>
 #include <memory>
+#include <SDL3/SDL.h>
 export module pr.client.ui;
 
 import pr.utils;
@@ -10,11 +11,11 @@ import pr.client.render;
 
 export namespace pr::client {
 struct Position;
-struct MouseState;
 class Element;
 class Button;
 class Screen;
 class TextEdit;
+class InputSystem;
 }
 
 namespace pr::client {
@@ -64,12 +65,27 @@ struct pr::client::Position {
     }
 };
 
-/// Mouse button state.
-struct pr::client::MouseState {
-    xy pos{};
-    bool left{};
-    bool right{};
-    bool middle{};
+/// User input handler.
+class pr::client::InputSystem {
+    struct MouseState {
+        xy pos{};
+        bool left{};
+        bool right{};
+        bool middle{};
+    };
+
+    Renderer& renderer;
+    bool was_selected = false;
+
+public:
+    std::string text_input;
+    MouseState mouse;
+    bool quit = false;
+
+    InputSystem(Renderer& r) : renderer(r) {}
+
+    void process_events();
+    void update_selection(bool is_element_selected);
 };
 
 class pr::client::Element {
@@ -91,7 +107,10 @@ public:
     auto bounding_box() const -> AABB { return box; }
 
     /// Event handler for when the mouse is clicked on this element.
-    virtual void clicked() {}
+    virtual void event_click() {}
+
+    /// Event handler for when a selected element is given text input.
+    virtual void event_text_input(std::string_view) {}
 
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
@@ -147,16 +166,22 @@ public:
     /// The default tick handler visits all elements and performs UI
     /// interactions on them; thus, calling this handler is recommended
     /// if you override it.
-    virtual void tick(MouseState state);
+    virtual void tick(InputSystem& input);
 };
 
 class pr::client::TextBox : public Element {
-protected:
     ShapedText label;
+
+protected:
     Position pos{};
     Size sz{};
+    i32 padding{};
+    i32 min_wd{};
+    i32 min_ht{};
 
     explicit TextBox(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
+
+    void UpdateText(ShapedText new_text);
 
 public:
     void draw(Renderer& r) override;
@@ -170,7 +195,7 @@ public:
     explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
         : TextBox(std::move(label), pos, padding, min_wd, min_ht) {}
 
-    void clicked() override {
+    void event_click() override {
         if (on_click) on_click();
     }
 
@@ -179,12 +204,15 @@ public:
 
 class pr::client::TextEdit : public TextBox {
     std::string text;
+    bool dirty = false;
+    FontSize size;
 
 public:
-    TextEdit(Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
-        : TextBox(ShapedText(), pos, padding, min_wd, min_ht) {
+    TextEdit(Position pos, FontSize size, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
+        : TextBox(ShapedText(), pos, padding, min_wd, min_ht), size{size} {
         selectable = true;
     }
 
     void draw(Renderer& r) override;
+    void event_text_input(std::string_view input) override;
 };

@@ -22,14 +22,14 @@ class Renderer;
 class Font;
 class ShapedText;
 
-enum struct FontSize : u8;
+enum struct FontSize : u32;
 } // namespace pr::client
 
 // =============================================================================
 //  Utility Types
 // =============================================================================
 /// To keep font sizes uniform.
-enum struct pr::client::FontSize : base::u8 {
+enum struct pr::client::FontSize : base::u32 {
     Large = 48,
     Huge = 96,
 };
@@ -129,7 +129,7 @@ public:
     auto depth() const -> f32 { return dp; }
 
     /// Get the font size.
-    auto font_size() const -> u32 { return fsize; }
+    auto font_size() const -> FontSize { return FontSize(fsize); }
 
     /// Get the height of the text.
     auto height() const -> f32 { return ht; }
@@ -250,6 +250,9 @@ public:
 
     /// Create a text object that can be drawn.
     auto make_text(std::string_view text, FontSize size) -> ShapedText;
+
+    /// Get the SDL window.
+    auto sdl_window() -> SDL_Window* { return window; }
 
     /// Get the size of the window.
     auto size() -> Size;

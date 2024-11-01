@@ -413,7 +413,7 @@ void Renderer::draw_text(
     text_shader.uniform("position", pos.vec());
 
     // Bind the font atlas.
-    font(text.font_size()).use();
+    font(+text.font_size()).use();
 
     // Dew it.
     text.vao.draw();

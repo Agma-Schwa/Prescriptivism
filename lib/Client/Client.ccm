@@ -21,7 +21,7 @@ class pr::client::MenuScreen : public Screen {
     ShapedText title;
 
 public:
-    MenuScreen(Renderer& r);
+    MenuScreen(Client& c);
 
     void render(Renderer& r) override;
 };
@@ -33,11 +33,8 @@ public:
     /// The main renderer.
     Renderer renderer;
 
-    /// The current mouse state.
-    static MouseState mouse;
-
-    /// Whether we should quit the game.
-    static bool quit;
+    /// The user input handler.
+    InputSystem input_system{renderer};
 
 private:
     std::unique_ptr<MenuScreen> menu_screen;
