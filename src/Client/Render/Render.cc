@@ -163,7 +163,10 @@ Font::Font(FT_Face ft_face, u32 size) : size{size} {
 ///
 /// The resulting object is position-independent and can
 /// be drawn at any coordinates.
-auto Font::shape(std::u32string_view text) -> ShapedText {
+auto Font::shape(
+    std::u32string_view text,
+    std::vector<ShapedText::Cluster>* clusters
+) -> ShapedText {
     auto buf = hb_buf.get();
     auto font = hb_font.get();
 
@@ -209,9 +212,11 @@ auto Font::shape(std::u32string_view text) -> ShapedText {
     std::vector<vec4> verts;
     f32 x = 0;
     f32 max_ht = 0, max_dp = 0;
+    if (clusters) clusters->clear();
     for (unsigned i = 0; i < count; ++i) {
         auto& info = infos[i];
         auto& pos = positions[i];
+        if (clusters) clusters->emplace_back(info.cluster, i32(x));
 
         // Note: 'codepoint' here is actually a glyph index in the
         // font after shaping, and not a codepoint.
@@ -395,13 +400,12 @@ void Renderer::draw_line(xy start, xy end, Colour c) {
     vao.draw();
 }
 
-
 void Renderer::draw_rect(xy pos, Size size, Colour c) {
     use(primitive_shader);
     primitive_shader.uniform("in_colour", c.vec4());
     auto [x, y] = pos;
     VertexArrays vao{VertexLayout::Position2D};
-    vec2 verts[] {
+    vec2 verts[]{
         {x, y},
         {x + size.wd, y},
         {x, y + size.ht},
@@ -503,13 +507,20 @@ auto Renderer::font(u32 size) -> Font& {
 
 auto Renderer::frame() -> Frame { return Frame(*this); }
 
-
-auto Renderer::make_text(std::string_view text, FontSize size) -> ShapedText {
-    return font(+size).shape(text::ToUTF32(text));
+auto Renderer::make_text(
+    std::string_view text,
+    FontSize size,
+    std::vector<ShapedText::Cluster>* clusters
+) -> ShapedText {
+    return font(+size).shape(text::ToUTF32(text), clusters);
 }
 
-auto Renderer::make_text(std::u32string_view text, FontSize size) -> ShapedText {
-    return font(+size).shape(text);
+auto Renderer::make_text(
+    std::u32string_view text,
+    FontSize size,
+    std::vector<ShapedText::Cluster>* clusters
+) -> ShapedText {
+    return font(+size).shape(text, clusters);
 }
 
 // =============================================================================

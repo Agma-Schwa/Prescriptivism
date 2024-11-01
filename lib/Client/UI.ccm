@@ -74,13 +74,22 @@ class pr::client::InputSystem {
         bool middle{};
     };
 
+    struct Arrows {
+        bool up{};
+        bool down{};
+        bool left{};
+        bool right{};
+    };
+
     Renderer& renderer;
     bool was_selected = false;
 
 public:
     std::u32string text_input;
     MouseState mouse;
+    Arrows arrows;
     bool quit = false;
+    bool keyboard_input = false;
 
     InputSystem(Renderer& r) : renderer(r) {}
 
@@ -110,7 +119,7 @@ public:
     virtual void event_click() {}
 
     /// Event handler for when a selected element is given text input.
-    virtual void event_text_input(std::u32string_view) {}
+    virtual void event_input(InputSystem& input) {}
 
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
@@ -170,15 +179,14 @@ public:
 };
 
 class pr::client::TextBox : public Element {
-    ShapedText label;
-
 protected:
+    ShapedText label;
     Position pos{};
     Size sz{};
     i32 padding{};
     i32 min_wd{};
     i32 min_ht{};
-    i32 cursor = -1; // Cursor offset relative to left bound; -1 to disable.
+    i32 cursor_offs = -1; // Cursor offset from the start of the text; -1 to disable.
 
     explicit TextBox(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
 
@@ -205,16 +213,18 @@ public:
 
 class pr::client::TextEdit : public TextBox {
     std::u32string text;
+    std::vector<ShapedText::Cluster> clusters;
     bool dirty = false;
     FontSize size;
+    i32 cursor = 0;
+    u32 no_blink_ticks = 0; // Used to inhibit blinking during typing.
 
 public:
     TextEdit(Position pos, FontSize size, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
         : TextBox(ShapedText(), pos, padding, min_wd, min_ht), size{size} {
         selectable = true;
-        cursor = 0;
     }
 
     void draw(Renderer& r) override;
-    void event_text_input(std::u32string_view input) override;
+    void event_input(InputSystem& input) override;
 };

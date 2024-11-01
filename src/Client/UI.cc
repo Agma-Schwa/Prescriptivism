@@ -1,8 +1,10 @@
 module;
 #include <algorithm>
+#include <cmath>
 #include <SDL3/SDL.h>
 #include <string_view>
 #include <utility>
+#include <ranges>
 module pr.client.ui;
 
 import base.text;
@@ -72,11 +74,13 @@ void TextBox::draw(Renderer& r) {
     auto bg = pos.absolute(r.size(), sz);
     auto text = Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
     r.draw_text(label, text);
-    if (cursor != -1 and selected and not r.blink_cursor()) r.draw_line(
-        xy(text.x + 1 + i32(label.width()), text.y),
-        xy(text.x + 1 + i32(label.width()), text.y + i32(label.height())),
-        Colour::White
-    );
+    if (cursor_offs != -1) {
+        r.draw_line(
+            xy(i32(text.x) + cursor_offs, text.y - i32(label.depth())),
+            xy(i32(text.x) + cursor_offs, text.y + i32(label.height())),
+            Colour::White
+        );
+    }
 }
 
 void TextBox::refresh(Size screen_size) {
@@ -86,7 +90,41 @@ void TextBox::refresh(Size screen_size) {
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
-        UpdateText(r.make_text(text, size));
+        UpdateText(r.make_text(text, size, &clusters));
+    }
+
+    // Use HarfBuzz cluster information to position the cursor: if the cursor
+    // position corresponds to an entry in the clusters array (e.g. the cursor
+    // is at position 3, and the array has an entry with value 3), position the
+    // cursor right before the character that starts at that cluster (i.e. the
+    // n-th character, where n is the index of the entry with value 3).
+    //
+    // If there is no entry, find the smallest cluster value 's' closest to the
+    // cursor position, take the difference between it and the next cluster, and
+    // lerp the cursor in the middle of the character at 's'.
+    if (no_blink_ticks) no_blink_ticks--;
+    if (selected and not clusters.empty() and (no_blink_ticks or r.blink_cursor())) {
+        cursor_offs = [&] -> i32 {
+            // Cursor is at the end of the text.
+            if (cursor == i32(text.size())) return i32(label.width());
+
+            // Cursor is too far right. Put it at the very end.
+            auto it = rgs::lower_bound(clusters, cursor, {}, &ShapedText::Cluster::index);
+            if (it == clusters.end()) it = clusters.begin() + clusters.size() - 1;
+
+            // Cursor is right before a character.
+            if (it->index == cursor) return i32(it->xoffs);
+
+            // Cursor is in the middle of a character; interpolate into it.
+            auto next = std::next(it);
+            auto x1 = it->xoffs;
+            auto x2 = next == clusters.end() ? label.width() : next->xoffs;
+            auto ni = next == clusters.end() ? text.size() : next->index;
+            auto x = i32(std::lerp(x1, x2, f32(cursor - it->index) / f32(ni - it->index)));
+            return x;
+        }();
+    } else {
+        cursor_offs = -1;
     }
 
     auto bg = pos.absolute(r.size(), sz);
@@ -94,16 +132,26 @@ void TextEdit::draw(Renderer& r) {
     TextBox::draw(r);
 }
 
-void TextEdit::event_text_input(std::u32string_view input) {
-    dirty = true;
-    for (auto c : input) {
-        if (c == U'\b') {
-            if (not text.empty()) text.pop_back();
-            continue;
+void TextEdit::event_input(InputSystem& input) {
+    // Copy text into the buffer.
+    if (not input.text_input.empty()) {
+        no_blink_ticks = 10;
+        dirty = true;
+        for (auto c : input.text_input) {
+            if (c == U'\b') {
+                if (not text.empty()) text.pop_back();
+                continue;
+            }
+
+            text += c;
         }
 
-        text += c;
+        cursor = std::min(i32(text.size()), cursor);
     }
+
+    if (input.arrows.left) cursor = std::max(0, cursor - 1);
+    if (input.arrows.right) cursor = std::min(i32(text.size()), cursor + 1);
+    if (input.keyboard_input) no_blink_ticks = 10;
 }
 
 // =============================================================================
@@ -111,6 +159,8 @@ void TextEdit::event_text_input(std::u32string_view input) {
 // =============================================================================
 void InputSystem::process_events() {
     text_input.clear();
+    keyboard_input = false;
+    arrows = {};
 
     // Get mouse state.
     mouse = {};
@@ -136,13 +186,23 @@ void InputSystem::process_events() {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_BACKSPACE) {
-                    if (not text_input.empty()) text_input.pop_back();
-                    else text_input = U"\b";
+                keyboard_input = true;
+                switch (event.key.key) {
+                    default: break;
+                    case SDLK_BACKSPACE: {
+                        if (not text_input.empty()) text_input.pop_back();
+                        else text_input = U"\b";
+                    } break;
+
+                    case SDLK_LEFT: arrows.left = true; break;
+                    case SDLK_RIGHT: arrows.right = true; break;
+                    case SDLK_UP: arrows.up = true; break;
+                    case SDLK_DOWN: arrows.down = true; break;
                 }
                 break;
 
             case SDL_EVENT_TEXT_INPUT:
+                keyboard_input = true;
                 text_input += text::ToUTF32(event.text.text);
                 break;
         }
@@ -191,7 +251,7 @@ void Screen::tick(InputSystem& input) {
     // Mark the selected element as selected once more.
     if (selected) {
         selected->selected = true;
-        if (not input.text_input.empty()) selected->event_text_input(input.text_input);
+        selected->event_input(input);
     }
 
     // In any case, tell the input system whether we have a
