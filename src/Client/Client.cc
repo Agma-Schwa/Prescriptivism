@@ -16,9 +16,8 @@ MenuScreen::MenuScreen(Renderer& r)
     : title{r.make_text("Prescriptivism", FontSize::Huge)} {}
 
 void MenuScreen::render(Renderer& renderer) {
-    auto sz = renderer.size();
     renderer.clear(Colour{45, 42, 46, 255});
-    renderer.draw_text(title, 0, sz.y - 200);
+    renderer.draw_text(title, Position::HCenter(-50));
 }
 
 // =============================================================================

@@ -204,6 +204,7 @@ auto Font::shape(std::string_view text) -> ShapedText {
     // Compute the vertices for each glyph.
     std::vector<vec4> verts;
     f32 x = 0;
+    f32 max_y = 0;
     for (unsigned i = 0; i < count; ++i) {
         auto& info = infos[i];
         auto& pos = positions[i];
@@ -238,6 +239,7 @@ auto Font::shape(std::string_view text) -> ShapedText {
 
         // Advance past the glyph.
         x += xadv;
+        max_y = std::max(max_y, ypos + h);
 
         // Build vertices for the glyph’s position and texture coordinates.
         verts.push_back({xpos, ypos + h, u0, v0});
@@ -253,7 +255,7 @@ auto Font::shape(std::string_view text) -> ShapedText {
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
     vao.draw();
-    return ShapedText(std::move(vao), size);
+    return ShapedText(std::move(vao), size, x, max_y);
 }
 
 // =============================================================================
@@ -373,23 +375,23 @@ Renderer::Frame::~Frame() { r.frame_end(); }
 //  Drawing
 // =============================================================================
 void Renderer::clear(Colour c) {
-    auto sz = size();
-    glViewport(0, 0, sz.x, sz.y);
+    auto [sx, sy] = size();
+    glViewport(0, 0, sx, sy);
     glClearColor(c.red(), c.green(), c.blue(), c.alpha());
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
 void Renderer::draw_text(
     const ShapedText& text,
-    i32 x,
-    i32 y,
+    Position pos,
     Colour colour
 ) {
     // Initialise the text shader.
-    auto sz = size();
+    auto [sx, sy] = size();
+    auto [x, y] = absolute(pos, i32(text.width()), i32(text.height()));
     text_shader.use();
     text_shader.uniform("text_colour", colour.vec4());
-    text_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
+    text_shader.uniform("projection", glm::ortho<f32>(0, sx, 0, sy));
     text_shader.uniform("position", vec2(x, y));
 
     // Bind the font atlas.
@@ -401,12 +403,12 @@ void Renderer::draw_text(
 
 void Renderer::draw_texture(
     const DrawableTexture& tex,
-    i32 x,
-    i32 y
+    Position pos
 ) {
-    auto sz = size();
+    auto [sx, sy] = size();
+    auto [x, y] = absolute(pos, tex.width(), tex.height());
     image_shader.use();
-    image_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
+    image_shader.uniform("projection", glm::ortho<f32>(0, sx, 0, sy));
     image_shader.uniform("position", vec2(x, y));
     tex.draw();
 }
@@ -479,8 +481,21 @@ auto Renderer::make_text(std::string_view text, FontSize size) -> ShapedText {
 // =============================================================================
 //  Querying State
 // =============================================================================
-auto Renderer::size() -> ivec2 {
-    int wd, ht;
+auto Renderer::absolute(Position pos, i32 obj_wd, i32 obj_ht) -> Size {
+    static auto Clamp = [](i32 val, i32 obj_size, i32 total_size) -> i32 {
+        if (val == Position::Centered) return (total_size - obj_size) / 2;
+        if (val < 0) return total_size + val - obj_size;
+        return val;
+    };
+
+    auto [sx, sy] = size();
+    auto x = Clamp(pos.x, obj_wd, sx);
+    auto y = Clamp(pos.y, obj_ht, sy);
+    return {x, y};
+}
+
+auto Renderer::size() -> Size {
+    i32 wd, ht;
     check SDL_GetWindowSize(window, &wd, &ht);
     return {wd, ht};
 }

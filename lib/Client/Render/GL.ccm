@@ -269,6 +269,8 @@ class client::Texture : Descriptor<glDeleteTextures> {
     GLenum unit{};
     GLenum format{};
     GLenum type{};
+    u32 wd;
+    u32 ht;
 
 public:
     Texture() = default;
@@ -305,6 +307,9 @@ public:
         glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        wd = width;
+        ht = height;
     }
 
     Texture(
@@ -328,6 +333,12 @@ public:
         glActiveTexture(unit);
         glBindTexture(target, descriptor);
     }
+
+    /// Get the height of the texture.
+    auto height() const -> u32 { return ht; }
+
+    /// Get the width of the texture.
+    auto width() const -> u32 { return wd; }
 
     /// Write data into the texture at a given offset.
     void write(u32 x, u32 y, u32 width, u32 height, const void* data) {
