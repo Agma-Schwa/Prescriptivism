@@ -81,10 +81,11 @@ constexpr char DefaultFontRegular[]{
 //  OpenGL Wrappers
 // =============================================================================
 template <auto deleter>
-class Descriptor {
+struct Descriptor {
 protected:
     GLuint descriptor{};
-    Descriptor() {}
+
+    Descriptor() = default;
 
 public:
     Descriptor(const Descriptor&) = delete;
@@ -131,7 +132,6 @@ public:
     void copy_data(Vertices<2> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
     void copy_data(Vertices<3> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
     void copy_data(Vertices<4> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
-
 
     /// Draw the buffer.
     void draw() const {
@@ -262,6 +262,10 @@ public:
     }
 
     /// Set a uniform.
+    void uniform(ZTermString name, vec2 v) {
+        return SetUniform(name, glUniform2f, v.x, v.y);
+    }
+
     void uniform(ZTermString name, vec4 v) {
         return SetUniform(name, glUniform4f, v.x, v.y, v.z, v.w);
     }
@@ -282,89 +286,96 @@ private:
     }
 };
 
-/// Text to be rendered.
-static constexpr u32 FontSize = 96;
-class ShapedText {
-    friend Renderer;
-
-    VertexArrays vao{VertexLayout::PositionTexture4D};
+class Texture : Descriptor<glDeleteTextures> {
+    GLenum target{};
+    GLenum unit{};
+    GLenum format{};
+    GLenum type{};
 
 public:
-    struct Glyph {
-        char32_t index;
-        f32 xoffs;
-        f32 xadv;
-        f32 yoffs;
-    };
+    Texture() = default;
 
-    std::vector<Glyph> glyphs;
+    /// Allocate a texture with the given width and height.
+    Texture(
+        u32 width,
+        u32 height,
+        GLenum format,
+        GLenum type,
+        GLenum target = GL_TEXTURE_2D,
+        GLenum unit = GL_TEXTURE0
+    ) : target{target},
+        unit{unit},
+        format{format},
+        type{type} {
 
-    ShapedText(hb_font_t* font, std::string_view text, i32 font_size) {
-        // Convert to UTF-32 in canonical decomposition form; this helps
-        // with fonts that may not have certain precombined characters, but
-        // which *do* support the individual components.
-        //
-        // Normalisation can fail if the input was nonsense; just render an
-        // error string in that case.
-        auto norm = Normalise(text::ToUTF32(text), text::NormalisationForm::NFD).value_or(U"<ERROR>");
-        auto buf = hb_buffer_create();
-        if (not buf) {
-            Log("Failed to create HarfBuzz buffer");
-            return;
-        }
+        glGenTextures(1, &descriptor);
+        bind();
+        glTexImage2D(
+            target,
+            0,
+            format,
+            width,
+            height,
+            0,
+            format,
+            type,
+            nullptr
+        );
 
-        // Add the text and compute properties.
-        defer { hb_buffer_destroy(buf); };
-        hb_buffer_add_utf32(buf, reinterpret_cast<const u32*>(norm.data()), int(norm.size()), 0, int(norm.size()));
-        // hb_buffer_guess_segment_properties(buf);
-        hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-        hb_buffer_set_script(buf, HB_SCRIPT_COMMON);
-        hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-        hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
-
-        // Scale the font; HarfBuzz uses integers for position values,
-        // so this is used so we can get fractional values out of it.
-        static constexpr int Scale = 64;
-        hb_font_set_scale(font, font_size * Scale, font_size * Scale);
-
-        // Shape it.
-        hb_feature_t ligatures{};
-        ligatures.tag = HB_TAG('l', 'i', 'g', 'a');
-        ligatures.value = 1;
-        ligatures.start = HB_FEATURE_GLOBAL_START;
-        ligatures.end = HB_FEATURE_GLOBAL_END;
-        hb_shape(font, buf, &ligatures, 1);
-        unsigned count;
-        auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
-        auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
-        if (not info_ptr or not pos_ptr) count = 0;
-        auto infos = std::span{info_ptr, count};
-        auto positions = std::span{pos_ptr, count};
-
-        // Record glyph data for later.
-        for (unsigned i = 0; i < count; ++i) {
-            auto& info = infos[i];
-            auto& pos = positions[i];
-            auto& c = glyphs.emplace_back();
-
-            // Note: 'codepoint' here is actually a glyph index in the
-            // font after shaping, and not a codepoint.
-            c.index = char32_t(info.codepoint);
-            c.xoffs = pos.x_offset / f32(Scale);
-            c.xadv = pos.x_advance / f32(Scale);
-            c.yoffs = pos.y_offset / f32(Scale);
-        }
-
-        // Create VAO.
-        auto& vbo = vao.add_buffer();
-        vbo.reserve<vec4>(6, GL_DYNAMIC_DRAW);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
 
+    /// Get the maximum texture size.
+    static auto MaxSize() -> GLint {
+        GLint max_texture_size;
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
+        return max_texture_size;
+    }
+
+    /// Bind this texture and make its texture unit active.
+    void bind() const {
+        glActiveTexture(unit);
+        glBindTexture(target, descriptor);
+    }
+
+    /// Write data into the texture at a given offset.
+    void write(u32 x, u32 y, u32 width, u32 height, const void* data) {
+        glTexSubImage2D(
+            target,
+            0,
+            x,
+            y,
+            width,
+            height,
+            format,
+            type,
+            data
+        );
+    }
+};
+
+// =============================================================================
+//  Text and Fonts
+// =============================================================================
+class Font;
+
+/// Text to be rendered.
+class ShapedText {
+    friend Renderer;
+    friend Font;
+
+    VertexArrays vao;
+    explicit ShapedText(VertexArrays vao) : vao{std::move(vao)} {}
+
+public:
     /// Debugging function that dumps the contents of a HarfBuzz buffer;
     /// must be called after shaping.
     static auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
         std::string debug;
-        debug.resize(10000);
+        debug.resize(10'000);
         hb_buffer_serialize_glyphs(
             buf,
             0,
@@ -378,16 +389,223 @@ public:
         );
         Log("Buffer: {}", debug);
     }
+
+    /// Get the vertices for this text.
+    auto verts() const -> const VertexArrays& { return vao; }
+};
+
+/// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
+class Font {
+    using HarfBuzzFontHandle = std::unique_ptr<hb_font_t, decltype(&hb_font_destroy)>;
+    using HarfBuzzBufferHandle = std::unique_ptr<hb_buffer_t, decltype(&hb_buffer_destroy)>;
+    struct Metrics {
+        vec2 size;
+        vec2 bearing;
+    };
+
+    /// HarfBuzz font to use for shaping.
+    HarfBuzzFontHandle hb_font = {nullptr, hb_font_destroy};
+    HarfBuzzBufferHandle hb_buf = {hb_buffer_create(), hb_buffer_destroy};
+
+    /// Metrics for all glyphs in the font.
+    std::vector<Metrics> glyphs{};
+
+    /// The width and height of a cell in the texture atlas.
+    u32 atlas_entry_width{};
+    u32 atlas_entry_height{};
+
+    /// The number of columns and rows in the texture atlas.
+    u32 atlas_columns{};
+    u32 atlas_rows{};
+
+    /// The font size.
+    u32 size{};
+
+    /// The atlas texture.
+    Texture atlas;
+
+public:
+    Font() = default;
+    Font(FT_Face ft_face, u32 size) : size{size} {
+        // Set the font size.
+        FT_Set_Pixel_Sizes(ft_face, 0, size);
+
+        // Create a HarfBuzz font for it.
+        hb_font.reset(hb_ft_font_create(ft_face, nullptr));
+        hb_ft_font_set_funcs(hb_font.get());
+        Assert(hb_font, "Failed to create HarfBuzz font");
+
+        // Determine the maximum width and height amongst all glyphs.
+        for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
+            if (FT_Load_Glyph(ft_face, g, FT_LOAD_BITMAP_METRICS_ONLY) != 0) {
+                Log("Failed to load glyph #{}", g);
+                continue;
+            }
+
+            atlas_entry_width = std::max(atlas_entry_width, ft_face->glyph->bitmap.width);
+            atlas_entry_height = std::max(atlas_entry_height, ft_face->glyph->bitmap.rows);
+        }
+
+        // Determine how many characters we can fit in a single row since an
+        // entire font tends to exceed OpenGL’s texture size limits in terms
+        // of width.
+        atlas_columns = Texture::MaxSize() / atlas_entry_width;
+        atlas_rows = u32(std::ceil(f64(ft_face->num_glyphs) / atlas_columns));
+        u32 texture_width = atlas_columns * atlas_entry_width;
+        u32 texture_height = atlas_rows * atlas_entry_height;
+
+        // Allocate the atlas.
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        atlas = Texture(texture_width, texture_height, GL_RED, GL_UNSIGNED_BYTE);
+        glyphs.resize(ft_face->num_glyphs);
+
+        // And copy each glyph.
+        for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
+            // This *should* never fail because we're loading glyphs and
+            // not codepoints, but prefer not to crash if it does fail.
+            if (FT_Load_Glyph(ft_face, g, FT_LOAD_RENDER) != 0) {
+                Log("Failed to load glyph #{}", g);
+                continue;
+            }
+
+            u32 x = g % atlas_columns;
+            u32 y = g / atlas_columns;
+
+            atlas.write(
+                x * atlas_entry_width,
+                y * atlas_entry_height,
+                ft_face->glyph->bitmap.width,
+                ft_face->glyph->bitmap.rows,
+                ft_face->glyph->bitmap.buffer
+            );
+
+            glyphs[g] = {
+                {ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows},
+                {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
+            };
+        }
+    }
+
+    /// Shape text using this font.
+    ///
+    /// The resulting object is position-independent and can
+    /// be drawn at any coordinates.
+    auto shape(std::string_view text) -> ShapedText {
+        auto buf = hb_buf.get();
+        auto font = hb_font.get();
+
+        // Convert to UTF-32 in canonical decomposition form; this helps
+        // with fonts that may not have certain precombined characters, but
+        // which *do* support the individual components.
+        //
+        // Normalisation can fail if the input was nonsense; just render an
+        // error string in that case.
+        auto norm = Normalise(text::ToUTF32(text), text::NormalisationForm::NFD).value_or(U"<ERROR>");
+
+        // Add the text and compute properties.
+        hb_buffer_clear_contents(buf);
+        hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
+        hb_buffer_add_utf32(buf, reinterpret_cast<const u32*>(norm.data()), int(norm.size()), 0, int(norm.size()));
+        hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+        hb_buffer_set_script(buf, HB_SCRIPT_COMMON);
+        hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+        // hb_buffer_guess_segment_properties(buf);
+
+        // Scale the font; HarfBuzz uses integers for position values,
+        // so this is used so we can get fractional values out of it.
+        static constexpr int Scale = 64;
+        hb_font_set_scale(font, size * Scale, size * Scale);
+
+        // Enable the following OpenType features: 'liga'.
+        hb_feature_t ligatures{};
+        ligatures.tag = HB_TAG('l', 'i', 'g', 'a');
+        ligatures.value = 1;
+        ligatures.start = HB_FEATURE_GLOBAL_START;
+        ligatures.end = HB_FEATURE_GLOBAL_END;
+
+        // Shape the text.
+        hb_shape(font, buf, &ligatures, 1);
+        unsigned count;
+        auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
+        auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
+        if (not info_ptr or not pos_ptr) count = 0;
+        auto infos = std::span{info_ptr, count};
+        auto positions = std::span{pos_ptr, count};
+
+        // Compute the vertices for each glyph.
+        std::vector<vec4> verts;
+        f32 x = 0;
+        for (unsigned i = 0; i < count; ++i) {
+            auto& info = infos[i];
+            auto& pos = positions[i];
+
+            // Note: 'codepoint' here is actually a glyph index in the
+            // font after shaping, and not a codepoint.
+            auto g = char32_t(info.codepoint);
+            auto xoffs = pos.x_offset / f32(Scale);
+            auto xadv = pos.x_advance / f32(Scale);
+            auto yoffs = pos.y_offset / f32(Scale);
+
+            // Compute the x and y position using the glyph’s metrics and
+            // the shaping data provided by HarfBuzz.
+            f32 xpos = x + glyphs[g].bearing.x + xoffs;
+            f32 ypos = - (glyphs[g].size.y - glyphs[g].bearing.y) + yoffs;
+            f32 w = glyphs[g].size.x;
+            f32 h = glyphs[g].size.y;
+
+            // Compute the offset of the glyph in the atlas.
+            f64 tx = f64(g % atlas_columns) * atlas_entry_width;
+            f64 ty = f64(g / atlas_columns) * atlas_entry_height;
+            f64 atlas_width = f64(atlas_columns * atlas_entry_width);
+            f64 atlas_height = f64(atlas_rows * atlas_entry_height);
+
+            // Compute the uv coordinates of the glyph; note that the glyph
+            // is likely smaller than the width of an atlas cell, so perform
+            // this calculation in pixels.
+            f32 u0 = f32(f64(tx) / atlas_width);
+            f32 u1 = f32(f64(tx + w) / atlas_width);
+            f32 v0 = f32(f64(ty) / atlas_height);
+            f32 v1 = f32(f64(ty + h) / atlas_height);
+
+            // Advance past the glyph.
+            x += xadv;
+
+            // Build vertices for the glyph’s position and texture coordinates.
+            verts.push_back({xpos, ypos + h, u0, v0});
+            verts.push_back({xpos, ypos, u0, v1});
+            verts.push_back({xpos + w, ypos, u1, v1});
+            verts.push_back({xpos, ypos + h, u0, v0});
+            verts.push_back({xpos + w, ypos, u1, v1});
+            verts.push_back({xpos + w, ypos + h, u1, v0});
+        }
+
+        // Upload the vertices.
+        VertexArrays vao{VertexLayout::PositionTexture4D};
+        auto& vbo = vao.add_buffer();
+        vbo.copy_data(verts);
+        vao.draw();
+        return ShapedText(std::move(vao));
+    }
+
+    /// Activate the font for rendering.
+    void use() const { atlas.bind(); }
+
+    /// Get the height and width of a cell in the atlas.
+    auto cell_height() const -> u32 { return atlas_entry_height; }
+    auto cell_width() const -> u32 { return atlas_entry_width; }
+
+    /// Get the number of rows and columns in the atlas.
+    auto columns() const -> u32 { return atlas_columns; }
+    auto rows() const -> u32 { return atlas_rows; }
+
+    /// Get the total width and height of the atlas.
+    auto height() const -> u32 { return atlas_rows * atlas_entry_height; }
+    auto width() const -> u32 { return atlas_columns * atlas_entry_width; }
 };
 
 // =============================================================================
 //  Impl
 // =============================================================================
-struct FontGlyph {
-    vec2 size;
-    vec2 bearing;
-};
-
 struct Renderer::Impl {
     LIBBASE_IMMOVABLE(Impl);
 
@@ -396,20 +614,14 @@ struct Renderer::Impl {
 
     ShaderProgram default_shader;
     ShaderProgram text_shader;
-    hb_font_t* default_font;
     FT_Library ft;
     FT_Face ft_face;
-    std::vector<FontGlyph> glyphs{};
-    u32 atlas_entry_width{};
-    u32 atlas_entry_height{};
-    u32 atlas_columns{};
-    u32 atlas_rows{};
-    GLuint font_atlas{};
+    Font default_font;
 
     Impl(int initial_wd, int initial_ht);
     ~Impl();
 
-    // TODO: Colour and position (matrix) as uniforms.
+    // TODO: Colour as uniform.
     void draw_text(
         const ShapedText& text,
         i32 x,
@@ -515,101 +727,13 @@ Renderer::Impl::Impl(int initial_wd, int initial_ht) {
         &ft_face
     );
 
-    // Set the font size.
-    FT_Set_Pixel_Sizes(ft_face, 0, FontSize);
-
-    // Create a HarfBuzz font for it.
-    auto blob = hb_blob_create(
-        DefaultFontRegular,
-        sizeof DefaultFontRegular,
-        HB_MEMORY_MODE_READONLY,
-        nullptr,
-        nullptr
-    );
-
-    defer { hb_blob_destroy(blob); };
-    default_font = hb_ft_font_create(ft_face, nullptr);
-    hb_ft_font_set_funcs(default_font);
-    Assert(default_font, "Failed to create HarfBuzz font");
-
-    // Determine the maximum width and height amongst all glyphs.
-    for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
-        if (FT_Load_Glyph(ft_face, g, FT_LOAD_BITMAP_METRICS_ONLY) != 0) {
-            Log("Failed to load glyph #{}", g);
-            continue;
-        }
-
-        atlas_entry_width = std::max(atlas_entry_width, ft_face->glyph->bitmap.width);
-        atlas_entry_height = std::max(atlas_entry_height, ft_face->glyph->bitmap.rows);
-    }
-
-    // Determine how many characters we can fit in a single row since an
-    // entire font tends to exceed OpenGL’s texture size limits in terms
-    // of width.
-    GLint max_texture_size;
-    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
-    atlas_columns = max_texture_size / atlas_entry_width;
-    atlas_rows = u32(std::ceil(f64(ft_face->num_glyphs) / atlas_columns));
-    u32 texture_width = atlas_columns * atlas_entry_width;
-    u32 texture_height = atlas_rows * atlas_entry_height;
-
-    // Allocate the atlas.
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glGenTextures(1, &font_atlas);
-    glBindTexture(GL_TEXTURE_2D, font_atlas);
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RED,
-        texture_width,
-        texture_height,
-        0,
-        GL_RED,
-        GL_UNSIGNED_BYTE,
-        nullptr
-    );
-
-    // And copy each glyph.
-    glyphs.resize(ft_face->num_glyphs);
-    for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
-        // This *should* never fail because we're loading glyphs and
-        // not codepoints, but prefer not to crash if it does fail.
-        if (FT_Load_Glyph(ft_face, g, FT_LOAD_RENDER) != 0) {
-            Log("Failed to load glyph #{}", g);
-            continue;
-        }
-
-        u32 x = g % atlas_columns;
-        u32 y = g / atlas_columns;
-
-        glTexSubImage2D(
-            GL_TEXTURE_2D,
-            0,
-            x * atlas_entry_width,
-            y * atlas_entry_height,
-            ft_face->glyph->bitmap.width,
-            ft_face->glyph->bitmap.rows,
-            GL_RED,
-            GL_UNSIGNED_BYTE,
-            ft_face->glyph->bitmap.buffer
-        );
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glyphs[g] = {
-            {ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows},
-            {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
-        };
-    }
+    default_font = Font(ft_face, 96);
 }
 
 Renderer::Impl::~Impl() {
     SDL_GL_DestroyContext(context);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    hb_font_destroy(default_font);
     FT_Done_Face(ft_face);
     FT_Done_FreeType(ft);
 }
@@ -642,8 +766,9 @@ Renderer::Frame::~Frame() {
 
     // Draw text.
     constexpr std::string_view InputText = "EÉÉẸ̣eééé́ẹ́ẹ́ʒffifl";
-    static ShapedText text(r.impl->default_font, InputText, 96);
+    static ShapedText text = r.impl->default_font.shape(InputText);
     r.impl->draw_text(text, 20, r.impl->size().y - 200, Colour{255, 255, 255, 255});
+    r.impl->draw_text(text, 20, r.impl->size().y - 400, Colour{255, 255, 255, 255});
 
     // Swap buffers.
     check SDL_GL_SwapWindow(r.impl->window);
@@ -651,67 +776,22 @@ Renderer::Frame::~Frame() {
 
 void Renderer::Impl::draw_text(
     const ShapedText& text,
-    i32 xint,
-    i32 yint,
+    i32 x,
+    i32 y,
     Colour colour
 ) {
-    f32 x = xint;
-    f32 y = yint;
-
-    // Activate the text shader.
+    // Initialise the text shader.
     auto sz = size();
     text_shader.use();
     text_shader.uniform("text_colour", colour.vec4());
     text_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
+    text_shader.uniform("position", vec2(x, y));
 
     // Bind the font atlas.
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, font_atlas);
+    default_font.use();
 
-    // Compute the vertices for each character.
-    std::vector<vec4> verts;
-    for (const auto& glyph : text.glyphs) {
-        auto g = glyph.index;
-        if (usz(g) > glyphs.size()) g = U'?';
-
-        // Compute the x and y position using the glyph’s metrics and
-        // the shaping data provided by HarfBuzz.
-        f32 xpos = x + glyphs[g].bearing.x + glyph.xoffs;
-        f32 ypos = y - (glyphs[g].size.y - glyphs[g].bearing.y) + glyph.yoffs;
-        f32 w = glyphs[g].size.x;
-        f32 h = glyphs[g].size.y;
-
-        // Compute the offset of the glyph in the atlas.
-        f64 texx = f64(g % atlas_columns) * atlas_entry_width;
-        f64 texy = f64(g / atlas_columns) * atlas_entry_height;
-        f64 atlas_width = f64(atlas_columns * atlas_entry_width);
-        f64 atlas_height = f64(atlas_rows * atlas_entry_height);
-
-        // Compute the uv coordinates of the glyph; note that the glyph
-        // is likely smaller than the width of an atlas cell, so perform
-        // this calculation in pixels.
-        f32 u0 = f32(f64(texx) / atlas_width);
-        f32 u1 = f32(f64(texx + w) / atlas_width);
-        f32 v0 = f32(f64(texy) / atlas_height);
-        f32 v1 = f32(f64(texy + h) / atlas_height);
-
-        // Advance past the glyph.
-        x += glyph.xadv;
-
-        // Build vertices for the glyph’s position and texture coordinates.
-        verts.push_back({xpos, ypos + h, u0, v0});
-        verts.push_back({xpos, ypos, u0, v1});
-        verts.push_back({xpos + w, ypos, u1, v1});
-        verts.push_back({xpos, ypos + h, u0, v0});
-        verts.push_back({xpos + w, ypos, u1, v1});
-        verts.push_back({xpos + w, ypos + h, u1, v0});
-    }
-
-    // Upload the vertices.
-    VertexArrays vao{VertexLayout::PositionTexture4D};
-    auto& vbo = vao.add_buffer();
-    vbo.copy_data(verts);
-    vao.draw();
+    // Dew it.
+    text.vao.draw();
 }
 
 // =============================================================================
