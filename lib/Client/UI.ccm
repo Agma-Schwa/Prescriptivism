@@ -74,11 +74,13 @@ class pr::client::InputSystem {
         bool middle{};
     };
 
-    struct Arrows {
+    struct MovementKeys {
         bool up{};
         bool down{};
         bool left{};
         bool right{};
+        bool home{};
+        bool end{};
     };
 
     Renderer& renderer;
@@ -87,7 +89,7 @@ class pr::client::InputSystem {
 public:
     std::u32string text_input;
     MouseState mouse;
-    Arrows arrows;
+    MovementKeys mov;
     bool quit = false;
     bool keyboard_input = false;
 
@@ -119,7 +121,7 @@ public:
     virtual void event_click() {}
 
     /// Event handler for when a selected element is given text input.
-    virtual void event_input(InputSystem& input) {}
+    virtual void event_input(InputSystem&) {}
 
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;

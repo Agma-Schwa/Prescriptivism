@@ -139,18 +139,23 @@ void TextEdit::event_input(InputSystem& input) {
         dirty = true;
         for (auto c : input.text_input) {
             if (c == U'\b') {
-                if (not text.empty()) text.pop_back();
+                if (cursor != 0) text.erase(--cursor, 1);
                 continue;
             }
 
-            text += c;
-        }
+            if (c == U'\x7F') {
+                if (cursor != i32(text.size())) text.erase(cursor, 1);
+                continue;
+            }
 
-        cursor = std::min(i32(text.size()), cursor);
+            text.insert(cursor++, 1, c);
+        }
     }
 
-    if (input.arrows.left) cursor = std::max(0, cursor - 1);
-    if (input.arrows.right) cursor = std::min(i32(text.size()), cursor + 1);
+    if (input.mov.left) cursor = std::max(0, cursor - 1);
+    if (input.mov.right) cursor = std::min(i32(text.size()), cursor + 1);
+    if (input.mov.home) cursor = 0;
+    if (input.mov.end) cursor = i32(text.size());
     if (input.keyboard_input) no_blink_ticks = 10;
 }
 
@@ -160,7 +165,7 @@ void TextEdit::event_input(InputSystem& input) {
 void InputSystem::process_events() {
     text_input.clear();
     keyboard_input = false;
-    arrows = {};
+    mov = {};
 
     // Get mouse state.
     mouse = {};
@@ -189,15 +194,14 @@ void InputSystem::process_events() {
                 keyboard_input = true;
                 switch (event.key.key) {
                     default: break;
-                    case SDLK_BACKSPACE: {
-                        if (not text_input.empty()) text_input.pop_back();
-                        else text_input = U"\b";
-                    } break;
-
-                    case SDLK_LEFT: arrows.left = true; break;
-                    case SDLK_RIGHT: arrows.right = true; break;
-                    case SDLK_UP: arrows.up = true; break;
-                    case SDLK_DOWN: arrows.down = true; break;
+                    case SDLK_BACKSPACE: text_input += U"\b"; break;
+                    case SDLK_DELETE: text_input += U'\x7F'; break;
+                    case SDLK_LEFT: mov.left = true; break;
+                    case SDLK_RIGHT: mov.right = true; break;
+                    case SDLK_UP: mov.up = true; break;
+                    case SDLK_DOWN: mov.down = true; break;
+                    case SDLK_HOME: mov.home = true; break;
+                    case SDLK_END: mov.end = true; break;
                 }
                 break;
 
