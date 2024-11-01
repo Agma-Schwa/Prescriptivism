@@ -73,9 +73,14 @@ void TextBox::UpdateText(ShapedText new_text) {
     sz.ht = std::max(min_ht, i32(label.height() + label.depth())) + 2 * padding;
 }
 
-void TextBox::draw(Renderer& r) {
+auto TextBox::TextPos(Renderer& r) -> xy {
     auto bg = pos.absolute(r.size(), sz);
-    auto text = Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
+    return Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
+}
+
+
+void TextBox::draw(Renderer& r) {
+    auto text = TextPos(r);
     r.draw_text(label, text);
     if (cursor_offs != -1) {
         r.draw_line(
@@ -130,10 +135,42 @@ void TextEdit::draw(Renderer& r) {
         cursor_offs = -1;
     }
 
+    if (hovered) r.set_cursor(Cursor::IBeam);
+
     auto bg = pos.absolute(r.size(), sz);
     r.draw_rect(bg, sz, selected ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
+
+void TextEdit::event_click(InputSystem& input) {
+    // Figure out where we clicked and set the cursor accordingly;
+    // we do this by iterating over all clusters; as soon as we find
+    // one whose offset brings us further away from the click position,
+    // we stop and go back to the one before it.
+    auto pos = TextPos(input.renderer);
+    i32 mx = input.mouse.pos.x;
+    i32 x0 = pos.x;
+    i32 x1 = x0 + i32(label.width());
+    if (mx < x0) cursor = 0;
+    else if (mx > x1) cursor = i32(text.size());
+    else if (clusters.size() < 2) cursor = 0;
+    else {
+        i32 x = x0;
+        i32 d = std::abs(x - mx);
+        for (ShapedText::Cluster* prev = nullptr; auto& c : clusters) {
+            auto nd = std::abs(x + c.xoffs - mx);
+            if (nd > d) {
+                if (not prev) cursor = 0;
+                else cursor = prev->index;
+                return;
+            }
+            d = nd;
+            prev = &c;
+        }
+        cursor = i32(text.size());
+    }
+}
+
 
 void TextEdit::event_input(InputSystem& input) {
     // Copy text into the buffer.
@@ -253,6 +290,7 @@ void Screen::refresh(Size screen_size) {
 }
 
 void Screen::render(Renderer& r) {
+    r.set_cursor(Cursor::Default);
     for (auto& e : children) e->draw(r);
 }
 
@@ -273,7 +311,7 @@ void Screen::tick(InputSystem& input) {
         // event handler.
         if (e->hovered and input.mouse.left) {
             if (e->selectable) selected = e.get();
-            e->event_click();
+            e->event_click(input);
         }
     }
 

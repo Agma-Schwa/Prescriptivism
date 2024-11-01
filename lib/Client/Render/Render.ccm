@@ -4,6 +4,7 @@ module;
 #include <glm/glm.hpp>
 #include <hb.h>
 #include <memory>
+#include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
 #include <unordered_map>
 #include <vector>
@@ -23,6 +24,7 @@ class Font;
 class ShapedText;
 
 enum struct FontSize : u32;
+enum struct Cursor : u32;
 } // namespace pr::client
 
 // =============================================================================
@@ -32,6 +34,11 @@ enum struct FontSize : u32;
 enum struct pr::client::FontSize : base::u32 {
     Large = 48,
     Huge = 96,
+};
+
+enum struct pr::client::Cursor : base::u32 {
+    Default = SDL_SYSTEM_CURSOR_DEFAULT,
+    IBeam = SDL_SYSTEM_CURSOR_TEXT,
 };
 
 struct pr::client::Colour {
@@ -227,6 +234,9 @@ class pr::client::Renderer {
     FT_Library ft;
     FT_Face ft_face;
     std::unordered_map<u32, Font> fonts_by_size;
+    std::unordered_map<Cursor, SDL_Cursor*> cursor_cache;
+    Cursor active_cursor = Cursor::Default;
+    Cursor requested_cursor = Cursor::Default;
 
 public:
     class Frame {
@@ -271,6 +281,9 @@ public:
     auto make_text(std::string_view text, FontSize size, std::vector<ShapedText::Cluster>* clusters = nullptr) -> ShapedText;
     auto make_text(std::u32string_view text, FontSize size, std::vector<ShapedText::Cluster>* clusters = nullptr) -> ShapedText;
 
+    /// Set the active cursor.
+    void set_cursor(Cursor);
+
     /// Get the SDL window.
     auto sdl_window() -> SDL_Window* { return window; }
 
@@ -287,4 +300,7 @@ private:
 
     /// Set the active shader.
     void use(ShaderProgram& shader);
+
+    /// Set the current cursor.
+    void set_cursor_impl();
 };

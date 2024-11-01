@@ -83,10 +83,10 @@ class pr::client::InputSystem {
         bool end{};
     };
 
-    Renderer& renderer;
     bool was_selected = false;
 
 public:
+    Renderer& renderer;
     std::u32string text_input;
     MouseState mouse;
     MovementKeys mov;
@@ -118,7 +118,7 @@ public:
     auto bounding_box() const -> AABB { return box; }
 
     /// Event handler for when the mouse is clicked on this element.
-    virtual void event_click() {}
+    virtual void event_click(InputSystem&) {}
 
     /// Event handler for when a selected element is given text input.
     virtual void event_input(InputSystem&) {}
@@ -193,6 +193,7 @@ protected:
     explicit TextBox(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
 
     void UpdateText(ShapedText new_text);
+    auto TextPos(Renderer& r) -> xy;
 
 public:
     void draw(Renderer& r) override;
@@ -206,7 +207,7 @@ public:
     explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
         : TextBox(std::move(label), pos, padding, min_wd, min_ht) {}
 
-    void event_click() override {
+    void event_click(InputSystem&) override {
         if (on_click) on_click();
     }
 
@@ -227,6 +228,7 @@ public:
         selectable = true;
     }
 
+    void event_click(InputSystem& input) override;
     void draw(Renderer& r) override;
     void event_input(InputSystem& input) override;
 };

@@ -488,6 +488,12 @@ void Renderer::frame_start() {
         check SDL_SetHint(SDL_HINT_MOUSE_AUTO_CAPTURE, "0");
         check SDL_CaptureMouse(false);
     }
+
+    // Set the active cursor if it has changed.
+    if (requested_cursor != active_cursor) {
+        active_cursor = requested_cursor;
+        set_cursor_impl();
+    }
 }
 
 void Renderer::use(ShaderProgram& shader) {
@@ -521,6 +527,26 @@ auto Renderer::make_text(
     std::vector<ShapedText::Cluster>* clusters
 ) -> ShapedText {
     return font(+size).shape(text, clusters);
+}
+
+void Renderer::set_cursor(Cursor c) {
+    // Rather than actually setting the cursor, we register the
+    // change and set it at the start of the next frame; this allows
+    // us to avoid flicker in case a cursor change is requested multiple
+    // times per frame and thus also makes that possible as a pattern.
+    requested_cursor = c;
+}
+
+void Renderer::set_cursor_impl() {
+    auto it = cursor_cache.find(active_cursor);
+    if (it != cursor_cache.end()) {
+        check SDL_SetCursor(it->second);
+        return;
+    }
+
+    SDL_Cursor* cursor = check SDL_CreateSystemCursor(SDL_SystemCursor(active_cursor));
+    cursor_cache[active_cursor] = cursor;
+    check SDL_SetCursor(cursor);
 }
 
 // =============================================================================
