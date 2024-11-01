@@ -27,8 +27,10 @@ public:
 };
 
 class pr::client::MenuScreen : public Screen {
+    ShapedText title;
+
 public:
-    MenuScreen() = default;
+    MenuScreen(Renderer& r);
 
     void render(Renderer& r) override;
 };
@@ -36,12 +38,14 @@ public:
 class pr::client::Client {
     LIBBASE_IMMOVABLE(Client);
 
-    std::unique_ptr<MenuScreen> menu_screen = std::make_unique<MenuScreen>();
-    Screen* current_screen = menu_screen.get();
-
 public:
     Renderer renderer;
 
+private:
+    std::unique_ptr<MenuScreen> menu_screen;
+    Screen* current_screen;
+
+public:
     /// Create a new client.
     explicit Client();
 

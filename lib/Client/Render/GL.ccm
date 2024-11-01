@@ -1,0 +1,378 @@
+module;
+#include <base/Assert.hh>
+#include <pr/gl-headers.hh>
+#include <utility>
+export module pr.client.render.gl;
+
+import pr.utils;
+import pr.client.utils;
+
+using namespace gl;
+using namespace pr;
+using namespace pr::client;
+
+export namespace pr::client {
+enum class VertexLayout : u8;
+
+class DrawableTexture;
+class ShaderProgram;
+class Texture;
+class VertexArrays;
+class VertexBuffer;
+
+using glm::ivec2;
+using glm::mat4;
+using glm::vec;
+using glm::vec1;
+using glm::vec2;
+using glm::vec3;
+using glm::vec4;
+}
+
+template <typename T, std::size_t n>
+struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(glm::vec<n, T> vec, FormatContext& ctx) const {
+        std::string s{"("};
+        s += std::to_string(vec.x);
+        if constexpr (n >= 2) s += std::format(", {}", vec.y);
+        if constexpr (n >= 3) s += std::format(", {}", vec.z);
+        if constexpr (n >= 4) s += std::format(", {}", vec.w);
+        s += ")";
+        return std::formatter<std::string_view>::format(s, ctx);
+    }
+};
+
+/// Supported vertex layouts.
+enum class client::VertexLayout : u8 {
+    Position2D,        /// vec2f position
+    PositionTexture4D, /// vec4f position(xy)+texture(zw)
+};
+
+/// Helper to keep track of and delete OpenGL objects.
+template <auto deleter>
+struct Descriptor {
+protected:
+    GLuint descriptor{};
+
+    Descriptor() = default;
+
+public:
+    Descriptor(const Descriptor&) = delete;
+    Descriptor(Descriptor&& other) : descriptor(std::exchange(other.descriptor, 0)) {}
+    Descriptor& operator=(const Descriptor&) = delete;
+    Descriptor& operator=(Descriptor&& other) {
+        std::swap(descriptor, other.descriptor);
+        return *this;
+    }
+
+    ~Descriptor() {
+        if (descriptor) {
+            if constexpr (requires { deleter(1, &descriptor); }) deleter(1, &descriptor);
+            else deleter(descriptor);
+        }
+    }
+};
+
+template <glm::length_t size>
+using Vertices = std::span<const vec<size, f32>>;
+
+class client::VertexBuffer : Descriptor<glDeleteBuffers> {
+    friend VertexArrays;
+
+    GLenum draw_mode;
+    GLsizei size = 0;
+
+    template <typename T>
+    VertexBuffer(std::span<const T> data, GLenum draw_mode) : draw_mode{draw_mode} {
+        glGenBuffers(1, &descriptor);
+        copy_data(data);
+    }
+
+public:
+    /// Bind the buffer.
+    void bind() const { glBindBuffer(GL_ARRAY_BUFFER, descriptor); }
+
+    /// Copy data to the buffer.
+    void copy_data(Vertices<2> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
+    void copy_data(Vertices<3> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
+    void copy_data(Vertices<4> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
+
+    /// Draw the buffer.
+    void draw() const {
+        bind();
+        glDrawArrays(draw_mode, 0, size);
+    }
+
+    /// Reserve space in the buffer.
+    template <typename T>
+    void reserve(std::size_t count, GLenum usage = GL_STATIC_DRAW) {
+        bind();
+        glBufferData(GL_ARRAY_BUFFER, count * sizeof(T), nullptr, usage);
+        size = GLsizei(count);
+    }
+
+    /// Store data into the buffer. Calling reserve() first is mandatory.
+    template <typename T>
+    void store(std::span<const T> data) {
+        Assert(data.size() == size, "Data size mismatch");
+        bind();
+        glBufferSubData(GL_ARRAY_BUFFER, 0, data.size_bytes(), data.data());
+    }
+
+private:
+    template <typename T>
+    void CopyImpl(std::span<const T> data, GLenum usage) {
+        bind();
+        glBufferData(GL_ARRAY_BUFFER, data.size_bytes(), data.data(), usage);
+        size = GLsizei(data.size());
+    }
+};
+
+class client::VertexArrays : Descriptor<glDeleteVertexArrays> {
+    VertexLayout layout;
+    std::vector<VertexBuffer> buffers;
+
+public:
+    VertexArrays(VertexLayout layout)
+        : layout{layout} { glGenVertexArrays(1, &descriptor); }
+
+    /// Creates a new buffer and attaches it to the vertex array.
+    auto add_buffer(Vertices<2> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
+        return AddBufferImpl(data, draw_mode);
+    }
+
+    auto add_buffer(Vertices<3> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
+        return AddBufferImpl(data, draw_mode);
+    }
+
+    auto add_buffer(Vertices<4> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
+        return AddBufferImpl(data, draw_mode);
+    }
+
+    /// Creates a new buffer and attaches it to the vertex array.
+    auto add_buffer(GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
+        return add_buffer(Vertices<2>{}, draw_mode);
+    }
+
+    /// Binds the vertex array.
+    void bind() const { glBindVertexArray(descriptor); }
+
+    /// Draw the vertex array.
+    void draw() const {
+        bind();
+        for (const auto& vbo : buffers) vbo.draw();
+    }
+
+    /// Unbinds the vertex array.
+    void unbind() const { glBindVertexArray(0); }
+
+private:
+    template <typename T>
+    auto AddBufferImpl(std::span<const T> verts, GLenum draw_mode) -> VertexBuffer& {
+        buffers.push_back(VertexBuffer{verts, draw_mode});
+        auto& vbo = buffers.back();
+        bind();
+        glBindBuffer(GL_ARRAY_BUFFER, vbo.descriptor);
+        ApplyLayout();
+        return vbo;
+    }
+
+    void ApplyLayout() {
+        switch (layout) {
+            case VertexLayout::Position2D:
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+                return;
+            case VertexLayout::PositionTexture4D:
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
+                return;
+        }
+
+        Unreachable("Invalid vertex layout");
+    }
+};
+
+class client::ShaderProgram : Descriptor<glDeleteProgram> {
+    struct Shader : Descriptor<glDeleteShader> {
+        friend ShaderProgram;
+        Shader(GLenum type, std::span<const char> source) {
+            descriptor = glCreateShader(type);
+            auto size = GLint(source.size());
+            auto data = source.data();
+            glShaderSource(descriptor, 1, &data, &size);
+            glCompileShader(descriptor);
+
+            GLint success;
+            glGetShaderiv(descriptor, GL_COMPILE_STATUS, &success);
+            if (not success) {
+                // Throw this on the heap since it’s huge.
+                auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
+                glGetShaderInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
+                Log("Shader compilation failed: {}", info_log.get());
+            }
+        }
+    };
+
+public:
+    ShaderProgram() = default;
+    ShaderProgram(
+        std::span<const char> vertex_shader_source,
+        std::span<const char> fragment_shader_source
+    ) {
+        Shader vertex_shader(GL_VERTEX_SHADER, vertex_shader_source);
+        Shader fragment_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
+
+        descriptor = glCreateProgram();
+        glAttachShader(descriptor, vertex_shader.descriptor);
+        glAttachShader(descriptor, fragment_shader.descriptor);
+        glLinkProgram(descriptor);
+
+        GLint success;
+        glGetProgramiv(descriptor, GL_LINK_STATUS, &success);
+        if (not success) {
+            // Throw this on the heap since it’s huge.
+            auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
+            glGetProgramInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
+            Log("Shader program linking failed: {}", info_log.get());
+        }
+    }
+
+    /// Set a uniform.
+    void uniform(ZTermString name, vec2 v) {
+        return SetUniform(name, glUniform2f, v.x, v.y);
+    }
+
+    void uniform(ZTermString name, vec4 v) {
+        return SetUniform(name, glUniform4f, v.x, v.y, v.z, v.w);
+    }
+
+    void uniform(ZTermString name, mat4 m) {
+        return SetUniform(name, glUniformMatrix4fv, 1, GL_FALSE, &m[0][0]);
+    }
+
+    /// Set this as the active shader.
+    void use() const { glUseProgram(descriptor); }
+
+private:
+    template <typename... T>
+    void SetUniform(ZTermString name, auto callable, T... args) {
+        auto u = glGetUniformLocation(descriptor, name.c_str());
+        if (u == -1) return;
+        callable(u, args...);
+    }
+};
+
+class client::Texture : Descriptor<glDeleteTextures> {
+    GLenum target{};
+    GLenum unit{};
+    GLenum format{};
+    GLenum type{};
+
+public:
+    Texture() = default;
+
+    /// Allocate a texture with the given width and height.
+    Texture(
+        const void* data,
+        u32 width,
+        u32 height,
+        GLenum format,
+        GLenum type,
+        GLenum target = GL_TEXTURE_2D,
+        GLenum unit = GL_TEXTURE0
+    ) : target{target},
+        unit{unit},
+        format{format},
+        type{type} {
+
+        glGenTextures(1, &descriptor);
+        bind();
+        glTexImage2D(
+            target,
+            0,
+            format,
+            width,
+            height,
+            0,
+            format,
+            type,
+            data
+        );
+
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+
+    Texture(
+        u32 width,
+        u32 height,
+        GLenum format,
+        GLenum type,
+        GLenum target = GL_TEXTURE_2D,
+        GLenum unit = GL_TEXTURE0
+    ) : Texture(nullptr, width, height, format, type, target, unit) {}
+
+    /// Get the maximum texture size.
+    static auto MaxSize() -> GLint {
+        GLint max_texture_size;
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
+        return max_texture_size;
+    }
+
+    /// Bind this texture and make its texture unit active.
+    void bind() const {
+        glActiveTexture(unit);
+        glBindTexture(target, descriptor);
+    }
+
+    /// Write data into the texture at a given offset.
+    void write(u32 x, u32 y, u32 width, u32 height, const void* data) {
+        glTexSubImage2D(
+            target,
+            0,
+            x,
+            y,
+            width,
+            height,
+            format,
+            type,
+            data
+        );
+    }
+};
+
+class client::DrawableTexture : public Texture {
+    VertexArrays vao{VertexLayout::PositionTexture4D};
+
+public:
+    DrawableTexture(
+        const void* data,
+        u32 width,
+        u32 height,
+        GLenum format,
+        GLenum type,
+        GLenum target = GL_TEXTURE_2D,
+        GLenum unit = GL_TEXTURE0
+    ) : Texture(data, width, height, format, type, target, unit) {
+        // Flip the texture uv coordinates upside-down since the origin
+        // is in the bottom-left corner, but that’s not how images work.
+        vec4 verts[] {
+            {0, 0, 0, 1},
+            {width, 0, 1, 1},
+            {0, height, 0, 0},
+            {width, height, 1, 0},
+        };
+
+        vao.add_buffer(verts, GL_TRIANGLE_STRIP);
+    }
+
+    /// Draw the texture.
+    void draw() const {
+        bind();
+        vao.draw();
+    }
+};

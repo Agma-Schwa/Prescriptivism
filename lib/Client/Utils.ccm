@@ -1,0 +1,7 @@
+module;
+#include <glm/glm.hpp>
+export module pr.client.utils;
+
+export namespace pr::client {
+
+}

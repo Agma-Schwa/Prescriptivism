@@ -1,16 +1,34 @@
 module;
 #include <base/Macros.hh>
-#include <memory>
+#include <freetype/freetype.h>
 #include <glm/glm.hpp>
+#include <hb.h>
+#include <memory>
+#include <SDL3/SDL_video.h>
+#include <unordered_map>
 export module pr.client.render;
+
 import pr.utils;
+import pr.client.render.gl;
 
 export namespace pr::client {
 struct Colour;
 struct Size;
 
 class Renderer;
+class Font;
+class ShapedText;
+
+enum struct FontSize : u8;
 }
+
+// =============================================================================
+//  Utility Types
+// =============================================================================
+/// To keep font sizes uniform.
+enum struct pr::client::FontSize : base::u8 {
+    Huge = 96,
+};
 
 struct pr::client::Colour {
     u8 r;
@@ -43,9 +61,103 @@ struct pr::client::Colour {
 
 constexpr pr::client::Colour pr::client::Colour::White = {255, 255, 255, 255};
 
+// =============================================================================
+//  Text
+// =============================================================================
+/// Text to be rendered.
+class pr::client::ShapedText {
+    friend Renderer;
+    friend Font;
+
+    VertexArrays vao;
+    u32 fsize;
+
+    explicit ShapedText(VertexArrays vao, u32 fsize) : vao{std::move(vao)}, fsize{fsize} {}
+
+public:
+    /// Debugging function that dumps the contents of a HarfBuzz buffer;
+    /// must be called after shaping.
+    static auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf);
+
+    /// Get the font size.
+    auto font_size() const -> u32 { return fsize; }
+
+    /// Get the vertices for this text.
+    auto verts() const -> const VertexArrays& { return vao; }
+};
+
+/// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
+class pr::client::Font {
+    using HarfBuzzFontHandle = std::unique_ptr<hb_font_t, decltype(&hb_font_destroy)>;
+    using HarfBuzzBufferHandle = std::unique_ptr<hb_buffer_t, decltype(&hb_buffer_destroy)>;
+    struct Metrics {
+        vec2 size;
+        vec2 bearing;
+    };
+
+    /// HarfBuzz font to use for shaping.
+    HarfBuzzFontHandle hb_font = {nullptr, hb_font_destroy};
+    HarfBuzzBufferHandle hb_buf = {hb_buffer_create(), hb_buffer_destroy};
+
+    /// Metrics for all glyphs in the font.
+    std::vector<Metrics> glyphs{};
+
+    /// The width and height of a cell in the texture atlas.
+    u32 atlas_entry_width{};
+    u32 atlas_entry_height{};
+
+    /// The number of columns and rows in the texture atlas.
+    u32 atlas_columns{};
+    u32 atlas_rows{};
+
+    /// The font size.
+    u32 size{};
+
+    /// The atlas texture.
+    Texture atlas;
+
+public:
+    Font() = default;
+    Font(FT_Face ft_face, u32 size);
+
+    /// Shape text using this font.
+    ///
+    /// The resulting object is position-independent and can
+    /// be drawn at any coordinates.
+    auto shape(std::string_view text) -> ShapedText;
+
+    /// Activate the font for rendering.
+    void use() const { atlas.bind(); }
+
+    /// Get the height and width of a cell in the atlas.
+    auto cell_height() const -> u32 { return atlas_entry_height; }
+    auto cell_width() const -> u32 { return atlas_entry_width; }
+
+    /// Get the number of rows and columns in the atlas.
+    auto columns() const -> u32 { return atlas_columns; }
+    auto rows() const -> u32 { return atlas_rows; }
+
+    /// Get the total width and height of the atlas.
+    auto height() const -> u32 { return atlas_rows * atlas_entry_height; }
+    auto width() const -> u32 { return atlas_columns * atlas_entry_width; }
+};
+
+// =============================================================================
+//  Renderer
+// =============================================================================
 /// A renderer that renders to a window.
 class pr::client::Renderer {
-    LIBBASE_DECLARE_HIDDEN_IMPL(Renderer);
+    LIBBASE_IMMOVABLE(Renderer);
+
+    SDL_Window* window;
+    SDL_GLContextState* context;
+
+    ShaderProgram identity_shader;
+    ShaderProgram text_shader;
+    ShaderProgram image_shader;
+    FT_Library ft;
+    FT_Face ft_face;
+    std::unordered_map<u32, Font> fonts_by_size;
 
 public:
     class Frame {
@@ -57,28 +169,35 @@ public:
         ~Frame();
     };
 
-    static auto Create(int initial_wd, int initial_ht) -> Renderer;
+    /// Create a new window and renderer.
+    Renderer(int initial_wd, int initial_ht);
+
+    /// Clean up resources.
+    ~Renderer();
 
     /// Clear the screen.
     void clear(Colour c = Colour::White);
 
-    /// Draw text at a position.
-    void draw_text(std::string_view text, int x, int y, u32 font_size, Colour c = Colour::White);
+    /// Draw text at a position in world coordinates.
+    void draw_text(const ShapedText& text, i32 x, i32 y, Colour c = Colour::White);
+
+    /// Draw a texture at a position in world coordinates.
+    void draw_texture(const DrawableTexture& tex, i32 x, i32 y);
 
     /// Start a new frame.
     auto frame() -> Frame;
-};
 
-template <typename T, std::size_t n>
-struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(glm::vec<n, T> vec, FormatContext& ctx) const {
-        std::string s{"("};
-        s += std::to_string(vec.x);
-        if constexpr (n >= 2) s += std::format(", {}", vec.y);
-        if constexpr (n >= 3) s += std::format(", {}", vec.z);
-        if constexpr (n >= 4) s += std::format(", {}", vec.w);
-        s += ")";
-        return std::formatter<std::string_view>::format(s, ctx);
-    }
+    /// Create a text object that can be drawn.
+    auto make_text(std::string_view text, FontSize size) -> ShapedText;
+
+    /// Get the size of the window.
+    auto size() -> ivec2;
+
+private:
+    /// Get a font of a given size.
+    auto font(u32 size) -> Font&;
+
+    /// Start/end a frame.
+    void frame_end();
+    void frame_start();
 };

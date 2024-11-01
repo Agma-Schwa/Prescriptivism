@@ -12,14 +12,22 @@ using namespace pr::client;
 // =============================================================================
 //  Main Menu Screen
 // =============================================================================
+MenuScreen::MenuScreen(Renderer& r)
+    : title{r.make_text("Prescriptivism", FontSize::Huge)} {}
+
 void MenuScreen::render(Renderer& renderer) {
+    auto sz = renderer.size();
     renderer.clear(Colour{45, 42, 46, 255});
+    renderer.draw_text(title, 0, sz.y - 200);
 }
 
 // =============================================================================
 //  API
 // =============================================================================
-Client::Client(): renderer(Renderer::Create(800, 600)) {}
+Client::Client() : renderer(Renderer(800, 600)) {
+    menu_screen = std::make_unique<MenuScreen>(renderer);
+    current_screen = menu_screen.get();
+}
 
 void Client::Run() {
     constexpr chr::milliseconds ClientTickDuration = 16ms;
@@ -54,4 +62,3 @@ void Client::Run() {
         }
     }
 }
-

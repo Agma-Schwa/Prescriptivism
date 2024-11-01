@@ -235,6 +235,10 @@ target_compile_options(Prescriptivism PRIVATE
     -Wno-c23-extensions
 )
 
+target_include_directories(Prescriptivism PRIVATE
+    ${PROJECT_SOURCE_DIR}/include/Client
+)
+
 ## Allow overriding the default font w/o having to make it part of the project;
 ## the path must be absolute or relative to the assets directory.
 if (NOT DEFINED PRESCRIPTIVISM_DEFAULT_FONT_PATH)
