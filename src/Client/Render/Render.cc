@@ -78,6 +78,10 @@ constexpr char DefaultFontRegular[]{
 // =============================================================================
 //  Text and Fonts
 // =============================================================================
+ShapedText::ShapedText() : vao{VertexLayout::PositionTexture4D}, fsize{}, wd{}, ht{}, dp{} {
+    vao.add_buffer(GL_TRIANGLES);
+}
+
 auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     std::string debug;
     debug.resize(10'000);

@@ -10,9 +10,15 @@ import pr.client.render.gl;
 using namespace pr;
 using namespace pr::client;
 
+// =============================================================================
+//  Constants
+// =============================================================================
 constexpr Colour DefaultButtonColour{36, 36, 36, 255};
 constexpr Colour HoverButtonColour{23, 23, 23, 255};
 
+// =============================================================================
+//  Helpers
+// =============================================================================
 auto Position::absolute(Size screen_size, Size object_size) -> xy {
     return relative(vec2(), screen_size, object_size);
 }
@@ -29,6 +35,15 @@ auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
     auto x = i32(parent.x) + Clamp(base.x, obj_wd, sx) + xadjust;
     auto y = i32(parent.y) + Clamp(base.y, obj_ht, sy) + yadjust;
     return {x, y};
+}
+
+// =============================================================================
+//  Elements
+// =============================================================================
+void Button::draw(Renderer& r) {
+    auto bg = pos.absolute(r.size(), sz);
+    r.draw_rect(bg, sz, hovered ? HoverButtonColour : DefaultButtonColour);
+    TextBox::draw(r);
 }
 
 TextBox::TextBox(
@@ -53,12 +68,15 @@ void TextBox::refresh(Size screen_size) {
     SetBoundingBox(AABB(pos.absolute(screen_size, sz), sz));
 }
 
-void Button::draw(Renderer& r) {
+void TextEdit::draw(Renderer& r) {
     auto bg = pos.absolute(r.size(), sz);
-    r.draw_rect(bg, sz, hovered ? HoverButtonColour : DefaultButtonColour);
+    r.draw_rect(bg, sz, selected ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
 
+// =============================================================================
+//  Screen
+// =============================================================================
 void Screen::refresh(Size screen_size) {
     for (auto& e: children) e->refresh(screen_size);
 }
@@ -68,8 +86,26 @@ void Screen::render(Renderer& r) {
 }
 
 void Screen::tick(MouseState st) {
+    // Deselect the currently selected element if there was a click.
+    if (st.left) selected = nullptr;
+
+    // Tick each child.
     for (auto& e : children) {
+        // First, reset all of the child’s properties so we can
+        // recompute them.
+        e->reset_properties();
+
+        // If the cursor is within the element’s bounds, mark it as hovered.
         e->hovered = e->bounding_box().contains(st.pos);
-        if (e->hovered and st.left) if (st.left) e->clicked();
+
+        // If, additionally, we had a click, select the element and fire the
+        // event handler.
+        if (e->hovered and st.left) {
+            if (e->selectable) selected = e.get();
+            e->clicked();
+        }
     }
+
+    // Mark the selected element as selected once more.
+    if (selected) selected->selected = true;
 }

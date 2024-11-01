@@ -118,6 +118,9 @@ class pr::client::ShapedText {
         : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht), dp(dp) {}
 
 public:
+    /// Create an empty text object.
+    ShapedText();
+
     /// Debugging function that dumps the contents of a HarfBuzz buffer;
     /// must be called after shaping.
     static auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf);

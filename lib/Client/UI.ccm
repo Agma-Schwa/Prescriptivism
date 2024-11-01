@@ -77,6 +77,8 @@ class pr::client::Element {
 
 public:
     bool hovered : 1 = false;
+    bool selectable : 1 = false;
+    bool selected : 1 = false;
 
 protected:
     Element() = default;
@@ -96,6 +98,12 @@ public:
 
     /// Recompute bounding box etc.
     virtual void refresh(Size screen_size) = 0;
+
+    /// Reset properties at the start of a tick.
+    void reset_properties() {
+        hovered = false;
+        selected = false;
+    }
 };
 
 class pr::client::Screen {
@@ -103,6 +111,9 @@ class pr::client::Screen {
 
     /// List of children.
     std::vector<std::unique_ptr<Element>> children;
+
+    /// The selected element.
+    Element* selected = nullptr;
 
 protected:
     Screen() = default;
@@ -166,10 +177,14 @@ public:
     void draw(Renderer& r) override;
 };
 
-/*class pr::client::TextEdit : public TextBox {
+class pr::client::TextEdit : public TextBox {
     std::string text;
-    ShapedText rendered;
-    Position pos{};
-    Size sz{};
-}
-*/
+
+public:
+    TextEdit(Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
+        : TextBox(ShapedText(), pos, padding, min_wd, min_ht) {
+        selectable = true;
+    }
+
+    void draw(Renderer& r) override;
+};

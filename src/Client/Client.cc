@@ -21,6 +21,13 @@ MenuScreen::MenuScreen(Renderer& r)
         125
     );
 
+    Create<TextEdit>(
+        Position::HCenter(250),
+        10,
+        250,
+        25
+    );
+
     quit.on_click = [] {
         Client::quit = true;
     };
