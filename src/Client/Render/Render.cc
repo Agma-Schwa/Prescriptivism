@@ -128,9 +128,10 @@ public:
     void bind() const { glBindBuffer(GL_ARRAY_BUFFER, descriptor); }
 
     /// Copy data to the buffer.
-    void copy_data(Vertices<2> data, GLenum usage = GL_STATIC_DRAW) {
-        CopyImpl(data, usage);
-    }
+    void copy_data(Vertices<2> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
+    void copy_data(Vertices<3> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
+    void copy_data(Vertices<4> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
+
 
     /// Draw the buffer.
     void draw() const {
@@ -667,13 +668,8 @@ void Renderer::Impl::draw_text(
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, font_atlas);
 
-    // Create the VAO for the text.
-    VertexArrays vao{VertexLayout::PositionTexture4D};
-    auto& vbo = vao.add_buffer();
-    vbo.reserve<vec4>(6, GL_DYNAMIC_DRAW);
-    vao.bind();
-
-    // Draw each character.
+    // Compute the vertices for each character.
+    std::vector<vec4> verts;
     for (const auto& glyph : text.glyphs) {
         auto g = glyph.index;
         if (usz(g) > glyphs.size()) g = U'?';
@@ -690,6 +686,10 @@ void Renderer::Impl::draw_text(
         f64 texy = f64(g / atlas_columns) * atlas_entry_height;
         f64 atlas_width = f64(atlas_columns * atlas_entry_width);
         f64 atlas_height = f64(atlas_rows * atlas_entry_height);
+
+        // Compute the uv coordinates of the glyph; note that the glyph
+        // is likely smaller than the width of an atlas cell, so perform
+        // this calculation in pixels.
         f32 u0 = f32(f64(texx) / atlas_width);
         f32 u1 = f32(f64(texx + w) / atlas_width);
         f32 v0 = f32(f64(texy) / atlas_height);
@@ -699,19 +699,19 @@ void Renderer::Impl::draw_text(
         x += glyph.xadv;
 
         // Build vertices for the glyph’s position and texture coordinates.
-        vec4 verts[]{
-            {xpos, ypos + h, u0, v0},
-            {xpos, ypos, u0, v1},
-            {xpos + w, ypos, u1, v1},
-            {xpos, ypos + h, u0, v0},
-            {xpos + w, ypos, u1, v1},
-            {xpos + w, ypos + h, u1, v0}
-        };
-
-        // Upload the vertices.
-        vbo.store(std::span<const vec4>{verts});
-        vao.draw();
+        verts.push_back({xpos, ypos + h, u0, v0});
+        verts.push_back({xpos, ypos, u0, v1});
+        verts.push_back({xpos + w, ypos, u1, v1});
+        verts.push_back({xpos, ypos + h, u0, v0});
+        verts.push_back({xpos + w, ypos, u1, v1});
+        verts.push_back({xpos + w, ypos + h, u1, v0});
     }
+
+    // Upload the vertices.
+    VertexArrays vao{VertexLayout::PositionTexture4D};
+    auto& vbo = vao.add_buffer();
+    vbo.copy_data(verts);
+    vao.draw();
 }
 
 // =============================================================================
