@@ -32,8 +32,11 @@ enum struct Cursor : u32;
 // =============================================================================
 /// To keep font sizes uniform.
 enum struct pr::client::FontSize : base::u32 {
-    Large = 48,
-    Huge = 96,
+    Text = 12,
+    Medium = 24,
+    Large = 36,
+    Huge = 48,
+    Title = 96,
 };
 
 enum struct pr::client::Cursor : base::u32 {

@@ -6,6 +6,7 @@ module;
 #include <SDL3/SDL.h>
 export module pr.client.ui;
 
+import base.text;
 import pr.utils;
 import pr.client.render;
 
@@ -16,6 +17,7 @@ class Button;
 class Screen;
 class TextEdit;
 class InputSystem;
+class Label;
 }
 
 namespace pr::client {
@@ -122,7 +124,7 @@ public:
     virtual void draw(Renderer& r) = 0;
 
     /// Recompute bounding box etc.
-    virtual void refresh(Size screen_size) = 0;
+    virtual void refresh(Size) {}
 
     /// Reset properties at the start of a tick.
     void reset_properties() {
@@ -155,6 +157,9 @@ public:
         return ref;
     }
 
+    /// Code to run to reset a screen when it is entered.
+    virtual void enter() {}
+
     /// Refresh all element positions.
     ///
     /// This recomputes the position of each element after the screen
@@ -173,6 +178,16 @@ public:
     /// interactions on them; thus, calling this handler is recommended
     /// if you override it.
     virtual void tick(InputSystem& input);
+};
+
+class pr::client::Label : public Element {
+    ShapedText text;
+    Position pos{};
+
+public:
+    explicit Label(ShapedText text, Position pos) : text(std::move(text)), pos(pos) {}
+
+    void draw(Renderer& r) override;
 };
 
 class pr::client::TextBox : public Element {
@@ -229,7 +244,8 @@ public:
         selectable = true;
     }
 
-    void event_click(InputSystem& input) override;
     void draw(Renderer& r) override;
+    void event_click(InputSystem& input) override;
     void event_input(InputSystem& input) override;
+    auto value() -> std::string { return text::ToUTF8(text); }
 };

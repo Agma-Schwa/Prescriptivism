@@ -52,6 +52,10 @@ void Button::draw(Renderer& r) {
     TextBox::draw(r);
 }
 
+void Label::draw(Renderer&r) {
+    r.draw_text(text, pos.absolute(r.size(), text.size()));
+}
+
 TextBox::TextBox(
     ShapedText text,
     Position pos,

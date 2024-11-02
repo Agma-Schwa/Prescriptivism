@@ -47,6 +47,8 @@ struct FTCallImpl {
     }
 };
 
+constexpr Colour DefaultBGColour{45, 42, 46, 255};
+
 constexpr char PrimitiveVertexShaderData[]{
 #embed "Shaders/Primitive.vert"
 };
@@ -481,7 +483,7 @@ void Renderer::frame_end() {
 }
 
 void Renderer::frame_start() {
-    clear(Colour::White);
+    clear(DefaultBGColour);
 
     // Disable mouse capture if the debugger is running.
     if (libassert::is_debugger_present()) {

@@ -1,5 +1,5 @@
 import pr.client;
 
 int main() {
-    pr::client::Client().Run();
+    pr::client::Client().run();
 }
