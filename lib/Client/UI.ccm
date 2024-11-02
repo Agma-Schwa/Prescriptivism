@@ -74,13 +74,9 @@ class pr::client::InputSystem {
         bool middle{};
     };
 
-    struct MovementKeys {
-        bool up{};
-        bool down{};
-        bool left{};
-        bool right{};
-        bool home{};
-        bool end{};
+    struct Event {
+        SDL_Keycode key;
+        SDL_Keymod mod;
     };
 
     bool was_selected = false;
@@ -88,10 +84,9 @@ class pr::client::InputSystem {
 public:
     Renderer& renderer;
     std::u32string text_input;
+    std::vector<Event> kb_events;
     MouseState mouse;
-    MovementKeys mov;
     bool quit = false;
-    bool keyboard_input = false;
 
     InputSystem(Renderer& r) : renderer(r) {}
 
@@ -215,12 +210,18 @@ public:
 };
 
 class pr::client::TextEdit : public TextBox {
+    struct Selection {
+        i32 start;
+        i32 end;
+    };
+
     std::u32string text;
     std::vector<ShapedText::Cluster> clusters;
-    bool dirty = false;
     FontSize size;
+    bool dirty = false;
     i32 cursor = 0;
     u32 no_blink_ticks = 0; // Used to inhibit blinking during typing.
+    Selection sel{};
 
 public:
     TextEdit(Position pos, FontSize size, i32 padding, i32 min_wd = 0, i32 min_ht = 0)

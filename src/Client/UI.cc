@@ -21,9 +21,6 @@ using namespace pr::client;
 // =============================================================================
 constexpr Colour DefaultButtonColour{36, 36, 36, 255};
 constexpr Colour HoverButtonColour{23, 23, 23, 255};
-constexpr char32_t Backspace = U'\b';
-constexpr char32_t BackspaceWord = U'\x18';
-constexpr char32_t Delete = U'\x7F';
 
 // =============================================================================
 //  Helpers
@@ -78,7 +75,6 @@ auto TextBox::TextPos(Renderer& r) -> xy {
     auto bg = pos.absolute(r.size(), sz);
     return Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
 }
-
 
 void TextBox::draw(Renderer& r) {
     auto text = TextPos(r);
@@ -198,56 +194,71 @@ void TextEdit::event_click(InputSystem& input) {
     }
 }
 
-
 void TextEdit::event_input(InputSystem& input) {
     // Copy text into the buffer.
     if (not input.text_input.empty()) {
         no_blink_ticks = 20;
         dirty = true;
-        for (auto c : input.text_input) {
-            switch (c) {
-                default: text.insert(cursor++, 1, c); break;
-                case Backspace:
-                    if (cursor != 0) text.erase(--cursor, 1);
-                    break;
-                case Delete:
-                    if (cursor != i32(text.size())) text.erase(cursor, 1);
-                    break;
-                case BackspaceWord: {
+        text.insert(cursor, input.text_input);
+        cursor += i32(input.text_input.size());
+    }
+
+    auto Paste = [&] {
+        if (SDL_HasClipboardText()) {
+            text += text::ToUTF32(SDL_GetClipboardText());
+            dirty = true;
+        }
+    };
+
+    for (auto [key, mod] : input.kb_events) {
+        no_blink_ticks = 20;
+        switch (key) {
+            default: break;
+            case SDLK_BACKSPACE:
+                if (mod & SDL_KMOD_CTRL) {
                     static constexpr std::u32string_view ws = U" \t\n\r\v\f";
                     u32stream segment{text.data(), usz(cursor)};
                     auto pos = segment.trim_back().drop_back_until_any(ws).size();
                     text.erase(pos, cursor - pos);
                     cursor = i32(pos);
-                } break;
-            }
+                    dirty = true;
+                } else if (cursor != 0) {
+                    text.erase(--cursor, 1);
+                    dirty = true;
+                }
+                break;
+            case SDLK_DELETE:
+                if (cursor != i32(text.size())) {
+                    text.erase(cursor, 1);
+                    dirty = true;
+                }
+                break;
+            case SDLK_LEFT: cursor = std::max(0, cursor - 1); break;
+            case SDLK_RIGHT: cursor = std::min(i32(text.size()), cursor + 1); break;
+            case SDLK_HOME: cursor = 0; break;
+            case SDLK_END: cursor = i32(text.size()); break;
+            case SDLK_V:
+                if (mod & SDL_KMOD_CTRL) Paste();
+                break;
+            case SDLK_INSERT:
+                if (mod & SDL_KMOD_SHIFT) Paste();
+                break;
         }
     }
-
-    if (input.mov.left) cursor = std::max(0, cursor - 1);
-    if (input.mov.right) cursor = std::min(i32(text.size()), cursor + 1);
-    if (input.mov.home) cursor = 0;
-    if (input.mov.end) cursor = i32(text.size());
-    if (input.keyboard_input) no_blink_ticks = 10;
 }
 
 // =============================================================================
 //  Input Handler.
 // =============================================================================
 void InputSystem::process_events() {
+    kb_events.clear();
     text_input.clear();
-    keyboard_input = false;
-    mov = {};
 
     // Get mouse state.
     mouse = {};
     f32 x, y;
     SDL_GetMouseState(&x, &y);
     mouse.pos = {x, renderer.size().ht - y};
-
-    auto Paste = [&] {
-        if (SDL_HasClipboardText()) text_input += text::ToUTF32(SDL_GetClipboardText());
-    };
 
     // Process events.
     SDL_Event event;
@@ -267,35 +278,10 @@ void InputSystem::process_events() {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                keyboard_input = true;
-                switch (event.key.key) {
-                    default: break;
-                    case SDLK_BACKSPACE:
-                        if (event.key.mod & SDL_KMOD_CTRL) text_input += BackspaceWord;
-                        else text_input += Backspace;
-                        break;
-                    case SDLK_DELETE:
-                        // if (event.key.mod & SDL_KMOD_CTRL) text_input += DeleteWord;
-                        // else
-                        text_input += Delete;
-                        break;
-                    case SDLK_LEFT: mov.left = true; break;
-                    case SDLK_RIGHT: mov.right = true; break;
-                    case SDLK_UP: mov.up = true; break;
-                    case SDLK_DOWN: mov.down = true; break;
-                    case SDLK_HOME: mov.home = true; break;
-                    case SDLK_END: mov.end = true; break;
-                    case SDLK_V:
-                        if (event.key.mod & SDL_KMOD_CTRL) Paste();
-                        break;
-                    case SDLK_INSERT:
-                        if (event.key.mod & SDL_KMOD_SHIFT) Paste();
-                        break;
-                }
+                kb_events.emplace_back(event.key.key, event.key.mod);
                 break;
 
             case SDL_EVENT_TEXT_INPUT:
-                keyboard_input = true;
                 text_input += text::ToUTF32(event.text.text);
                 break;
         }
