@@ -18,6 +18,7 @@ class Screen;
 class TextEdit;
 class InputSystem;
 class Label;
+class Throbber;
 }
 
 namespace pr::client {
@@ -248,4 +249,14 @@ public:
     void event_click(InputSystem& input) override;
     void event_input(InputSystem& input) override;
     auto value() -> std::string { return text::ToUTF8(text); }
+};
+
+class pr::client::Throbber : public Element {
+    Position pos;
+    bool show = true;
+
+public:
+    Throbber(Position pos) : pos(pos) {}
+
+    void draw(Renderer& r) override;
 };

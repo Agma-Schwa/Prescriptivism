@@ -6,6 +6,7 @@ module;
 #include <SDL3/SDL.h>
 #include <string_view>
 #include <utility>
+#include <pr/gl-headers.hh>
 module pr.client.ui;
 
 import base.text;
@@ -249,6 +250,25 @@ void TextEdit::event_input(InputSystem& input) {
                 break;
         }
     }
+}
+
+void Throbber::draw(Renderer& r) {
+    auto at = pos.absolute(r.size(), {40, 40});
+    auto xfrm = glm::identity<mat4>();
+    xfrm = translate(xfrm, vec3(20, 20, 0));
+    xfrm = rotate(xfrm, glm::radians(f32(3600 - SDL_GetTicks() % 3600) / 10), vec3(0, 0, 1));
+    r.use(r.throbber_shader);
+    r.throbber_shader.uniform("position", at.vec());
+    r.throbber_shader.uniform("rotation", xfrm);
+    VertexArrays vao{VertexLayout::Position2D};
+    vec2 verts[] {
+        {-20, -20},
+        {-20, 20},
+        {20, -20},
+        {20, 20}
+    };
+    vao.add_buffer(verts, gl::GL_TRIANGLE_STRIP);
+    vao.draw();
 }
 
 // =============================================================================

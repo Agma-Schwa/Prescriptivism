@@ -92,9 +92,14 @@ struct pr::client::xy {
     xy(i32 x, i32 y) : x(x), y(y) {}
     xy(vec2 v) : x(i32(v.x)), y(i32(v.y)) {}
     xy(f32 x, f32 y) : x(i32(x)), y(i32(y)) {}
+    xy(f64 x, f64 y) : x(i32(x)), y(i32(y)) {}
     xy(Size sz) : x(sz.wd), y(sz.ht) {}
 
     auto vec() const -> vec2 { return {f32(x), f32(y)}; }
+
+private:
+    friend xy operator+(xy a, xy b) { return {a.x + b.x, a.y + b.y}; }
+    friend xy operator-(xy a, xy b) { return {a.x - b.x, a.y - b.y}; }
 };
 
 /// Axis-aligned bounding box.
@@ -231,9 +236,13 @@ class pr::client::Renderer {
     SDL_Window* window;
     SDL_GLContextState* context;
 
+public:
     ShaderProgram primitive_shader;
     ShaderProgram text_shader;
     ShaderProgram image_shader;
+    ShaderProgram throbber_shader;
+
+private:
     FT_Library ft;
     FT_Face ft_face;
     std::unordered_map<u32, Font> fonts_by_size;
@@ -284,6 +293,9 @@ public:
     auto make_text(std::string_view text, FontSize size, std::vector<ShapedText::Cluster>* clusters = nullptr) -> ShapedText;
     auto make_text(std::u32string_view text, FontSize size, std::vector<ShapedText::Cluster>* clusters = nullptr) -> ShapedText;
 
+    /// Set the active shader.
+    void use(ShaderProgram& shader);
+
     /// Set the active cursor.
     void set_cursor(Cursor);
 
@@ -300,9 +312,6 @@ private:
     /// Start/end a frame.
     void frame_end();
     void frame_start();
-
-    /// Set the active shader.
-    void use(ShaderProgram& shader);
 
     /// Set the current cursor.
     void set_cursor_impl();

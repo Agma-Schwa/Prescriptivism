@@ -14,6 +14,8 @@ module;
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+#include <complex>
+
 // clang-format on
 module pr.client.render;
 import pr.client.utils;
@@ -71,6 +73,14 @@ constexpr char ImageVertexShaderData[]{
 
 constexpr char ImageFragmentShaderData[]{
 #embed "Shaders/Image.frag"
+};
+
+constexpr char ThrobberVertexShaderData[]{
+#embed "Shaders/Throbber.vert"
+};
+
+constexpr char ThrobberFragmentShaderData[]{
+#embed "Shaders/Throbber.frag"
 };
 
 constexpr char DefaultFontRegular[]{
@@ -355,6 +365,11 @@ Renderer::Renderer(int initial_wd, int initial_ht) {
         std::span{ImageFragmentShaderData}
     );
 
+    throbber_shader = ShaderProgram(
+        std::span{ThrobberVertexShaderData},
+        std::span{ThrobberFragmentShaderData}
+    );
+
     // Enable blending.
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -500,7 +515,7 @@ void Renderer::frame_start() {
 
 void Renderer::use(ShaderProgram& shader) {
     auto [sx, sy] = size();
-    shader.use_shader_program();
+    shader.use_shader_program_dont_call_this_directly();
     shader.uniform("projection", glm::ortho<f32>(0, sx, 0, sy));
 }
 

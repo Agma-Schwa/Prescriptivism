@@ -61,6 +61,8 @@ ConnexionScreen::ConnexionScreen(Client& c): client{c} {
         125
     );
 
+    Create<Throbber>(Position::Center());
+
     abort.on_click = [&] { st = State::Aborted; };
 }
 

@@ -1,5 +1,6 @@
 module;
 #include <base/Assert.hh>
+#include <glm/gtc/type_ptr.hpp>
 #include <pr/gl-headers.hh>
 #include <utility>
 export module pr.client.render.gl;
@@ -21,6 +22,7 @@ class VertexArrays;
 class VertexBuffer;
 
 using glm::ivec2;
+using glm::mat3;
 using glm::mat4;
 using glm::vec;
 using glm::vec1;
@@ -248,14 +250,18 @@ public:
         return SetUniform(name, glUniform4f, v.x, v.y, v.z, v.w);
     }
 
+    void uniform(ZTermString name, mat3 m) {
+        return SetUniform(name, glUniformMatrix3fv, 1, GL_FALSE, value_ptr(m));
+    }
+
     void uniform(ZTermString name, mat4 m) {
-        return SetUniform(name, glUniformMatrix4fv, 1, GL_FALSE, &m[0][0]);
+        return SetUniform(name, glUniformMatrix4fv, 1, GL_FALSE, value_ptr(m));
     }
 
     /// Set this as the active shader.
     ///
     /// Prefer to call Renderer::use() instead.
-    void use_shader_program() const { glUseProgram(descriptor); }
+    void use_shader_program_dont_call_this_directly() const { glUseProgram(descriptor); }
 
 private:
     template <typename... T>
