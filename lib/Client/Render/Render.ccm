@@ -293,8 +293,10 @@ public:
     auto make_text(std::string_view text, FontSize size, std::vector<ShapedText::Cluster>* clusters = nullptr) -> ShapedText;
     auto make_text(std::u32string_view text, FontSize size, std::vector<ShapedText::Cluster>* clusters = nullptr) -> ShapedText;
 
-    /// Set the active shader.
-    void use(ShaderProgram& shader);
+    /// Reload all shaders.
+    ///
+    /// ONLY USED DURING DEVELOPMENT!!!
+    void reload_shaders();
 
     /// Set the active cursor.
     void set_cursor(Cursor);
@@ -304,6 +306,9 @@ public:
 
     /// Get the size of the window.
     auto size() -> Size;
+
+    /// Set the active shader.
+    void use(ShaderProgram& shader);
 
 private:
     /// Get a font of a given size.

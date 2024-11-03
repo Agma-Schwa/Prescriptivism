@@ -253,19 +253,23 @@ void TextEdit::event_input(InputSystem& input) {
 }
 
 void Throbber::draw(Renderer& r) {
-    auto at = pos.absolute(r.size(), {40, 40});
+    static constexpr f32 R = 20;
+    static constexpr f32 Rate = 3; // Smaller means faster.
+    auto at = pos.absolute(r.size(), {i32(R), i32(R)});
+    auto rads = f32(glm::radians(fmod(360 * Rate - SDL_GetTicks(), 360 * Rate) / Rate));
     auto xfrm = glm::identity<mat4>();
-    xfrm = translate(xfrm, vec3(20, 20, 0));
-    xfrm = rotate(xfrm, glm::radians(f32(3600 - SDL_GetTicks() % 3600) / 10), vec3(0, 0, 1));
+    xfrm = translate(xfrm, vec3(R, R, 0));
+    xfrm = rotate(xfrm, rads, vec3(0, 0, 1));
     r.use(r.throbber_shader);
     r.throbber_shader.uniform("position", at.vec());
     r.throbber_shader.uniform("rotation", xfrm);
+    r.throbber_shader.uniform("r", R);
     VertexArrays vao{VertexLayout::Position2D};
     vec2 verts[] {
-        {-20, -20},
-        {-20, 20},
-        {20, -20},
-        {20, 20}
+        {-R, -R},
+        {-R, R},
+        {R, -R},
+        {R, R}
     };
     vao.add_buffer(verts, gl::GL_TRIANGLE_STRIP);
     vao.draw();
@@ -302,6 +306,7 @@ void InputSystem::process_events() {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
+                if (event.key.key == SDLK_F12) renderer.reload_shaders();
                 kb_events.emplace_back(event.key.key, event.key.mod);
                 break;
 

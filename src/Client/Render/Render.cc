@@ -546,6 +546,20 @@ auto Renderer::make_text(
     return font(+size).shape(text, clusters);
 }
 
+void Renderer::reload_shaders() {
+    // TODO: inotify().
+    auto Reload = [&](ShaderProgram& program, std::string_view shader_name) {
+        auto vert = File::Read(std::format("./assets/Shaders/{}.vert", shader_name)).value();
+        auto frag = File::Read(std::format("./assets/Shaders/{}.frag", shader_name)).value();
+        program = ShaderProgram{std::span{vert}, std::span{frag}};
+    };
+
+    Reload(primitive_shader, "Primitive");
+    Reload(text_shader, "Text");
+    Reload(image_shader, "Image");
+    Reload(throbber_shader, "Throbber");
+}
+
 void Renderer::set_cursor(Cursor c) {
     // Rather than actually setting the cursor, we register the
     // change and set it at the start of the next frame; this allows
