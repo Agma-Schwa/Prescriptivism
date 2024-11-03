@@ -29,8 +29,9 @@ void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) {
 // =============================================================================
 //  API
 // =============================================================================
-Server::Server(u16 port): server(net::TCPServer::Create(port, 200).value()) {}
-
+Server::Server(u16 port): server(net::TCPServer::Create(port, 200).value()) {
+    server.set_callbacks(*this);
+}
 
 void Server::Run() {
     constexpr chr::milliseconds ServerTickDuration = 33ms;
