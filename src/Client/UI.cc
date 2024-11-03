@@ -252,19 +252,7 @@ void TextEdit::event_input(InputSystem& input) {
     }
 }
 
-void Throbber::draw(Renderer& r) {
-    static constexpr f32 R = 20;
-    static constexpr f32 Rate = 3; // Smaller means faster.
-    auto at = pos.absolute(r.size(), {i32(R), i32(R)});
-    auto rads = f32(glm::radians(fmod(360 * Rate - SDL_GetTicks(), 360 * Rate) / Rate));
-    auto xfrm = glm::identity<mat4>();
-    xfrm = translate(xfrm, vec3(R, R, 0));
-    xfrm = rotate(xfrm, rads, vec3(0, 0, 1));
-    r.use(r.throbber_shader);
-    r.throbber_shader.uniform("position", at.vec());
-    r.throbber_shader.uniform("rotation", xfrm);
-    r.throbber_shader.uniform("r", R);
-    VertexArrays vao{VertexLayout::Position2D};
+Throbber::Throbber(Position pos) : vao(VertexLayout::Position2D), pos(pos) {
     vec2 verts[] {
         {-R, -R},
         {-R, R},
@@ -272,6 +260,23 @@ void Throbber::draw(Renderer& r) {
         {R, R}
     };
     vao.add_buffer(verts, gl::GL_TRIANGLE_STRIP);
+}
+
+void Throbber::draw(Renderer& r) {
+    static constexpr f32 Rate = 3; // Smaller means faster.
+
+    auto at = pos.absolute(r.size(), {i32(R), i32(R)});
+    auto rads = f32(glm::radians(fmod(360 * Rate - SDL_GetTicks(), 360 * Rate) / Rate));
+
+    auto xfrm = glm::identity<mat4>();
+    xfrm = translate(xfrm, vec3(R, R, 0));
+    xfrm = rotate(xfrm, rads, vec3(0, 0, 1));
+
+    r.use(r.throbber_shader);
+    r.throbber_shader.uniform("position", at.vec());
+    r.throbber_shader.uniform("rotation", xfrm);
+    r.throbber_shader.uniform("r", R);
+
     vao.draw();
 }
 

@@ -9,6 +9,7 @@ export module pr.client.ui;
 import base.text;
 import pr.utils;
 import pr.client.render;
+import pr.client.render.gl;
 
 export namespace pr::client {
 struct Position;
@@ -252,11 +253,14 @@ public:
 };
 
 class pr::client::Throbber : public Element {
+    static constexpr f32 R = 20; // Radius of the throbber.
+
+    VertexArrays vao;
     Position pos;
     bool show = true;
 
 public:
-    Throbber(Position pos) : pos(pos) {}
+    Throbber(Position pos);
 
     void draw(Renderer& r) override;
 };
