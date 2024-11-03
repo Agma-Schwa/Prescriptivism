@@ -1,7 +1,11 @@
 module;
-#include <format>
+#include <base/Assert.hh>
+#include <base/Macros.hh>
 #include <chrono>
+#include <format>
+#include <functional>
 #include <print>
+#include <thread>
 export module pr.utils;
 export import base;
 export namespace pr {
@@ -9,6 +13,9 @@ using namespace base;
 
 struct Profile;
 struct ZTermString;
+
+template <typename ResultType>
+class Thread;
 
 void CloseLoggingThread();
 
@@ -28,6 +35,50 @@ struct pr::Profile {
         auto end = chr::system_clock::now();
         auto duration = chr::duration_cast<chr::milliseconds>(end - start);
         std::println("Profile ({}): {}ms", name, duration.count());
+    }
+};
+
+/// Thread that can be restarted, aborted, and which may return a value.
+template <typename ResultType>
+class pr::Thread {
+    LIBBASE_IMMOVABLE(Thread);
+    std::jthread thread;
+    std::atomic_bool run_flag = false;
+    Result<ResultType> result = Error("Thread was aborted");
+
+public:
+    Thread() = default;
+
+    /// Check if the thread is running.
+    [[nodiscard]] bool running() const { return run_flag.load(std::memory_order::acquire); }
+
+    /// Start the thread.
+    template <typename Callable, typename... Args>
+    void start(Callable&& c, Args&&... args) { // clang-format off
+        Assert(not running(), "Thread already started!");
+        result = Error("Thread was aborted");
+        thread = std::jthread{[
+            this,
+            ...args = std::forward<Args>(args),
+            callable = std::forward<Callable>(c)
+        ](
+            std::stop_token stop
+        ) {
+            result = std::invoke(callable, args..., stop);
+            run_flag.store(false, std::memory_order::release);
+        }};
+        run_flag.store(true, std::memory_order::release);
+    } // clang-format on
+
+    /// Stop the thread and unbind it from the current instance.
+    void stop_and_release() {
+        if (thread.request_stop()) thread.detach();
+    }
+
+    /// Get the result value of the thread.
+    [[nodiscard]] auto value() -> Result<ResultType> requires (not std::is_void_v<ResultType>) {
+        Assert(not running(), "Thread is still running!");
+        return std::move(result);
     }
 };
 

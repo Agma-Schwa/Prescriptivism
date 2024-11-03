@@ -88,7 +88,7 @@ class pr::net::TCPConnexion {
 
 public:
     /// Connect to a server.
-    static auto Connect(std::string_view remote_ip, u16 port) -> Result<TCPConnexion>;
+    static auto Connect(std::string_view remote_address, u16 port) -> Result<TCPConnexion>;
 
     /// Get the ip address of the remote peer.
     auto address() const -> std::string_view;

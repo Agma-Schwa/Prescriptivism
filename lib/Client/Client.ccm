@@ -1,6 +1,9 @@
 module;
+#include <base/Assert.hh>
 #include <base/Macros.hh>
+#include <functional>
 #include <memory>
+#include <thread>
 export module pr.client;
 
 import pr.utils;
@@ -14,7 +17,6 @@ class Client;
 }
 
 namespace pr::client {
-class Text;
 class MenuScreen;
 class ErrorScreen;
 class ConnexionScreen;
@@ -28,18 +30,24 @@ public:
 
 /// Screen that displays an error.
 class pr::client::ErrorScreen : public Screen {
+    /// Text to display.
+    Label* msg;
+
     /// The screen to return to after this one is closed.
-    Screen* return_to;
+    Screen* return_screen = nullptr;
 
 public:
-    ErrorScreen(Client& c, std::string_view message, Screen* return_to);
+    ErrorScreen(Client& c);
+
+    /// Set the text to display and the screen to return to.
+    void enter(Client& c, std::string_view t, Screen& return_to);
 };
 
 /// Screen that is displayed while we connect to a server.
 ///
 /// This screen has all the connexion logic.
 class pr::client::ConnexionScreen : public Screen {
-    enum class State {
+    enum class State : u32 {
         Entered,    ///< The screen has just been entered.
         Connecting, ///< We are trying to connect in a separate thread.
         Aborted,    ///< The 'Cancel' button was pressed.
@@ -47,12 +55,18 @@ class pr::client::ConnexionScreen : public Screen {
 
     Client& client;
     State st;
+    std::string address;
+    Thread<net::TCPConnexion> connexion_thread;
 
 public:
     ConnexionScreen(Client& c);
 
-    void enter() override;
+    void on_entered() override;
     void tick(InputSystem& input) override;
+    void set_address(std::string addr);
+
+private:
+    auto connexion_thread_main(std::string address, std::stop_token st) -> Result<net::TCPConnexion>;
 };
 
 class pr::client::Client {
@@ -67,8 +81,8 @@ public:
 
     /// Screens.
     std::unique_ptr<MenuScreen> menu_screen;
-    std::unique_ptr<ErrorScreen> connexion_error_screen;
     std::unique_ptr<ConnexionScreen> connexion_screen;
+    std::unique_ptr<ErrorScreen> error_screen;
 
 private:
     Screen* current_screen;
@@ -88,4 +102,7 @@ public:
 
     /// Run the client for ever.
     void run();
+
+    /// Show an error to the user.
+    void show_error(std::string_view error, Screen& return_to);
 };

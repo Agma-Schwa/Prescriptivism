@@ -14,6 +14,7 @@ module;
 #ifdef __linux__
 #    include <arpa/inet.h>
 #    include <fcntl.h>
+#    include <netdb.h>
 #    include <netinet/in.h>
 #    include <sys/socket.h>
 #    include <sys/types.h>
@@ -80,7 +81,7 @@ struct AcceptedConnexion {
 };
 
 auto AcceptConnexion(Socket sock, bool& done) -> std::optional<AcceptedConnexion>;
-auto ConnectToServer(std::string_view remote_ip, u16 port) -> Result<SocketHolder>;
+auto ConnectToServer(std::string_view remote_address, u16 port) -> Result<SocketHolder>;
 auto CreateServerSocket(u16 port, u32 max_connexions) -> Result<SocketHolder>;
 } // namespace pr::net::impl
 
@@ -100,7 +101,7 @@ auto MakeNonBlocking(impl::Socket sock) -> Result<> {
     return {};
 }
 
-auto CreateNonBlockingSocket() -> Result<impl::SocketHolder> {
+auto CreateSocket() -> Result<impl::SocketHolder> {
     // Create the socket.
     impl::SocketHolder sock{socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)};
     if (sock.handle() == impl::InvalidSocket) return Error(
@@ -108,15 +109,21 @@ auto CreateNonBlockingSocket() -> Result<impl::SocketHolder> {
         std::strerror(errno)
     );
 
-    // Set the socket to non-blocking.
-    Try(MakeNonBlocking(sock.handle()));
-
     // Set the socket to be reusable.
     int opt = 1;
     if (setsockopt(sock.handle(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt) == -1) return Error(
         "Failed to set socket to reusable: {}",
         std::strerror(errno)
     );
+
+    return std::move(sock);
+}
+
+auto CreateNonBlockingSocket() -> Result<impl::SocketHolder> {
+    auto sock = Try(CreateSocket());
+
+    // Set the socket to non-blocking.
+    Try(MakeNonBlocking(sock.handle()));
 
     return std::move(sock);
 }
@@ -154,29 +161,65 @@ auto impl::AcceptConnexion(Socket sock, bool& done) -> std::optional<AcceptedCon
     return AcceptedConnexion{std::move(new_sock), ip_str};
 }
 
-auto impl::ConnectToServer(std::string_view remote_ip, u16 port) -> Result<SocketHolder> {
-    auto sock = Try(CreateNonBlockingSocket());
+auto impl::ConnectToServer(std::string_view remote_address, u16 port) -> Result<SocketHolder> {
+    auto sock = Try(CreateSocket());
+    auto Failed = [&](std::string_view msg = std::strerror(errno)) {
+        return Error(
+            "Failed to connect to {}: {}",
+            remote_address,
+            msg
+        );
+    };
 
-    // Parse the IP address.
-    in_addr addr{};
-    if (inet_pton(AF_INET, remote_ip.data(), &addr) != 1) return Error(
-        "Failed to parse IP address '{}'",
-        remote_ip
-    );
+    // Connect to an address directly.
+    auto ConnectToIP = [&] -> Result<bool> {
+        in_addr addr{};
+        if (inet_pton(AF_INET, remote_address.data(), &addr) == 1) {
+            // Connect to the server.
+            sockaddr_in sa{};
+            sa.sin_family = AF_INET;
+            sa.sin_port = htons(port);
+            sa.sin_addr = addr;
+            auto a = reinterpret_cast<sockaddr*>(&sa);
+            if (connect(sock.handle(), a, sizeof sa) == -1) return Failed();
+            return true;
+        }
+        return false;
+    };
 
-    // Connect to the server.
-    sockaddr_in sa{};
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(port);
-    sa.sin_addr = addr;
-    if (connect(sock.handle(), reinterpret_cast<sockaddr*>(&sa), sizeof sa) == -1) return Error(
-        "Failed to connect to {}: {}",
-        remote_ip,
-        std::strerror(errno)
-    );
+    // Parse and connect to a host name.
+    auto ConnectToHost = [&] -> Result<bool> {
+        addrinfo hints{};
+        addrinfo* addrs;
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+        auto res = getaddrinfo(remote_address.data(), std::to_string(port).c_str(), &hints, &addrs);
+        if (res != 0) return Failed(gai_strerror(res));
+        defer { freeaddrinfo(addrs); };
 
-    // Take care to clear 'fd' so we don't close the socket.
-    return std::move(sock);
+        // Try to connect to each of the addresses we got.
+        for (auto* a = addrs; a; a = a->ai_next) {
+            if (connect(sock.handle(), a->ai_addr, a->ai_addrlen) != -1) {
+                char buf[64]{};
+                inet_ntop(a->ai_family, a->ai_addr, buf, sizeof buf);
+                Log("Address {} resolved to {}", remote_address, std::string_view{buf});
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Try to either connect via IP or host name; either one may simply
+    // be unsuccessful (e.g. it’s not an IP address), or fail due to a
+    // hard error (e.g. the IP exists, but we couldn’t connect to it).
+    if (Try(ConnectToIP()) or Try(ConnectToHost())) {
+        Try(MakeNonBlocking(sock.handle()));
+        return std::move(sock);
+    }
+
+    // Couldn’t make sense of this.
+    return Failed();
 }
 
 auto impl::CreateServerSocket(u16 port, u32 max_connexions) -> Result<SocketHolder> {
@@ -263,7 +306,7 @@ void TCPServer::Impl::CloseConnexionAfterError(TCPConnexion& conn) {
 void TCPServer::Impl::ReceiveAll() {
     Assert(tcp_callbacks, "Callbacks not set");
     for (auto& conn : all_connexions) {
-        constexpr usz ReceivePerTick = 65536;
+        constexpr usz ReceivePerTick = 65'536;
         if (conn.impl->disconnected) continue;
         auto& buf = conn.impl->buffer;
 

@@ -160,7 +160,7 @@ public:
     }
 
     /// Code to run to reset a screen when it is entered.
-    virtual void enter() {}
+    virtual void on_entered() {}
 
     /// Refresh all element positions.
     ///
@@ -183,13 +183,16 @@ public:
 };
 
 class pr::client::Label : public Element {
+    // TODO: Reflow text.
     ShapedText text;
     Position pos{};
 
 public:
     explicit Label(ShapedText text, Position pos) : text(std::move(text)), pos(pos) {}
+    explicit Label(Position pos) : pos(pos) {}
 
     void draw(Renderer& r) override;
+    void update_text(ShapedText new_text) { text = std::move(new_text); }
 };
 
 class pr::client::TextBox : public Element {
