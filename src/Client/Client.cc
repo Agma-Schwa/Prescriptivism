@@ -9,6 +9,7 @@ module pr.client;
 
 import pr.utils;
 import base.text;
+import pr.packets;
 
 using namespace pr;
 using namespace pr::client;
@@ -109,7 +110,7 @@ void ConnexionScreen::tick(InputSystem& input) {
     switch (st) {
         case State::Aborted:
             connexion_thread.stop_and_release();
-            client.enter_screen(*client.menu_screen);
+            client.enter_screen(client.menu_screen);
             break;
 
         case State::Connecting: {
@@ -120,13 +121,13 @@ void ConnexionScreen::tick(InputSystem& input) {
             if (not conn) {
                 client.show_error(
                     std::format("Connexion failed: {}", conn.error()),
-                    *client.menu_screen
+                    client.menu_screen
                 );
                 return;
             }
 
             // We do! TODO: Switch to game screen.
-            client.enter_screen(*client.menu_screen);
+            client.game_screen.enter(std::move(conn.value()));
             return;
         }
 
@@ -145,23 +146,71 @@ void ConnexionScreen::set_address(std::string addr) {
 }
 
 // =============================================================================
+//  Game Screen
+// =============================================================================
+void GameScreen::enter(net::TCPConnexion conn) {
+    server_connexion = std::move(conn);
+    client.enter_screen(*this);
+}
+
+void GameScreen::tick([[maybe_unused]] InputSystem& input) {
+    // Server has gone away.
+    if (server_connexion->disconnected()) {
+        server_connexion.reset();
+        client.show_error("Server closed", client.menu_screen);
+        return;
+    }
+
+    // Receive data from the server.
+    tick_networking();
+}
+
+void GameScreen::tick_networking() {
+    server_connexion->receive([&](net::ReceiveBuffer& buf) {
+        while (not server_connexion->disconnected() and not buf.empty()) {
+            auto res = packets::HandleClientSidePacket(*this, buf);
+
+            // If there was an error, close the connexion.
+            if (not res) {
+                server_connexion->disconnect();
+                client.show_error(res.error(), client.menu_screen);
+            }
+
+            // And stop if the packet was incomplete.
+            if (not res.value()) break;
+        }
+    });
+}
+
+// =============================================================================
+//  Game Screen - Packet Handlers
+// =============================================================================
+namespace sc = packets::sc;
+namespace cs = packets::cs;
+
+void GameScreen::handle(sc::Disconnect) {
+    server_connexion->disconnect();
+    client.show_error("Server closed", client.menu_screen);
+}
+
+void GameScreen::handle(sc::HeartbeatRequest req) {
+    server_connexion->send(cs::HeartbeatResponse{req.seq_no});
+}
+
+// =============================================================================
 //  API
 // =============================================================================
 Client::Client() : renderer(Renderer(800, 600)) {
-    menu_screen = std::make_unique<MenuScreen>(*this);
-    connexion_screen = std::make_unique<ConnexionScreen>(*this);
-    error_screen = std::make_unique<ErrorScreen>(*this);
-    enter_screen(*menu_screen);
+    enter_screen(menu_screen);
 }
 
 void Client::connect_to_server(std::string_view ip_address) {
     Log("Connecting to server at {}", ip_address);
-    connexion_screen->set_address(std::string{ip_address});
-    enter_screen(*connexion_screen);
+    connexion_screen.set_address(std::string{ip_address});
+    enter_screen(connexion_screen);
 }
 
 void Client::enter_screen(Screen& s) {
-    Assert(&s, "Forgot to initialise screen");
     current_screen = &s;
     s.on_entered();
 }
@@ -198,7 +247,7 @@ void Client::run() {
 }
 
 void Client::show_error(std::string_view error, Screen& return_to) {
-    error_screen->enter(
+    error_screen.enter(
         *this,
         error,
         return_to

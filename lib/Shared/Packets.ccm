@@ -1,0 +1,160 @@
+module;
+#include <base/Assert.hh>
+#include <pr/Packets.hh>
+#include <utility>
+export module pr.packets;
+
+import pr.utils;
+import pr.tcp;
+
+using IDType = base::u8;
+
+// =============================================================================
+//  Common Packet API
+// =============================================================================
+namespace pr::net {
+template <IDType Id>
+struct PacketBase {
+    /// Id of the packet.
+    ///
+    /// Note that server packets and client packets have different IDs!
+    IDType id = Id;
+};
+}
+
+#define DefinePacket(name) export struct name : ::pr::net::PacketBase<+ID::name>
+#define Ctor(name)             \
+private:                       \
+    friend net::ReceiveBuffer; \
+    name() = default;          \
+public:                        \
+    name
+
+// =============================================================================
+//  Enumerations
+// =============================================================================
+namespace pr::packets::common {
+enum struct ID : IDType {
+#define X(name) name,
+    COMMON_PACKETS(X)
+#undef X
+};
+
+#define X(name) export struct name;
+COMMON_PACKETS(X)
+#undef X
+} // namespace pr::packets::common
+
+namespace pr::packets::sc {
+enum struct ID : std::underlying_type_t<common::ID> {
+#define X(name) name,
+    COMMON_PACKETS(X)
+        SC_PACKETS(X)
+#undef X
+};
+
+#define X(name) export using common::name;
+COMMON_PACKETS(X)
+#undef X
+} // namespace pr::packets::sc
+
+namespace pr::packets::cs {
+enum struct ID : std::underlying_type_t<common::ID> {
+#define X(name) name,
+    COMMON_PACKETS(X)
+        CS_PACKETS(X)
+#undef X
+};
+
+#define X(name) export using common::name;
+COMMON_PACKETS(X)
+#undef X
+} // namespace pr::packets::cs
+
+// =============================================================================
+//  Common Packets
+// =============================================================================
+namespace pr::packets::common {
+/// Packet sent by either side to disconnect the other.
+DefinePacket(Disconnect){};
+} // namespace pr::packets::common
+// =============================================================================
+//  Server -> Client
+// =============================================================================
+namespace pr::packets::sc {
+/// Packet sent by the server to see if it’s still there. These
+/// are mostly used when a client is idling because it’s not their
+/// turn.
+DefinePacket(HeartbeatRequest) {
+    Ctor(HeartbeatRequest)(u32 seq_no) : seq_no(seq_no) {}
+
+    /// Sequence number of the heartbeat packet; used to see if the
+    /// client is actually responding to the right packet.
+    u32 seq_no;
+};
+} // namespace pr::packets::sc
+
+// =============================================================================
+//  Client -> Server
+// =============================================================================
+namespace pr::packets::cs {
+DefinePacket(HeartbeatResponse) {
+    Ctor(HeartbeatResponse)(u32 seq_no) : seq_no(seq_no) {}
+
+    /// The sequence number of the corresponding server packet.
+    u32 seq_no;
+};
+} // namespace pr::packets::cs
+
+// =============================================================================
+//  Packet Processing
+// =============================================================================
+namespace pr::packets {
+static_assert(std::is_same_v<IDType, u8>, "TODO: Handle larger packet IDs");
+
+template <typename Packet, typename Handler, typename... Args>
+auto Dispatch(Handler& h, net::ReceiveBuffer& buf, Args&&... args) -> Result<bool> {
+    auto pack = buf.read<Packet>();
+    if (not pack.has_value()) return false;
+    h.handle(std::forward<Args>(args)..., std::move(pack.value()));
+    return true;
+}
+
+/// Deserialise and handle a packet received from the server.
+///
+/// \return An error indicating that something went wrong (in which case
+/// we should close the connexion) or a bool indicating whether the packet
+/// is complete (if this is false, stop processing packets until we have
+/// more data).
+export template <typename Handler>
+auto HandleClientSidePacket(Handler& h, net::ReceiveBuffer& buf) -> Result<bool> {
+    Assert(not buf.empty(), "No packet to handle?");
+    switch (auto ty = buf.peek<sc::ID>().value()) {
+        default: return Error("Server sent unrecognised packet: {}", +ty);
+#define X(name) \
+    case pr::packets::sc::ID::name: return Dispatch<pr::packets::sc::name>(h, buf);
+            COMMON_PACKETS(X)
+            SC_PACKETS(X)
+#undef X
+    }
+}
+
+/// Deserialise and handle a packet received from a client.
+///
+/// \return An error indicating that something went wrong (in which case
+/// we should close the connexion) or a bool indicating whether the packet
+/// is complete (if this is false, stop processing packets until we have
+/// more data).
+export template <typename Handler>
+auto HandleServerSidePacket(Handler& h, net::TCPConnexion& client, net::ReceiveBuffer& buf) -> Result<bool> {
+    Assert(not buf.empty(), "No packet to handle?");
+    switch (auto ty = buf.peek<cs::ID>().value()) {
+        default: return Error("Client sent unrecognised packet: {}", +ty);
+#define X(name) \
+    case pr::packets::cs::ID::name: return Dispatch<pr::packets::cs::name>(h, buf, client);
+            COMMON_PACKETS(X)
+            CS_PACKETS(X)
+#undef X
+    }
+}
+}

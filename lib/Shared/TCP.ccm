@@ -1,10 +1,11 @@
 module;
 #include <base/Macros.hh>
+#include <cstring>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <type_traits>
-#include <optional>
-#include <cstring>
 #include <vector>
 export module pr.tcp;
 import pr.utils;
@@ -19,10 +20,32 @@ constexpr u16 DefaultPort = 33'014;
 }
 
 class pr::net::ReceiveBuffer {
+    LIBBASE_IMMOVABLE(ReceiveBuffer);
+
     std::span<std::byte> data;
 
 public:
     ReceiveBuffer(std::vector<std::byte>& buffer) : data(buffer) {}
+
+    /// Check if the buffer is empty.
+    auto empty() const -> bool { return data.empty(); }
+
+    /// \see read().
+    auto peek(usz n) -> std::span<std::byte> {
+        if (n > data.size()) return {};
+        return data.subspan(0, n);
+    }
+
+    /// \see read().
+    template <typename T>
+    requires std::is_trivially_copyable_v<T> and std::is_default_constructible_v<T>
+    auto peek() -> std::optional<T> {
+        if (data.size() < sizeof(T)) return std::nullopt;
+        auto n = peek(sizeof(T));
+        T result;
+        std::memcpy(&result, n.data(), sizeof(T));
+        return result;
+    }
 
     /// Read data from the buffer and discard it.
     ///
@@ -43,7 +66,7 @@ public:
     /// instead, returning an empty optional if there are not enough
     /// bytes in the buffer.
     template <typename T>
-    requires std::is_trivially_copyable_v<T> and std::is_default_constructible_v<T>
+    requires std::is_trivially_copyable_v<T>
     auto read() -> std::optional<T> {
         if (data.size() < sizeof(T)) return std::nullopt;
         auto n = read(sizeof(T));
@@ -95,6 +118,22 @@ public:
 
     /// Close the connexion.
     void disconnect();
+
+    /// Check if the connexion has been disconnected.
+    bool disconnected() const;
+
+    /// Receive data from the remote peer.
+    void receive(std::function<void(ReceiveBuffer&)> callback);
+
+    /// Send a struct to the remote peer.
+    template <typename T>
+    requires std::is_class_v<T>
+    void send(const T& t) {
+        send(std::span{reinterpret_cast<const std::byte*>(&t), sizeof(T)});
+    }
+
+    /// Send data to the remote peer.
+    void send(std::span<const std::byte> data);
 };
 
 /// A reference type that holds a TCP server that can accept

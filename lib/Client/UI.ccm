@@ -235,10 +235,10 @@ class pr::client::TextEdit : public TextBox {
         i32 end;
     };
 
-    std::u32string text;
+    std::u32string text = U"localhost"; // FIXME: For testing. Remove.
     std::vector<ShapedText::Cluster> clusters;
     FontSize size;
-    bool dirty = false;
+    bool dirty = true;
     i32 cursor = 0;
     u32 no_blink_ticks = 0; // Used to inhibit blinking during typing.
     Selection sel{};

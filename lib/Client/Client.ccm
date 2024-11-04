@@ -3,10 +3,12 @@ module;
 #include <base/Macros.hh>
 #include <functional>
 #include <memory>
+#include <pr/Packets.hh>
 #include <thread>
 export module pr.client;
 
 import pr.utils;
+import pr.packets;
 import pr.client.ui;
 import pr.client.render;
 import pr.client.render.gl;
@@ -20,6 +22,7 @@ namespace pr::client {
 class MenuScreen;
 class ErrorScreen;
 class ConnexionScreen;
+class GameScreen;
 }
 
 /// Main menu of the game.
@@ -69,6 +72,23 @@ private:
     auto connexion_thread_main(std::string address, std::stop_token st) -> Result<net::TCPConnexion>;
 };
 
+/// This screen renders the actual game.
+class pr::client::GameScreen : public Screen {
+    Client& client;
+    LateInit<net::TCPConnexion> server_connexion;
+
+public:
+    explicit GameScreen(Client& c) : client(c) {}
+    void enter(net::TCPConnexion conn);
+    void tick(InputSystem& input) override;
+    void tick_networking();
+
+#define X(name) void handle(packets::sc::name);
+    COMMON_PACKETS(X)
+    SC_PACKETS(X)
+#undef X
+};
+
 class pr::client::Client {
     LIBBASE_IMMOVABLE(Client);
 
@@ -80,9 +100,10 @@ public:
     InputSystem input_system{renderer};
 
     /// Screens.
-    std::unique_ptr<MenuScreen> menu_screen;
-    std::unique_ptr<ConnexionScreen> connexion_screen;
-    std::unique_ptr<ErrorScreen> error_screen;
+    MenuScreen menu_screen{*this};
+    ConnexionScreen connexion_screen{*this};
+    ErrorScreen error_screen{*this};
+    GameScreen game_screen{*this};
 
 private:
     Screen* current_screen;

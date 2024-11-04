@@ -3,6 +3,7 @@ module;
 #include <base/Macros.hh>
 #include <cerrno>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <print>
 #include <span>
@@ -260,19 +261,25 @@ auto impl::CreateServerSocket(u16 port, u32 max_connexions) -> Result<SocketHold
 struct TCPConnexion::Impl : impl::SocketHolder {
     bool disconnected = false;
     std::string ip_address;
-    std::vector<std::byte> buffer;
+    std::vector<std::byte> receive_buffer;
+    std::vector<std::byte> send_buffer;
 
     explicit Impl(SocketHolder socket, std::string ip_address)
         : SocketHolder(std::move(socket)),
           ip_address(std::move(ip_address)) {}
 
     void Disconnect();
+    void Receive(std::function<void(ReceiveBuffer&)> callback);
+    void Send(std::span<const std::byte> data);
+
+private:
+    usz SendImpl(std::span<const std::byte> data);
 };
 
 struct TCPServer::Impl : impl::SocketHolder {
     std::vector<TCPConnexion> all_connexions;
     const u16 port;
-    TCPCallbacks* tcp_callbacks;
+    TCPCallbacks* tcp_callbacks = nullptr;
 
     explicit Impl(SocketHolder socket, u16 port)
         : SocketHolder(std::move(socket)),
@@ -291,7 +298,83 @@ void TCPConnexion::Impl::Disconnect() {
     if (disconnected) return;
     disconnected = true;
 
-    // TODO: Send message.
+    // Try to flush the send buffer before closing the connexion so
+    // the client hopefully gets any disconnect packets that might
+    // have been queued up.
+    if (not send_buffer.empty()) Send(send_buffer);
+}
+
+void TCPConnexion::Impl::Send(std::span<const std::byte> data) {
+    // Clear out the buffer first before sending new data.
+    if (not send_buffer.empty()) {
+        auto sent = SendImpl(send_buffer);
+        if (sent != send_buffer.size()) {
+            send_buffer.erase(send_buffer.begin(), send_buffer.begin() + sent);
+            send_buffer.insert(send_buffer.end(), data.begin(), data.end());
+            return;
+        }
+    }
+
+    // Then, send the new data.
+    auto sent = SendImpl(data);
+    if (sent != data.size()) send_buffer.insert(
+        send_buffer.end(),
+        data.begin() + sent,
+        data.end()
+    );
+}
+
+void TCPConnexion::Impl::Receive(std::function<void(ReceiveBuffer&)> callback) {
+    // Unlike the send buffer, we don’t want to pass the receive buffer
+    // to the caller immediately even if it is not empty, since data left
+    // in the receive buffer indicates an incomplete packet.
+    constexpr usz ReceivePerTick = 65'536;
+    if (disconnected) return;
+
+    // Allocate more space in the buffer.
+    auto old_sz = receive_buffer.size();
+    receive_buffer.resize(old_sz + ReceivePerTick);
+
+    // Receive data.
+    auto sz = recv(handle(), receive_buffer.data() + old_sz, ReceivePerTick, 0);
+    if (sz == -1) {
+        if (errno == EWOULDBLOCK or errno == EAGAIN) return;
+        return Disconnect();
+    }
+
+    // If we receive 0, the connexion was closed.
+    if (sz == 0) {
+        Log("Connexion {} closed by peer", ip_address);
+        return Disconnect();
+    }
+
+    // Truncate the buffer to match what we received.
+    receive_buffer.resize(old_sz + usz(sz));
+
+    // Dispatch the data to the callback and truncate the buffer
+    // to remove everything that was processed by it.
+    ReceiveBuffer buffer{receive_buffer};
+    callback(buffer);
+    auto processed = receive_buffer.size() - buffer.size();
+    receive_buffer.erase(
+        receive_buffer.begin(),
+        receive_buffer.begin() + isz(processed)
+    );
+}
+
+usz TCPConnexion::Impl::SendImpl(std::span<const std::byte> data) {
+    auto sz = ::send(handle(), data.data(), data.size(), MSG_NOSIGNAL);
+
+    // Sending failed.
+    if (sz == -1) {
+        if (errno == EINTR) return SendImpl(data);
+        if (errno == EWOULDBLOCK or errno == EAGAIN) return 0;
+        if (errno == ECONNRESET or errno == EPIPE) return Disconnect(), 0;
+        Log("Unexpected error while sending data to {}: {}", ip_address, std::strerror(errno));
+        return Disconnect(), 0;
+    }
+
+    return usz(sz);
 }
 
 // =============================================================================
@@ -305,40 +388,9 @@ void TCPServer::Impl::CloseConnexionAfterError(TCPConnexion& conn) {
 
 void TCPServer::Impl::ReceiveAll() {
     Assert(tcp_callbacks, "Callbacks not set");
-    for (auto& conn : all_connexions) {
-        constexpr usz ReceivePerTick = 65'536;
-        if (conn.impl->disconnected) continue;
-        auto& buf = conn.impl->buffer;
-
-        // Allocate more space in the buffer.
-        auto old_sz = buf.size();
-        buf.resize(old_sz + ReceivePerTick);
-
-        // Receive data.
-        auto sz = recv(conn.impl->handle(), buf.data() + old_sz, ReceivePerTick, 0);
-        if (sz == -1) {
-            if (errno == EWOULDBLOCK or errno == EAGAIN) continue;
-            CloseConnexionAfterError(conn);
-            continue;
-        }
-
-        // If we receive 0, the connexion was closed.
-        if (sz == 0) {
-            Log("Connexion {} closed by client", conn.address());
-            conn.disconnect();
-            continue;
-        }
-
-        // Truncate the buffer to match what we received.
-        buf.resize(old_sz + usz(sz));
-
-        // Dispatch the data to the callback and truncate the buffer
-        // to remove everything that was processed by it.
-        ReceiveBuffer buffer{buf};
-        tcp_callbacks->receive(conn, buffer);
-        auto processed = buf.size() - buffer.size();
-        buf.erase(buf.begin(), buf.begin() + isz(processed));
-    }
+    for (auto& conn : all_connexions) conn.receive([&](ReceiveBuffer& buf) {
+        tcp_callbacks->receive(conn, buf);
+    });
 }
 
 void TCPServer::Impl::SetCallbacks(TCPCallbacks& callbacks) {
@@ -390,6 +442,9 @@ auto TCPServer::Create(u16 port, u32 max_connexions) -> Result<TCPServer> {
 
 auto TCPConnexion::address() const -> std::string_view { return impl->ip_address; }
 void TCPConnexion::disconnect() { impl->Disconnect(); }
+bool TCPConnexion::disconnected() const { return impl->disconnected; }
+void TCPConnexion::receive(std::function<void(ReceiveBuffer&)> callback) { return impl->Receive(callback); }
+void TCPConnexion::send(std::span<const std::byte> data) { return impl->Send(data); }
 
 auto TCPServer::connexions() -> std::span<TCPConnexion> { return impl->all_connexions; }
 auto TCPServer::port() const -> u16 { return impl->port; }

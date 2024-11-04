@@ -192,6 +192,9 @@ file(GLOB_RECURSE common_modules lib/Shared/*.ccm)
 add_library(PrescriptivismShared STATIC ${common_sources})
 target_link_libraries(PrescriptivismShared PUBLIC options libbase)
 target_sources(PrescriptivismShared PUBLIC FILE_SET CXX_MODULES FILES ${common_modules})
+target_include_directories(PrescriptivismShared PUBLIC
+    "${PROJECT_SOURCE_DIR}/include/Shared"
+)
 
 ## ============================================================================
 ##  Server
@@ -230,7 +233,7 @@ target_compile_options(Prescriptivism PRIVATE
 )
 
 target_include_directories(Prescriptivism PRIVATE
-    ${PROJECT_SOURCE_DIR}/include/Client
+    "${PROJECT_SOURCE_DIR}/include/Client"
 )
 
 ## Allow overriding the default font w/o having to make it part of the project;

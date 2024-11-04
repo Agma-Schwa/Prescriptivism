@@ -1,11 +1,13 @@
 module;
 #include <base/Macros.hh>
 #include <memory>
+#include <pr/Packets.hh>
 export module pr.server;
 import pr.tcp;
 
 import base;
 import pr.utils;
+import pr.packets;
 
 export namespace pr::server {
 class Server;
@@ -21,8 +23,16 @@ public:
     /// Create and start the server.
     Server(u16 port);
 
+    /// Disconnect a client.
+    void Kick(net::TCPConnexion& client);
+
     /// Run the server for ever.
     [[noreturn]] void Run();
+
+#define X(name) void handle(net::TCPConnexion& client, packets::cs::name);
+    COMMON_PACKETS(X)
+    CS_PACKETS(X)
+#undef X
 
 private:
     void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;

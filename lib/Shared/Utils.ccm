@@ -14,18 +14,67 @@ using namespace base;
 struct Profile;
 struct ZTermString;
 
+template <typename T>
+class LateInit;
+
 template <typename ResultType>
 class Thread;
 
 void CloseLoggingThread();
 
-template <typename ...Args>
+template <typename... Args>
 void Log(std::format_string<Args...> fmt, Args&&... args);
-}
+} // namespace pr
 
 namespace pr {
 void LogImpl(std::string);
 }
+
+template <typename T>
+class pr::LateInit {
+    LIBBASE_IMMOVABLE(LateInit);
+    alignas(T) std::byte storage[sizeof(T)];
+    bool initialised = false;
+
+public:
+    LateInit() = default;
+    ~LateInit() {
+        if (initialised) Ptr()->~T();
+    }
+
+    void operator=(T&& value)
+    requires std::is_move_assignable_v<T>
+    {
+        if (not initialised) init(std::move(value));
+        else *Ptr() = std::move(value);
+    }
+
+    void reset() {
+        if (initialised) Ptr()->~T();
+        initialised = false;
+    }
+
+    template <typename... Args>
+    auto init(Args&&... args) -> T* {
+        if (initialised) reset();
+        initialised = true;
+        new (storage) T(std::forward<Args>(args)...);
+        return Ptr();
+    }
+
+    [[nodiscard]] auto operator->() -> T* {
+        Assert(initialised, "LateInit not initialised!");
+        return Ptr();
+    }
+
+    [[nodiscard]] auto operator*() -> T& {
+        Assert(initialised, "LateInit not initialised!");
+        return *Ptr();
+    }
+
+private:
+    auto Ptr() -> T* { return reinterpret_cast<T*>(std::launder(storage)); }
+};
 
 struct pr::Profile {
     std::string name;
@@ -76,7 +125,9 @@ public:
     }
 
     /// Get the result value of the thread.
-    [[nodiscard]] auto value() -> Result<ResultType> requires (not std::is_void_v<ResultType>) {
+    [[nodiscard]] auto value() -> Result<ResultType>
+    requires (not std::is_void_v<ResultType>)
+    {
         Assert(not running(), "Thread is still running!");
         return std::move(result);
     }
@@ -98,7 +149,7 @@ public:
     auto c_str() const -> const char* { return data.data(); }
 };
 
-template <typename ...Args>
+template <typename... Args>
 void pr::Log(std::format_string<Args...> fmt, Args&&... args) {
     pr::LogImpl(std::format(fmt, std::forward<Args>(args)...));
 }

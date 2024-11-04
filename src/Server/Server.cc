@@ -15,15 +15,39 @@ using namespace pr::server;
 // =============================================================================
 //  Impl
 // =============================================================================
-void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) {
-    auto sz = buffer.size();
-    auto data = buffer.read(sz);
-    Log(
-        "Received {} bytes from {}: {}",
-        sz,
-        client.address(),
-        std::string_view(reinterpret_cast<const char*>(data.data()), sz)
-    );
+void Server::Kick(net::TCPConnexion& client) {
+    client.send(packets::sc::Disconnect{});
+    client.disconnect();
+}
+
+void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buf) {
+    while (not client.disconnected() and not buf.empty()) {
+        auto res = packets::HandleServerSidePacket(*this, client, buf);
+
+        // If there was an error, close the connexion.
+        if (not res) {
+            Log("Packet error while processing {}: {}", client.address(), res.error());
+            return Kick(client);
+        }
+
+        // And stop if the packet was incomplete.
+        if (not res.value()) break;
+    }
+}
+
+// =============================================================================
+//  Packet Handlers
+// =============================================================================
+namespace sc = packets::sc;
+namespace cs = packets::cs;
+
+void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
+    Log("Client {} disconnected", client.address());
+    client.disconnect();
+}
+
+void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
+    Log("Received heartbeat response from client {}", res.seq_no);
 }
 
 // =============================================================================
