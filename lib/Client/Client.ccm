@@ -78,7 +78,7 @@ class pr::client::GameScreen : public Screen {
     LateInit<net::TCPConnexion> server_connexion;
 
 public:
-    explicit GameScreen(Client& c) : client(c) {}
+    explicit GameScreen(Client& c);
     void enter(net::TCPConnexion conn);
     void tick(InputSystem& input) override;
     void tick_networking();

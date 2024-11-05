@@ -33,6 +33,7 @@ enum struct Cursor : u32;
 // =============================================================================
 /// To keep font sizes uniform.
 enum struct pr::client::FontSize : base::u32 {
+    Small = 6,
     Text = 12,
     Medium = 24,
     Large = 36,
@@ -83,16 +84,18 @@ struct pr::client::Colour {
     auto vec4() const -> glm::vec4 { return {red(), green(), blue(), alpha()}; }
 
     static constinit const Colour White;
+    static constinit const Colour Black;
 };
 
 constexpr pr::client::Colour pr::client::Colour::White = {255, 255, 255, 255};
+constexpr pr::client::Colour pr::client::Colour::Black = {0, 0, 0, 255};
 
 struct pr::client::Size {
     i32 wd{};
     i32 ht{};
 
-    Size() = default;
-    Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
+    constexpr Size() = default;
+    constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
 };
 
 // XY position that is destructurable.
