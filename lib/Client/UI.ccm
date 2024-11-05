@@ -62,26 +62,26 @@ struct pr::client::Position {
     /// Anchor of the position.
     Anchor anchor = Anchor::Default;
 
-    Position() = default;
-    Position(xy base, Anchor a = Anchor::Default) : base(base), anchor(a) {}
-    Position(i32 x, i32 y, Anchor a = Anchor::Default) : base(x, y), anchor(a) {}
+    constexpr Position() = default;
+    constexpr Position(xy base, Anchor a = Anchor::Default) : base(base), anchor(a) {}
+    constexpr Position(i32 x, i32 y, Anchor a = Anchor::Default) : base(x, y), anchor(a) {}
 
     /// Create a position that is centered horizontally or vertically.
-    static auto HCenter(i32 y, Anchor a = Anchor::Default) -> Position { return {Centered, y, a}; }
-    static auto VCenter(i32 x, Anchor a = Anchor::Default) -> Position { return {x, Centered, a}; }
-    static auto Center(Anchor a = Anchor::Default) -> Position { return {Centered, Centered, a}; }
+    static constexpr auto HCenter(i32 y, Anchor a = Anchor::Default) -> Position { return {Centered, y, a}; }
+    static constexpr auto VCenter(i32 x, Anchor a = Anchor::Default) -> Position { return {x, Centered, a}; }
+    static constexpr auto Center(Anchor a = Anchor::Default) -> Position { return {Centered, Centered, a}; }
 
     /// Convert to an absolute position.
     auto absolute(Size screen_size, Size object_size) -> xy;
 
     /// Anchor the position.
-    auto anchor_to(Anchor a) -> Position& {
+    constexpr auto anchor_to(Anchor a) -> Position& {
         anchor = a;
         return *this;
     }
 
     /// Offset horizontally.
-    auto hoffset(i32 offset) -> Position& {
+    constexpr auto hoffset(i32 offset) -> Position& {
         xadjust += std::saturate_cast<i16>(offset);
         return *this;
     }
@@ -90,7 +90,7 @@ struct pr::client::Position {
     auto relative(xy origin, Size parent_size, Size object_size) -> xy;
 
     /// Offset vertically.
-    auto voffset(i32 offset) -> Position& {
+    constexpr auto voffset(i32 offset) -> Position& {
         yadjust += std::saturate_cast<i16>(offset);
         return *this;
     }

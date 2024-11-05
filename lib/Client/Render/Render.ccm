@@ -77,11 +77,11 @@ struct pr::client::Colour {
         };
     }
 
-    f32 red() const { return r / 255.0f; }
-    f32 green() const { return g / 255.0f; }
-    f32 blue() const { return b / 255.0f; }
-    f32 alpha() const { return a / 255.0f; }
-    auto vec4() const -> glm::vec4 { return {red(), green(), blue(), alpha()}; }
+    constexpr f32 red() const { return r / 255.0f; }
+    constexpr f32 green() const { return g / 255.0f; }
+    constexpr f32 blue() const { return b / 255.0f; }
+    constexpr f32 alpha() const { return a / 255.0f; }
+    constexpr auto vec4() const -> glm::vec4 { return {red(), green(), blue(), alpha()}; }
 
     static constinit const Colour White;
     static constinit const Colour Black;
@@ -103,18 +103,18 @@ struct pr::client::xy {
     i32 x{};
     i32 y{};
 
-    xy() = default;
-    xy(i32 x, i32 y) : x(x), y(y) {}
-    xy(vec2 v) : x(i32(v.x)), y(i32(v.y)) {}
-    xy(f32 x, f32 y) : x(i32(x)), y(i32(y)) {}
-    xy(f64 x, f64 y) : x(i32(x)), y(i32(y)) {}
-    xy(Size sz) : x(sz.wd), y(sz.ht) {}
+    constexpr xy() = default;
+    constexpr xy(i32 x, i32 y) : x(x), y(y) {}
+    constexpr xy(vec2 v) : x(i32(v.x)), y(i32(v.y)) {}
+    constexpr xy(f32 x, f32 y) : x(i32(x)), y(i32(y)) {}
+    constexpr xy(f64 x, f64 y) : x(i32(x)), y(i32(y)) {}
+    constexpr xy(Size sz) : x(sz.wd), y(sz.ht) {}
 
-    auto vec() const -> vec2 { return {f32(x), f32(y)}; }
+    constexpr auto vec() const -> vec2 { return {f32(x), f32(y)}; }
 
 private:
-    friend xy operator+(xy a, xy b) { return {a.x + b.x, a.y + b.y}; }
-    friend xy operator-(xy a, xy b) { return {a.x - b.x, a.y - b.y}; }
+    friend constexpr xy operator+(xy a, xy b) { return {a.x + b.x, a.y + b.y}; }
+    friend constexpr xy operator-(xy a, xy b) { return {a.x - b.x, a.y - b.y}; }
 };
 
 /// Axis-aligned bounding box.
@@ -122,10 +122,10 @@ struct pr::client::AABB {
     xy min;
     xy max;
 
-    AABB() = default;
-    AABB(i32 x, i32 y, i32 wd, i32 ht) : min(x, y), max(x + wd, y + ht) {}
-    AABB(xy min, xy max) : min(min), max(max) {}
-    AABB(xy pos, Size sz) : min(pos), max(pos.x + sz.wd, pos.y + sz.ht) {}
+    constexpr AABB() = default;
+    constexpr AABB(i32 x, i32 y, i32 wd, i32 ht) : min(x, y), max(x + wd, y + ht) {}
+    constexpr AABB(xy min, xy max) : min(min), max(max) {}
+    constexpr AABB(xy pos, Size sz) : min(pos), max(pos.x + sz.wd, pos.y + sz.ht) {}
 
     /// Check if this box contains a point.
     auto contains(xy) const -> bool;
