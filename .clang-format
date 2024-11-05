@@ -155,7 +155,8 @@ BreakBeforeTernaryOperators: true
 ##     Constructor()
 ##         : bar(42)
 ##         , baz(23)
-BreakConstructorInitializers: BeforeComma
+## Disabled because it breaks *every* constructor initialiser
+##BreakConstructorInitializers: BeforeComma
 
 ## Same thing, but for class declarations.
 BreakInheritanceList: BeforeComma
