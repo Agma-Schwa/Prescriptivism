@@ -194,7 +194,7 @@ void GameScreen::tick(InputSystem& input) {
     // Server has gone away.
     if (server_connexion->disconnected()) {
         server_connexion.reset();
-        client.show_error("Server closed", client.menu_screen);
+        client.show_error("Disconnected: Server has gone away", client.menu_screen);
         return;
     }
 
@@ -226,9 +226,18 @@ void GameScreen::tick_networking() {
 namespace sc = packets::sc;
 namespace cs = packets::cs;
 
-void GameScreen::handle(sc::Disconnect) {
+void GameScreen::handle(sc::Disconnect packet) {
     server_connexion->disconnect();
-    client.show_error("Server closed", client.menu_screen);
+    auto reason = [&] -> std::string_view {
+        switch (packet.reason) {
+            using Reason = packets::sc::Disconnect::Reason;
+            case Reason::Unspecified: return "Disconnected";
+            case Reason::ServerFull: return "Disconnected: Server full";
+            case Reason::InvalidPacket: return "Disconnected: Client sent invalid packet";
+            default: return "Disconnected: <<<Invalid>>>";
+        }
+    }();
+    client.show_error(reason, client.menu_screen);
 }
 
 void GameScreen::handle(sc::HeartbeatRequest req) {

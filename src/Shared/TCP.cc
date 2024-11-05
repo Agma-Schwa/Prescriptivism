@@ -279,7 +279,7 @@ private:
 struct TCPServer::Impl : impl::SocketHolder {
     std::vector<TCPConnexion> all_connexions;
     const u16 port;
-    TCPCallbacks* tcp_callbacks = nullptr;
+    TCPServerCallbacks* tcp_callbacks = nullptr;
 
     explicit Impl(SocketHolder socket, u16 port)
         : SocketHolder(std::move(socket)),
@@ -288,7 +288,7 @@ struct TCPServer::Impl : impl::SocketHolder {
     void CloseConnexionAfterError(TCPConnexion& conn);
     void UpdateConnexions();
     void ReceiveAll();
-    void SetCallbacks(TCPCallbacks& callbacks);
+    void SetCallbacks(TCPServerCallbacks& callbacks);
 };
 
 // =============================================================================
@@ -393,7 +393,7 @@ void TCPServer::Impl::ReceiveAll() {
     });
 }
 
-void TCPServer::Impl::SetCallbacks(TCPCallbacks& callbacks) {
+void TCPServer::Impl::SetCallbacks(TCPServerCallbacks& callbacks) {
     Assert(not tcp_callbacks, "Callbacks already set");
     tcp_callbacks = &callbacks;
 }
@@ -408,20 +408,27 @@ void TCPServer::Impl::UpdateConnexions() {
     for (bool done = false; not done;) {
         auto conn = impl::AcceptConnexion(handle(), done);
         if (not conn) continue;
-        Log("Added connexion from {}", conn->ip_address);
+
+        // Create the connexion.
         TCPConnexion c;
-        c.impl = std::make_unique<TCPConnexion::Impl>(
+        c.impl = std::make_shared<TCPConnexion::Impl>(
             std::move(conn->socket),
             std::move(conn->ip_address)
         );
-        all_connexions.push_back(std::move(c));
+
+        // Try to accept it.
+        if (tcp_callbacks->accept(c)) {
+            Log("Added connexion from {}", conn->ip_address);
+            all_connexions.push_back(std::move(c));
+        }
     }
 }
 
 // =============================================================================
 //  API
 // =============================================================================
-LIBBASE_DEFINE_HIDDEN_IMPL(TCPConnexion);
+TCPConnexion::TCPConnexion() = default;
+TCPConnexion::~TCPConnexion() = default;
 LIBBASE_DEFINE_HIDDEN_IMPL(TCPServer);
 auto TCPConnexion::Connect(
     std::string_view remote_ip,
@@ -449,5 +456,5 @@ void TCPConnexion::send(std::span<const std::byte> data) { return impl->Send(dat
 auto TCPServer::connexions() -> std::span<TCPConnexion> { return impl->all_connexions; }
 auto TCPServer::port() const -> u16 { return impl->port; }
 void TCPServer::receive() { impl->ReceiveAll(); }
-void TCPServer::set_callbacks(TCPCallbacks& callbacks) { impl->SetCallbacks(callbacks); }
+void TCPServer::set_callbacks(TCPServerCallbacks& callbacks) { impl->SetCallbacks(callbacks); }
 void TCPServer::update_connexions() { impl->UpdateConnexions(); }

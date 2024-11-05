@@ -11,7 +11,7 @@ export module pr.tcp;
 import pr.utils;
 
 export namespace pr::net {
-class TCPCallbacks;
+class TCPServerCallbacks;
 class TCPServer;
 class TCPConnexion;
 class ReceiveBuffer;
@@ -81,16 +81,21 @@ public:
     }
 };
 
-/// Class that implements common functionality for TCP connexions
+/// Class that implements common functionality for TCP server
 /// that must be implemented by users.
-class pr::net::TCPCallbacks {
-    LIBBASE_IMMOVABLE(TCPCallbacks);
+class pr::net::TCPServerCallbacks {
+    LIBBASE_IMMOVABLE(TCPServerCallbacks);
 
 protected:
-    TCPCallbacks() = default;
+    TCPServerCallbacks() = default;
 
 public:
-    virtual ~TCPCallbacks() = default;
+    virtual ~TCPServerCallbacks() = default;
+
+    /// Called to query if we should accept a connexion. If this returns
+    /// false, the connexion is closed. The implementation of this is free
+    /// to send data to the client before returning.
+    virtual bool accept(TCPConnexion& connexion)  = 0;
 
     /// Called from TCPServer::receive().
     ///
@@ -104,12 +109,19 @@ public:
 /// A reference type that holds a TCP connexion that can be
 /// used to communicate with a remote peer. This can be a
 /// connexion to a server or to a client.
+///
+/// The actual state is managed by a shared pointer, so copying
+/// this and storing copies of it is safe.
 class pr::net::TCPConnexion {
-    LIBBASE_DECLARE_HIDDEN_IMPL(TCPConnexion);
-
     friend TCPServer; // Server needs to create client connexions.
 
+    struct Impl;
+    std::shared_ptr<Impl> impl;
+
 public:
+    TCPConnexion();
+    ~TCPConnexion();
+
     /// Connect to a server.
     static auto Connect(std::string_view remote_address, u16 port) -> Result<TCPConnexion>;
 
@@ -156,7 +168,7 @@ public:
     auto port() const -> u16;
 
     /// Set the server callback handler.
-    void set_callbacks(TCPCallbacks& callbacks);
+    void set_callbacks(TCPServerCallbacks& callbacks);
 
     /// Accept incoming connexions and throw away any that have
     /// gone stale. If there is an error with a connexion, it

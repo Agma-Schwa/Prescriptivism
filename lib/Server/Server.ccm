@@ -2,6 +2,8 @@ module;
 #include <base/Macros.hh>
 #include <memory>
 #include <pr/Packets.hh>
+#include <vector>
+#include <chrono>
 export module pr.server;
 import pr.tcp;
 
@@ -11,20 +13,57 @@ import pr.packets;
 
 export namespace pr::server {
 class Server;
+class Player;
 }
 
+namespace pr::server {
+using DisconnectReason = packets::sc::Disconnect::Reason;
+}
+
+class pr::server::Player {
+public:
+    /// The connexion for this player, if there is an established
+    /// one. This may be unset if the player has (temporarily) left
+    /// the game.
+    net::TCPConnexion client_connexion;
+
+    /// The player's name.
+    std::string name;
+
+    /// Create a new player.
+    Player(net::TCPConnexion client_connexion, std::string name);
+
+    /// Check if this player is currently connected to the server.
+    [[nodiscard]] auto connected() const -> bool {
+        return not client_connexion.disconnected();
+    }
+};
+
 /// Prescriptivism server instance.
-class pr::server::Server : net::TCPCallbacks {
+class pr::server::Server : net::TCPServerCallbacks {
     LIBBASE_IMMOVABLE(Server);
 
+    struct PendingConnexion {
+        net::TCPConnexion conn;
+        chr::steady_clock::time_point established;
+    };
+
+    /// TCP server that manages client connexions.
     net::TCPServer server;
+
+    /// The list of players. Once a player has been added, they are
+    /// typically never removed.
+    std::vector<std::unique_ptr<Player>> players;
+
+    /// List of connexions that have not yet been assigned a player.
+    std::vector<PendingConnexion> pending_connexions;
 
 public:
     /// Create and start the server.
     Server(u16 port);
 
     /// Disconnect a client.
-    void Kick(net::TCPConnexion& client);
+    void Kick(net::TCPConnexion& client, DisconnectReason reason);
 
     /// Run the server for ever.
     [[noreturn]] void Run();
@@ -35,5 +74,9 @@ public:
 #undef X
 
 private:
+    void Tick();
+    void TickNetworking();
+
+    bool accept(net::TCPConnexion& connexion) override;
     void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;
 };

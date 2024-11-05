@@ -76,7 +76,17 @@ COMMON_PACKETS(X)
 // =============================================================================
 namespace pr::packets::common {
 /// Packet sent by either side to disconnect the other.
-DefinePacket(Disconnect){};
+DefinePacket(Disconnect) {
+    enum class Reason : u8 {
+        Unspecified,   ///< Unknown.
+        InvalidPacket, ///< Peer sent invalid packet.
+        ServerFull,    ///< Server already has the maximum number of players.
+    };
+
+    Ctor(Disconnect)(Reason reason) : reason(reason) {}
+
+    Reason reason = Reason::Unspecified;
+};
 } // namespace pr::packets::common
 // =============================================================================
 //  Server -> Client
