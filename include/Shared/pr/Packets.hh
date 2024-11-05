@@ -8,6 +8,7 @@
     X(HeartbeatRequest)
 
 #define CS_PACKETS(X) \
-    X(HeartbeatResponse)
+    X(HeartbeatResponse) \
+    X(Login)
 
 #endif //PRESCRIPTIVISM_PACKETS_HH

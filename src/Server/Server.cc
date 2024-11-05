@@ -89,6 +89,10 @@ void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
     Log("Received heartbeat response from client {}", res.seq_no);
 }
 
+void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
+    Log("Login: name = {}, password = {}", login.name, login.password);
+}
+
 // =============================================================================
 //  Game Logic
 // =============================================================================

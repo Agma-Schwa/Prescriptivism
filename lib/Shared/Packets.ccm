@@ -1,5 +1,6 @@
 module;
 #include <base/Assert.hh>
+#include <cstring>
 #include <pr/Packets.hh>
 #include <utility>
 export module pr.packets;
@@ -20,7 +21,7 @@ struct PacketBase {
     /// Note that server packets and client packets have different IDs!
     IDType id = Id;
 };
-}
+} // namespace pr::net
 
 #define DefinePacket(name) export struct name : ::pr::net::PacketBase<+ID::name>
 #define Ctor(name)             \
@@ -29,6 +30,10 @@ private:                       \
     name() = default;          \
 public:                        \
     name
+
+#define Serialisable(...)                                          \
+    void serialise(pr::net::SendBuffer& buf) { buf(__VA_ARGS__); } \
+    void deserialise(pr::net::ReceiveBuffer::Reader& buf) { buf(__VA_ARGS__); }
 
 // =============================================================================
 //  Enumerations
@@ -113,6 +118,17 @@ DefinePacket(HeartbeatResponse) {
 
     /// The sequence number of the corresponding server packet.
     u32 seq_no;
+};
+
+DefinePacket(Login) {
+    Ctor(Login)(std::string name, std::string password)
+        : name(std::move(name)),
+          password(std::move(password)) {}
+
+    Serialisable(name, password);
+
+    std::string name;
+    std::string password;
 };
 } // namespace pr::packets::cs
 
