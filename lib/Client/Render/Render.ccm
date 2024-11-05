@@ -41,6 +41,9 @@ enum struct pr::client::FontSize : base::u32 {
 };
 
 /// Alignment of shaped text.
+///
+/// This is only relevant for multiline text; for single-line text,
+/// you can specify SingleLine to indicate that.
 enum struct pr::client::TextAlign : base::u8 {
     Left,
     Center,
@@ -216,7 +219,9 @@ class pr::client::Font {
 
     /// HarfBuzz font to use for shaping.
     HarfBuzzFontHandle hb_font = {nullptr, hb_font_destroy};
-    HarfBuzzBufferHandle hb_buf = {hb_buffer_create(), hb_buffer_destroy};
+
+    /// Cached HarfBuzz buffers to use for shaping.
+    std::vector<HarfBuzzBufferHandle> hb_bufs;
 
     /// Metrics for all glyphs in the font.
     std::vector<Metrics> glyphs{};

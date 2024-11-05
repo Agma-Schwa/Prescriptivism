@@ -8,15 +8,15 @@ module;
 #include <pr/gl-headers.hh>
 #include <SDL3/SDL.h>
 #include <webp/decode.h>
+#include <ranges>
+#include <algorithm>
 
 // clang-format off
 // Include order matters here!
 #include <ft2build.h>
 #include FT_FREETYPE_H
-
-#include <complex>
-
 // clang-format on
+
 module pr.client.render;
 import pr.client.utils;
 import pr.client.render.gl;
@@ -90,7 +90,12 @@ constexpr char DefaultFontRegular[]{
 // =============================================================================
 //  Text and Fonts
 // =============================================================================
-ShapedText::ShapedText() : vao{VertexLayout::PositionTexture4D}, fsize{}, wd{}, ht{}, dp{} {
+ShapedText::ShapedText()
+    : vao{VertexLayout::PositionTexture4D}
+    , fsize{}
+    , wd{}
+    , ht{}
+    , dp{} {
     vao.add_buffer(GL_TRIANGLES);
 }
 
@@ -111,7 +116,9 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     Log("Buffer: {}", debug);
 }
 
-Font::Font(FT_Face ft_face, u32 size, u32 skip) : size{size}, skip{skip} {
+Font::Font(FT_Face ft_face, u32 size, u32 skip)
+    : size{size}
+    , skip{skip} {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, size);
 
@@ -180,7 +187,7 @@ auto Font::shape(
     TextAlign align,
     std::vector<ShapedText::Cluster>* clusters
 ) -> ShapedText {
-    auto buf = hb_buf.get();
+    if (text.empty()) return ShapedText{};
     auto font = hb_font.get();
 
     // Convert to UTF-32 in canonical decomposition form; this helps
@@ -191,15 +198,26 @@ auto Font::shape(
     // error string in that case.
     auto norm = Normalise(text, text::NormalisationForm::NFD).value_or(U"<ERROR>");
 
+    // Get the glyph information and position from a HarfBuzz buffer.
+    auto GetInfo = [](hb_buffer_t* buf) -> std::pair<std::span<hb_glyph_info_t>, std::span<hb_glyph_position_t>> {
+        unsigned count;
+        auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
+        auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
+        if (not info_ptr or not pos_ptr) count = 0;
+        auto infos = std::span{info_ptr, count};
+        auto positions = std::span{pos_ptr, count};
+        return {infos, positions};
+    };
+
     // Shape a single line; we need to do line breaks manually, so
     // we might have to call this multiple times.
-    f32 ybase = 0;
-    f32 ht = 0, dp = 0;
-    f32 line_ht = 0, line_dp = 0;
-    f32 x = 0, max_x = 0;
-    std::vector<vec4> verts;
-    auto ShapeLine = [&](std::u32string_view line) {
-        static constexpr int Scale = 64;
+    std::vector<f32> line_widths;
+    static constexpr int Scale = 64;
+    auto ShapeLine = [&, line_idx = u32(0)](std::u32string_view line) mutable {
+        // Get a HarfBuzz buffer.
+        if (hb_bufs.size() <= line_idx) hb_bufs.push_back(HarfBuzzBufferHandle{hb_buffer_create(), hb_buffer_destroy});
+        auto buf = hb_bufs[line_idx++].get();
+
         // Add the text and compute properties.
         hb_buffer_clear_contents(buf);
         hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
@@ -222,18 +240,25 @@ auto Font::shape(
 
         // Shape the text.
         hb_shape(font, buf, &ligatures, 1);
-        unsigned count;
-        auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
-        auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
-        if (not info_ptr or not pos_ptr) count = 0;
-        auto infos = std::span{info_ptr, count};
-        auto positions = std::span{pos_ptr, count};
+
+        // Compute the width of this line.
+        f32 x = 0;
+        auto [_, positions] = GetInfo(buf);
+        for (const auto& pos : positions) x += pos.x_advance / f32(Scale);
+        line_widths.push_back(x);
+    };
+
+    // Add the vertices for a line to the vertex buffer.
+    f32 ybase = 0;                // The y-coordinate of the baseline.
+    std::vector<vec4> verts;
+    auto AddVertices = [&](hb_buffer_t* buf, f32 xbase) -> std::pair<f32, f32> {
+        auto [infos, positions] = GetInfo(buf);
+        f32 x = xbase;
+        f32 line_ht = 0, line_dp = 0;
 
         // Compute the vertices for each glyph.
         if (clusters) clusters->clear();
-        for (unsigned i = 0; i < count; ++i) {
-            auto& info = infos[i];
-            auto& pos = positions[i];
+        for (auto [info, pos] : vws::zip(infos, positions)) {
             if (clusters) clusters->emplace_back(info.cluster, i32(x));
 
             // Note: 'codepoint' here is actually a glyph index in the
@@ -278,16 +303,39 @@ auto Font::shape(
             verts.push_back({xpos + w, ypos, u1, v1});
             verts.push_back({xpos + w, ypos + h, u1, v0});
         }
+
+        return {line_ht, line_dp};
     };
 
-    bool first = true;
-    for (auto l : u32stream{norm}.lines()) {
-        ShapeLine(l.text());
-        max_x = std::max(max_x, x);
-        x = 0;
+    // This shouldn’t happen, but still...
+    auto lines = u32stream{norm}.lines();
+    if (lines.empty()) return ShapedText{};
+
+    // Shape each line and compute the width of each line.
+    for (auto l : lines) ShapeLine(l.text());
+    auto max_x = *rgs::max_element(line_widths);
+
+    // Now, add vertices for each line.
+    f32 ht = 0, dp = 0;
+    for (usz i = 0, end = usz(rgs::distance(lines)); i < end; i++) {
+        // Determine the starting X position for this line.
+        f32 xbase = [&] -> f32 {
+            switch (align) {
+                case TextAlign::Left: return 0;
+                case TextAlign::Center: return (max_x - line_widths[i]) / 2;
+                case TextAlign::Right: return max_x - line_widths[i];
+            }
+            Unreachable();
+        }();
+
+        // Build the vertices for this line.
+        auto [line_ht, line_dp] = AddVertices(hb_bufs[i].get(), xbase);
+
+        // Add interline skip before the next line.
         ybase -= std::max(line_ht + line_dp, f32(skip));
-        if (first) {
-            first = false;
+
+        // Update the total height and width.
+        if (i == 0) {
             ht = line_ht;
             dp = line_dp;
         } else {
@@ -417,7 +465,8 @@ Renderer::~Renderer() {
     FT_Done_FreeType(ft);
 }
 
-Renderer::Frame::Frame(Renderer& r) : r(r) { r.frame_start(); }
+Renderer::Frame::Frame(Renderer& r)
+    : r(r) { r.frame_start(); }
 Renderer::Frame::~Frame() { r.frame_end(); }
 
 // =============================================================================
