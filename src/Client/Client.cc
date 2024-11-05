@@ -148,9 +148,7 @@ void ConnexionScreen::set_address(std::string addr) {
 // =============================================================================
 //  Game Screen
 // =============================================================================
-
-GameScreen::GameScreen(Client& c): client(c) {
-
+GameScreen::GameScreen(Client& c) : client(c) {
     auto& card = Create<Card>(
         c.renderer,
         Position::Center(),
@@ -164,24 +162,27 @@ GameScreen::GameScreen(Client& c): client(c) {
     auto& small = Create<Button>(
         c.renderer.make_text("Small", FontSize::Medium),
         Position{30, 30},
-        10, 125
+        10,
+        125
     );
 
     auto& medium = Create<Button>(
         c.renderer.make_text("Medium", FontSize::Medium),
         Position::HCenter(30),
-        10, 125
+        10,
+        125
     );
 
     auto& large = Create<Button>(
         c.renderer.make_text("Large", FontSize::Medium),
         Position{-30, 30},
-        10, 125
+        10,
+        125
     );
 
-    small.on_click = [&]{ card.set_scale(Card::OtherPlayer); };
-    medium.on_click = [&] {card.set_scale(Card::Field);};
-    large.on_click = [&]{card.set_scale(Card::Large);};
+    small.on_click = [&] { card.set_scale(Card::OtherPlayer); };
+    medium.on_click = [&] { card.set_scale(Card::Field); };
+    large.on_click = [&] { card.set_scale(Card::Large); };
 }
 
 void GameScreen::enter(net::TCPConnexion conn) {

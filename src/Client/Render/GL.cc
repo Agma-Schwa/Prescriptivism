@@ -1,15 +1,15 @@
 module;
 #include <base/Assert.hh>
 #include <base/Macros.hh>
-#include <webp/decode.h>
 #include <pr/gl-headers.hh>
+#include <webp/decode.h>
 module pr.client.render.gl;
 
 using namespace gl;
 using namespace pr;
 using namespace pr::client;
 
-constexpr u8 DefaultTextureData[] {
+constexpr u8 DefaultTextureData[]{
 #embed "default_texture.webp"
 };
 

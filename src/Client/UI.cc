@@ -71,7 +71,7 @@ void Button::draw(Renderer& r) {
     TextBox::draw(r);
 }
 
-void Label::draw(Renderer&r) {
+void Label::draw(Renderer& r) {
     r.draw_text(text, auto{pos}.voffset(i32(text.depth())).absolute(r.size(), text.size()));
 }
 
@@ -309,7 +309,7 @@ void TextEdit::event_input(InputSystem& input) {
 }
 
 Throbber::Throbber(Position pos) : vao(VertexLayout::Position2D), pos(pos) {
-    vec2 verts[] {
+    vec2 verts[]{
         {-R, -R},
         {-R, R},
         {R, -R},
@@ -336,7 +336,15 @@ void Throbber::draw(Renderer& r) {
     vao.draw_vertices();
 }
 
-Card::Card(Renderer& r, Position pos, std::string_view _code, std::string_view _name, std::string_view _middle, std::string_view _special, u8 count) : pos(pos), count(count) {
+Card::Card(
+    Renderer& r,
+    Position pos,
+    std::string_view _code,
+    std::string_view _name,
+    std::string_view _middle,
+    std::string_view _special,
+    u8 count
+) : pos(pos), count(count) {
     s = Field;
     code[OtherPlayer] = r.make_text(_code, FontSize::Text);
     name[OtherPlayer] = r.make_text(_name, FontSize::Small);
@@ -352,23 +360,42 @@ Card::Card(Renderer& r, Position pos, std::string_view _code, std::string_view _
     special[Large] = r.make_text(_special, FontSize::Medium);
 }
 
-void Card::set_scale(const Scale _s){
+void Card::set_scale(const Scale _s) {
     s = _s;
 }
 
-
 void Card::draw(Renderer& r) {
-    auto at = pos.absolute(r.size(), CardSize[s]);
-    r.draw_rect(at, CardSize[s]);
-    r.draw_text(code[s], Position{Offset[s], -Offset[s]}.relative(at, CardSize[s], code[s].size()), Colour::Black);
-    for (int i = 0; i < count; ++i) {
-        r.draw_rect(Position{-3*Offset[s],-(2*Offset[s]+2*i*Offset[s])}.relative(at, CardSize[s], {5*Offset[s], Offset[s]}), {5*Offset[s], Offset[s]}, Colour::Black);
-    }
-    r.draw_text(name[s], Position{Offset[s], -2*Offset[s]-code[s].size().ht}.relative(at, CardSize[s], name[s].size()), Colour::Black);
-    r.draw_text(middle[s], Position::Center().relative(at, CardSize[s], middle[s].size()), Colour::Black);
-    r.draw_text(special[s], Position::HCenter(5*Offset[s]+special[s].size().ht).relative(at, CardSize[s], special[s].size()), Colour::Black);
-}
+    auto offs = Offset[s];
+    auto sz = CardSize[s];
+    auto at = pos.absolute(r.size(), sz);
 
+    r.draw_rect(at, sz);
+    r.draw_text(code[s], Position{offs, -offs}.relative(at, sz, code[s].size()), Colour::Black);
+
+    for (int i = 0; i < count; ++i) r.draw_rect(
+        Position{-3 * offs, -(2 * offs + 2 * i * offs)}.relative(at, sz, {5 * offs, offs}),
+        {5 * offs, offs},
+        Colour::Black
+    );
+
+    r.draw_text(
+        name[s],
+        Position{offs, -2 * offs - code[s].size().ht}.relative(at, sz, name[s].size()),
+        Colour::Black
+    );
+
+    r.draw_text(
+        middle[s],
+        Position::Center().relative(at, sz, middle[s].size()),
+        Colour::Black
+    );
+
+    r.draw_text(
+        special[s],
+        Position::HCenter(5 * offs + special[s].size().ht).relative(at, sz, special[s].size()),
+        Colour::Black
+    );
+}
 
 // =============================================================================
 //  Input Handler.

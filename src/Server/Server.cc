@@ -53,7 +53,7 @@ void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
 // =============================================================================
 //  API
 // =============================================================================
-Server::Server(u16 port): server(net::TCPServer::Create(port, 200).value()) {
+Server::Server(u16 port) : server(net::TCPServer::Create(port, 200).value()) {
     server.set_callbacks(*this);
 }
 

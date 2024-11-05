@@ -30,7 +30,7 @@ using glm::vec1;
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
-}
+} // namespace pr::client
 
 template <typename T, std::size_t n>
 struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
@@ -306,7 +306,6 @@ public:
         unit{unit},
         format{format},
         type{type} {
-
         glGenTextures(1, &descriptor);
         bind();
         glTexImage2D(
@@ -391,7 +390,7 @@ public:
     ) : Texture(data, width, height, format, type, target, unit, tile) {
         // Flip the texture uv coordinates upside-down since the origin
         // is in the bottom-left corner, but that’s not how images work.
-        vec4 verts[] {
+        vec4 verts[]{
             {0, 0, 0, 1},
             {width, 0, 1, 1},
             {0, height, 0, 0},

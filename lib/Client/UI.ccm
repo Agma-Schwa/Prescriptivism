@@ -1,10 +1,10 @@
 module;
-#include <functional>
 #include <base/Macros.hh>
+#include <functional>
 #include <limits>
 #include <memory>
-#include <SDL3/SDL.h>
 #include <numeric>
+#include <SDL3/SDL.h>
 export module pr.client.ui;
 
 import base.text;
@@ -24,7 +24,7 @@ class Throbber;
 class Card;
 
 enum class Anchor : u8;
-}
+} // namespace pr::client
 
 namespace pr::client {
 /// Intermediate widget that consists of a box that wraps some text.
@@ -129,9 +129,9 @@ class pr::client::Element {
     AABB box;
 
 public:
-    bool hovered : 1 = false;
+    bool hovered    : 1 = false;
     bool selectable : 1 = false;
-    bool selected : 1 = false;
+    bool selected   : 1 = false;
 
 protected:
     Element() = default;
@@ -178,7 +178,7 @@ public:
     virtual ~Screen() = default;
 
     /// Create an element.
-    template <std::derived_from<Element> El, typename ...Args>
+    template <std::derived_from<Element> El, typename... Args>
     auto Create(Args&&... args) -> El& {
         auto el = std::make_unique<El>(std::forward<Args>(args)...);
         auto& ref = *el;
@@ -297,21 +297,36 @@ public:
 
 class pr::client::Card : public Element {
 public:
-    enum Scale : u32 {
-        OtherPlayer, Field, Large, NumScales
+    enum Scale : u8 {
+        OtherPlayer,
+        Field,
+        Large,
+        NumScales
     };
+
 private:
-    Scale s;
-    Position pos;
+    static constexpr Size CardSize[NumScales] = {Size{60, 90}, Size{120, 180}, Size{240, 360}};
+    static constexpr u16 Offset[NumScales] = {1, 2, 4};
+
     ShapedText code[NumScales];
     ShapedText name[NumScales];
     ShapedText middle[NumScales];
     ShapedText special[NumScales];
+    Position pos;
+    Scale s;
     u8 count;
-    static constexpr Size CardSize[NumScales] = {Size{60, 90}, Size{120, 180}, Size{240, 360}};
-    static constexpr u16 Offset[NumScales] = {1, 2, 4};
+
 public:
-    Card(Renderer& r, Position pos, std::string_view code, std::string_view name, std::string_view middle, std::string_view special, u8 count);
+    Card(
+        Renderer& r,
+        Position pos,
+        std::string_view code,
+        std::string_view name,
+        std::string_view middle,
+        std::string_view special,
+        u8 count
+    );
+
     void draw(Renderer& r) override;
     void set_scale(Scale _s);
 };

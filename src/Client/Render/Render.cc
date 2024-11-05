@@ -1,4 +1,5 @@
 module;
+#include <algorithm>
 #include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <hb-ft.h>
@@ -6,10 +7,9 @@ module;
 #include <libassert/assert.hpp>
 #include <memory>
 #include <pr/gl-headers.hh>
+#include <ranges>
 #include <SDL3/SDL.h>
 #include <webp/decode.h>
-#include <ranges>
-#include <algorithm>
 
 // clang-format off
 // Include order matters here!
@@ -91,11 +91,7 @@ constexpr char DefaultFontRegular[]{
 //  Text and Fonts
 // =============================================================================
 ShapedText::ShapedText()
-    : vao{VertexLayout::PositionTexture4D}
-    , fsize{}
-    , wd{}
-    , ht{}
-    , dp{} {
+    : vao{VertexLayout::PositionTexture4D}, fsize{}, wd{}, ht{}, dp{} {
     vao.add_buffer(GL_TRIANGLES);
 }
 
@@ -117,8 +113,7 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
 }
 
 Font::Font(FT_Face ft_face, u32 size, u32 skip)
-    : size{size}
-    , skip{skip} {
+    : size{size}, skip{skip} {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, size);
 
@@ -249,7 +244,7 @@ auto Font::shape(
     };
 
     // Add the vertices for a line to the vertex buffer.
-    f32 ybase = 0;                // The y-coordinate of the baseline.
+    f32 ybase = 0; // The y-coordinate of the baseline.
     std::vector<vec4> verts;
     auto AddVertices = [&](hb_buffer_t* buf, f32 xbase) -> std::pair<f32, f32> {
         auto [infos, positions] = GetInfo(buf);
