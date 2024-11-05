@@ -225,6 +225,7 @@ public:
 class pr::client::TextBox : public Element {
 protected:
     ShapedText label;
+    ShapedText placeholder;
     Position pos{};
     Size sz{};
     i32 padding{};
@@ -232,10 +233,17 @@ protected:
     i32 min_ht{};
     i32 cursor_offs = -1; // Cursor offset from the start of the text; -1 to disable.
 
-    explicit TextBox(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0);
+    explicit TextBox(
+        ShapedText label,
+        ShapedText placeholder,
+        Position pos,
+        i32 padding,
+        i32 min_wd = 0,
+        i32 min_ht = 0
+    );
 
     void UpdateText(ShapedText new_text);
-    auto TextPos(Renderer& r) -> xy;
+    auto TextPos(Renderer& r, const ShapedText& text) -> xy;
 
 public:
     void draw(Renderer& r) override;
@@ -247,7 +255,7 @@ public:
     std::function<void()> on_click{};
 
     explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
-        : TextBox(std::move(label), pos, padding, min_wd, min_ht) {}
+        : TextBox(std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {}
 
     void event_click(InputSystem&) override {
         if (on_click) on_click();
@@ -262,17 +270,33 @@ class pr::client::TextEdit : public TextBox {
         i32 end;
     };
 
-    std::u32string text = U"localhost"; // FIXME: For testing. Remove.
+    std::u32string text;
     std::vector<ShapedText::Cluster> clusters;
     FontSize size;
-    bool dirty = true;
+    bool dirty = false;
     i32 cursor = 0;
     u32 no_blink_ticks = 0; // Used to inhibit blinking during typing.
     Selection sel{};
 
 public:
-    TextEdit(Position pos, FontSize size, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
-        : TextBox(ShapedText(), pos, padding, min_wd, min_ht), size{size} {
+    TextEdit(
+        Position pos,
+        FontSize size,
+        i32 padding,
+        i32 min_wd = 0,
+        i32 min_ht = 0
+    ) : TextBox(ShapedText(), ShapedText(), pos, padding, min_wd, min_ht), size{size} {
+        selectable = true;
+    }
+
+    TextEdit(
+        Position pos,
+        FontSize size,
+        ShapedText placeholder,
+        i32 padding,
+        i32 min_wd = 0,
+        i32 min_ht = 0
+    ) : TextBox(ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht), size{size} {
         selectable = true;
     }
 
@@ -280,6 +304,10 @@ public:
     void event_click(InputSystem& input) override;
     void event_input(InputSystem& input) override;
     auto value() -> std::string { return text::ToUTF8(text); }
+    auto value(std::u32string new_text) -> void {
+        text = std::move(new_text);
+        dirty = true;
+    }
 };
 
 class pr::client::Throbber : public Element {

@@ -58,13 +58,13 @@ class pr::client::ConnexionScreen : public Screen {
 
     Client& client;
     State st;
-    std::string address;
+    std::string address, username, password;
     Thread<net::TCPConnexion> connexion_thread;
 
 public:
     ConnexionScreen(Client& c);
 
-    void on_entered() override;
+    void enter(std::string address, std::string username, std::string password);
     void tick(InputSystem& input) override;
     void set_address(std::string addr);
 
@@ -114,9 +114,6 @@ private:
 public:
     /// Create a new client.
     explicit Client();
-
-    /// Connect to the server.
-    void connect_to_server(std::string_view ip_address);
 
     /// Enter a screen.
     void enter_screen(Screen& s);

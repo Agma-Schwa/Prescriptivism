@@ -91,9 +91,7 @@ constexpr char DefaultFontRegular[]{
 //  Text and Fonts
 // =============================================================================
 ShapedText::ShapedText()
-    : vao{VertexLayout::PositionTexture4D}, fsize{}, wd{}, ht{}, dp{} {
-    vao.add_buffer(GL_TRIANGLES);
-}
+    : vao{VertexLayout::PositionTexture4D}, fsize{}, wd{}, ht{}, dp{} {}
 
 auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     std::string debug;
@@ -503,6 +501,8 @@ void Renderer::draw_text(
     xy pos,
     Colour colour
 ) {
+    if (text.empty()) return;
+
     // Initialise the text shader.
     use(text_shader);
     text_shader.uniform("text_colour", colour.vec4());

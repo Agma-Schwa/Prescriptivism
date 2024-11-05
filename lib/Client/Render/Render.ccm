@@ -85,10 +85,12 @@ struct pr::client::Colour {
 
     static constinit const Colour White;
     static constinit const Colour Black;
+    static constinit const Colour Grey;
 };
 
 constexpr pr::client::Colour pr::client::Colour::White = {255, 255, 255, 255};
 constexpr pr::client::Colour pr::client::Colour::Black = {0, 0, 0, 255};
+constexpr pr::client::Colour pr::client::Colour::Grey = {128, 128, 128, 255};
 
 struct pr::client::Size {
     i32 wd{};
@@ -168,6 +170,9 @@ public:
 
     /// Get the depth of the text.
     auto depth() const -> f32 { return dp; }
+
+    /// Check if this text is empty.
+    auto empty() const -> bool { return vao.empty(); }
 
     /// Get the font size.
     auto font_size() const -> FontSize { return FontSize(fsize); }

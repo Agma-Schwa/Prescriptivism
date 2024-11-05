@@ -167,6 +167,9 @@ public:
         for (const auto& vbo : buffers) vbo.draw();
     }
 
+    /// Check if this contains no buffers.
+    auto empty() const -> bool { return buffers.empty(); }
+
     /// Unbinds the vertex array.
     void unbind() const { glBindVertexArray(0); }
 

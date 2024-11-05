@@ -59,16 +59,46 @@ MenuScreen::MenuScreen(Client& c) {
         125
     );
 
-    auto& text_edit = Create<TextEdit>(
-        Position::HCenter(250),
+    auto& address = Create<TextEdit>(
+        Position::HCenter(350),
         FontSize::Medium,
+        c.renderer.make_text("Server Address", FontSize::Medium),
         10,
         250,
         25
     );
 
+    auto& username = Create<TextEdit>(
+        Position::HCenter(287),
+        FontSize::Medium,
+        c.renderer.make_text("Your Name", FontSize::Medium),
+        10,
+        250,
+        25
+    );
+
+    auto& password = Create<TextEdit>(
+        Position::HCenter(225),
+        FontSize::Medium,
+        c.renderer.make_text("Password", FontSize::Medium),
+        10,
+        250,
+        25
+    );
+
+    // FIXME: Testing only. Remove these later.
+    address.value(U"localhost");
+    username.value(U"testuser");
+    password.value(U"password");
+
     quit.on_click = [&] { c.input_system.quit = true; };
-    connect.on_click = [&] { c.connect_to_server(text_edit.value()); };
+    connect.on_click = [&] {
+        c.connexion_screen.enter(
+            address.value(),
+            username.value(),
+            password.value()
+        );
+    };
 }
 
 // =============================================================================
@@ -101,8 +131,12 @@ auto ConnexionScreen::connexion_thread_main(
     return sock;
 }
 
-void ConnexionScreen::on_entered() {
+void ConnexionScreen::enter(std::string addr, std::string name, std::string pass) {
     st = State::Entered;
+    address = std::move(addr);
+    username = std::move(name);
+    password = std::move(pass);
+    client.enter_screen(*this);
 }
 
 void ConnexionScreen::tick(InputSystem& input) {
@@ -126,7 +160,8 @@ void ConnexionScreen::tick(InputSystem& input) {
                 return;
             }
 
-            // We do! TODO: Switch to game screen.
+            // We do! Tell the server who we are and switch to game screen.
+            conn.value().send(packets::cs::Login(std::move(username), std::move(password)));
             client.game_screen.enter(std::move(conn.value()));
             return;
         }
@@ -249,12 +284,6 @@ void GameScreen::handle(sc::HeartbeatRequest req) {
 // =============================================================================
 Client::Client() : renderer(Renderer(800, 600)) {
     enter_screen(menu_screen);
-}
-
-void Client::connect_to_server(std::string_view ip_address) {
-    Log("Connecting to server at {}", ip_address);
-    connexion_screen.set_address(std::string{ip_address});
-    enter_screen(connexion_screen);
 }
 
 void Client::enter_screen(Screen& s) {

@@ -418,7 +418,7 @@ void TCPServer::Impl::UpdateConnexions() {
 
         // Try to accept it.
         if (tcp_callbacks->accept(c)) {
-            Log("Added connexion from {}", conn->ip_address);
+            Log("Added connexion from {}", c.address());
             all_connexions.push_back(std::move(c));
         }
     }

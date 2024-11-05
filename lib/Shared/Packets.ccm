@@ -31,9 +31,9 @@ private:                       \
 public:                        \
     name
 
-#define Serialisable(...)                                          \
-    void serialise(pr::net::SendBuffer& buf) { buf(__VA_ARGS__); } \
-    void deserialise(pr::net::ReceiveBuffer::Reader& buf) { buf(__VA_ARGS__); }
+#define Serialisable(...)                                                    \
+    void serialise(pr::net::SendBuffer& buf) const { buf(id, __VA_ARGS__); } \
+    void deserialise(pr::net::ReceiveBuffer::Reader& buf) { buf(id, __VA_ARGS__); }
 
 // =============================================================================
 //  Enumerations

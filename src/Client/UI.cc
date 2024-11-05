@@ -77,11 +77,13 @@ void Label::draw(Renderer& r) {
 
 TextBox::TextBox(
     ShapedText text,
+    ShapedText placeholder,
     Position pos,
     i32 padding,
     i32 min_wd,
     i32 min_ht
-) : pos{pos},
+) : placeholder{std::move(placeholder)},
+    pos{pos},
     padding{padding},
     min_wd{min_wd},
     min_ht{min_ht} {
@@ -94,21 +96,20 @@ void TextBox::UpdateText(ShapedText new_text) {
     sz.ht = std::max(min_ht, i32(label.height() + label.depth())) + 2 * padding;
 }
 
-auto TextBox::TextPos(Renderer& r) -> xy {
+auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
     auto bg = pos.absolute(r.size(), sz);
-    return Position::Center().voffset(i32(label.depth())).relative(bg, sz, label.size());
+    return Position::Center().voffset(i32(text.depth())).relative(bg, sz, text.size());
 }
 
 void TextBox::draw(Renderer& r) {
-    auto text = TextPos(r);
-    r.draw_text(label, text);
-    if (cursor_offs != -1) {
-        r.draw_line(
-            xy(i32(text.x) + cursor_offs, text.y - i32(label.depth())),
-            xy(i32(text.x) + cursor_offs, text.y + i32(label.height())),
-            Colour::White
-        );
-    }
+    auto& text = label.empty() ? placeholder : label;
+    auto pos = TextPos(r, text);
+    r.draw_text(text, pos, label.empty() ? Colour::Grey : Colour::White);
+    if (cursor_offs != -1) r.draw_line(
+        xy(i32(pos.x) + cursor_offs, pos.y - i32(label.depth())),
+        xy(i32(pos.x) + cursor_offs, pos.y + i32(label.height())),
+        Colour::White
+    );
 }
 
 void TextBox::refresh(Size screen_size) {
@@ -212,7 +213,7 @@ void TextEdit::event_click(InputSystem& input) {
     // we stop and go back to the one before it.
     no_blink_ticks = 20;
     i32 mx = input.mouse.pos.x;
-    i32 x0 = TextPos(input.renderer).x;
+    i32 x0 = TextPos(input.renderer, label).x;
     i32 x1 = x0 + i32(label.width());
     if (mx < x0) cursor = 0;
     else if (mx > x1) cursor = i32(text.size());
