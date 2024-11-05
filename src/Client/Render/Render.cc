@@ -111,7 +111,7 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     Log("Buffer: {}", debug);
 }
 
-Font::Font(FT_Face ft_face, u32 size) : size{size} {
+Font::Font(FT_Face ft_face, u32 size, u32 skip) : size{size}, skip{skip} {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, size);
 
@@ -177,6 +177,7 @@ Font::Font(FT_Face ft_face, u32 size) : size{size} {
 /// be drawn at any coordinates.
 auto Font::shape(
     std::u32string_view text,
+    TextAlign align,
     std::vector<ShapedText::Cluster>* clusters
 ) -> ShapedText {
     auto buf = hb_buf.get();
@@ -190,94 +191,115 @@ auto Font::shape(
     // error string in that case.
     auto norm = Normalise(text, text::NormalisationForm::NFD).value_or(U"<ERROR>");
 
-    // Add the text and compute properties.
-    hb_buffer_clear_contents(buf);
-    hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
-    hb_buffer_add_utf32(buf, reinterpret_cast<const u32*>(norm.data()), int(norm.size()), 0, int(norm.size()));
-    hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-    hb_buffer_set_script(buf, HB_SCRIPT_COMMON);
-    hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-    // hb_buffer_guess_segment_properties(buf);
-
-    // Scale the font; HarfBuzz uses integers for position values,
-    // so this is used so we can get fractional values out of it.
-    static constexpr int Scale = 64;
-    hb_font_set_scale(font, size * Scale, size * Scale);
-
-    // Enable the following OpenType features: 'liga'.
-    hb_feature_t ligatures{};
-    ligatures.tag = HB_TAG('l', 'i', 'g', 'a');
-    ligatures.value = 1;
-    ligatures.start = HB_FEATURE_GLOBAL_START;
-    ligatures.end = HB_FEATURE_GLOBAL_END;
-
-    // Shape the text.
-    hb_shape(font, buf, &ligatures, 1);
-    unsigned count;
-    auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
-    auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
-    if (not info_ptr or not pos_ptr) count = 0;
-    auto infos = std::span{info_ptr, count};
-    auto positions = std::span{pos_ptr, count};
-
-    // Compute the vertices for each glyph.
+    // Shape a single line; we need to do line breaks manually, so
+    // we might have to call this multiple times.
+    f32 ybase = 0;
+    f32 ht = 0, dp = 0;
+    f32 line_ht = 0, line_dp = 0;
+    f32 x = 0, max_x = 0;
     std::vector<vec4> verts;
-    f32 x = 0;
-    f32 max_ht = 0, max_dp = 0;
-    if (clusters) clusters->clear();
-    for (unsigned i = 0; i < count; ++i) {
-        auto& info = infos[i];
-        auto& pos = positions[i];
-        if (clusters) clusters->emplace_back(info.cluster, i32(x));
+    auto ShapeLine = [&](std::u32string_view line) {
+        static constexpr int Scale = 64;
+        // Add the text and compute properties.
+        hb_buffer_clear_contents(buf);
+        hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
+        hb_buffer_add_utf32(buf, reinterpret_cast<const u32*>(line.data()), int(line.size()), 0, int(line.size()));
+        hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+        hb_buffer_set_script(buf, HB_SCRIPT_COMMON);
+        hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+        // hb_buffer_guess_segment_properties(buf);
 
-        // Note: 'codepoint' here is actually a glyph index in the
-        // font after shaping, and not a codepoint.
-        u32 g = u32(info.codepoint);
-        f32 xoffs = pos.x_offset / f32(Scale);
-        f32 xadv = pos.x_advance / f32(Scale);
-        f32 yoffs = pos.y_offset / f32(Scale);
+        // Scale the font; HarfBuzz uses integers for position values,
+        // so this is used so we can get fractional values out of it.
+        hb_font_set_scale(font, size * Scale, size * Scale);
 
-        // Compute the x and y position using the glyph’s metrics and
-        // the shaping data provided by HarfBuzz.
-        f32 desc = glyphs[g].size.y - glyphs[g].bearing.y;
-        f32 xpos = x + glyphs[g].bearing.x + xoffs;
-        f32 ypos = yoffs - desc;
-        f32 w = glyphs[g].size.x;
-        f32 h = glyphs[g].size.y;
+        // Enable the following OpenType features: 'liga'.
+        hb_feature_t ligatures{};
+        ligatures.tag = HB_TAG('l', 'i', 'g', 'a');
+        ligatures.value = 1;
+        ligatures.start = HB_FEATURE_GLOBAL_START;
+        ligatures.end = HB_FEATURE_GLOBAL_END;
 
-        // Compute the offset of the glyph in the atlas.
-        f64 tx = f64(g % atlas_columns) * atlas_entry_width;
-        f64 ty = f64(g / atlas_columns) * atlas_entry_height;
-        f64 atlas_width = f64(atlas_columns * atlas_entry_width);
-        f64 atlas_height = f64(atlas_rows * atlas_entry_height);
+        // Shape the text.
+        hb_shape(font, buf, &ligatures, 1);
+        unsigned count;
+        auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
+        auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
+        if (not info_ptr or not pos_ptr) count = 0;
+        auto infos = std::span{info_ptr, count};
+        auto positions = std::span{pos_ptr, count};
 
-        // Compute the uv coordinates of the glyph; note that the glyph
-        // is likely smaller than the width of an atlas cell, so perform
-        // this calculation in pixels.
-        f32 u0 = f32(f64(tx) / atlas_width);
-        f32 u1 = f32(f64(tx + w) / atlas_width);
-        f32 v0 = f32(f64(ty) / atlas_height);
-        f32 v1 = f32(f64(ty + h) / atlas_height);
+        // Compute the vertices for each glyph.
+        if (clusters) clusters->clear();
+        for (unsigned i = 0; i < count; ++i) {
+            auto& info = infos[i];
+            auto& pos = positions[i];
+            if (clusters) clusters->emplace_back(info.cluster, i32(x));
 
-        // Advance past the glyph.
-        x += xadv;
-        max_ht = std::max(max_ht, ypos + h);
-        max_dp = std::max(max_dp, desc);
+            // Note: 'codepoint' here is actually a glyph index in the
+            // font after shaping, and not a codepoint.
+            u32 g = u32(info.codepoint);
+            f32 xoffs = pos.x_offset / f32(Scale);
+            f32 xadv = pos.x_advance / f32(Scale);
+            f32 yoffs = pos.y_offset / f32(Scale);
 
-        // Build vertices for the glyph’s position and texture coordinates.
-        verts.push_back({xpos, ypos + h, u0, v0});
-        verts.push_back({xpos, ypos, u0, v1});
-        verts.push_back({xpos + w, ypos, u1, v1});
-        verts.push_back({xpos, ypos + h, u0, v0});
-        verts.push_back({xpos + w, ypos, u1, v1});
-        verts.push_back({xpos + w, ypos + h, u1, v0});
+            // Compute the x and y position using the glyph’s metrics and
+            // the shaping data provided by HarfBuzz.
+            f32 desc = glyphs[g].size.y - glyphs[g].bearing.y;
+            f32 xpos = x + glyphs[g].bearing.x + xoffs;
+            f32 ypos = ybase + yoffs - desc;
+            f32 w = glyphs[g].size.x;
+            f32 h = glyphs[g].size.y;
+
+            // Compute the offset of the glyph in the atlas.
+            f64 tx = f64(g % atlas_columns) * atlas_entry_width;
+            f64 ty = f64(g / atlas_columns) * atlas_entry_height;
+            f64 atlas_width = f64(atlas_columns * atlas_entry_width);
+            f64 atlas_height = f64(atlas_rows * atlas_entry_height);
+
+            // Compute the uv coordinates of the glyph; note that the glyph
+            // is likely smaller than the width of an atlas cell, so perform
+            // this calculation in pixels.
+            f32 u0 = f32(f64(tx) / atlas_width);
+            f32 u1 = f32(f64(tx + w) / atlas_width);
+            f32 v0 = f32(f64(ty) / atlas_height);
+            f32 v1 = f32(f64(ty + h) / atlas_height);
+
+            // Advance past the glyph.
+            x += xadv;
+            line_ht = std::max(line_ht, ypos + h);
+            line_dp = std::max(line_dp, desc);
+
+            // Build vertices for the glyph’s position and texture coordinates.
+            verts.push_back({xpos, ypos + h, u0, v0});
+            verts.push_back({xpos, ypos, u0, v1});
+            verts.push_back({xpos + w, ypos, u1, v1});
+            verts.push_back({xpos, ypos + h, u0, v0});
+            verts.push_back({xpos + w, ypos, u1, v1});
+            verts.push_back({xpos + w, ypos + h, u1, v0});
+        }
+    };
+
+    bool first = true;
+    for (auto l : u32stream{norm}.lines()) {
+        ShapeLine(l.text());
+        max_x = std::max(max_x, x);
+        x = 0;
+        ybase -= std::max(line_ht + line_dp, f32(skip));
+        if (first) {
+            first = false;
+            ht = line_ht;
+            dp = line_dp;
+        } else {
+            dp += line_ht + line_dp;
+        }
     }
 
     // Upload the vertices.
     VertexArrays vao{VertexLayout::PositionTexture4D};
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
-    return ShapedText(std::move(vao), size, x, max_ht, max_dp);
+    return ShapedText(std::move(vao), size, max_x, ht, dp);
 }
 
 // =============================================================================
@@ -533,17 +555,19 @@ auto Renderer::frame() -> Frame { return Frame(*this); }
 auto Renderer::make_text(
     std::string_view text,
     FontSize size,
+    TextAlign align,
     std::vector<ShapedText::Cluster>* clusters
 ) -> ShapedText {
-    return font(+size).shape(text::ToUTF32(text), clusters);
+    return font(+size).shape(text::ToUTF32(text), align, clusters);
 }
 
 auto Renderer::make_text(
     std::u32string_view text,
     FontSize size,
+    TextAlign align,
     std::vector<ShapedText::Cluster>* clusters
 ) -> ShapedText {
-    return font(+size).shape(text, clusters);
+    return font(+size).shape(text, align, clusters);
 }
 
 void Renderer::reload_shaders() {

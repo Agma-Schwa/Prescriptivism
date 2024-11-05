@@ -54,7 +54,7 @@ void Button::draw(Renderer& r) {
 }
 
 void Label::draw(Renderer&r) {
-    r.draw_text(text, pos.absolute(r.size(), text.size()));
+    r.draw_text(text, auto{pos}.voffset(i32(text.depth())).absolute(r.size(), text.size()));
 }
 
 TextBox::TextBox(
@@ -100,7 +100,7 @@ void TextBox::refresh(Size screen_size) {
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
-        UpdateText(r.make_text(text, size, &clusters));
+        UpdateText(r.make_text(text, size, TextAlign::SingleLine, &clusters));
     }
 
     // Use HarfBuzz cluster information to position the cursor: if the cursor
