@@ -18,7 +18,7 @@ using namespace pr::client;
 //  Error Screen
 // =============================================================================
 ErrorScreen::ErrorScreen(Client& c) {
-    msg = &Create<Label>(Position::Center());
+    msg = &Create<Label>(FontSize::Large, TextAlign::Center, Position::Center());
 
     auto& back = Create<Button>(
         c.renderer.make_text("Back", FontSize::Medium),
@@ -30,8 +30,8 @@ ErrorScreen::ErrorScreen(Client& c) {
     back.on_click = [&] { c.enter_screen(*return_screen); };
 }
 
-void ErrorScreen::enter(Client& c, std::string_view t, Screen& return_to) {
-    msg->update_text(c.renderer.make_text(t, FontSize::Large));
+void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
+    msg->update_text(std::move(t));
     return_screen = &return_to;
     c.enter_screen(*this);
 }
@@ -275,7 +275,7 @@ void GameScreen::handle(sc::Disconnect packet) {
             default: return "Disconnected: <<<Invalid>>>";
         }
     }();
-    client.show_error(reason, client.menu_screen);
+    client.show_error(std::string{reason}, client.menu_screen);
 }
 
 void GameScreen::handle(sc::HeartbeatRequest req) {
@@ -304,13 +304,13 @@ void Client::run() {
         input_system.process_events();
 
         // Refresh screen info.
-        current_screen->refresh(renderer.size());
+        current_screen->refresh(renderer);
 
         // Tick the screen.
         current_screen->tick(input_system);
 
         // Draw it.
-        current_screen->render(renderer);
+        current_screen->draw(renderer);
 
         const auto end_of_tick = chr::system_clock::now();
         const auto tick_duration = chr::duration_cast<chr::milliseconds>(end_of_tick - start_of_tick);
@@ -325,10 +325,10 @@ void Client::run() {
     }
 }
 
-void Client::show_error(std::string_view error, Screen& return_to) {
+void Client::show_error(std::string error, Screen& return_to) {
     error_screen.enter(
         *this,
-        error,
+        std::move(error),
         return_to
     );
 }

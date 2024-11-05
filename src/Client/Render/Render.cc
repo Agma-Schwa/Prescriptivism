@@ -90,9 +90,6 @@ constexpr char DefaultFontRegular[]{
 // =============================================================================
 //  Text and Fonts
 // =============================================================================
-ShapedText::ShapedText()
-    : vao{VertexLayout::PositionTexture4D}, fsize{}, wd{}, ht{}, dp{} {}
-
 auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     std::string debug;
     debug.resize(10'000);
@@ -343,6 +340,21 @@ auto Font::shape(
     return ShapedText(std::move(vao), size, max_x, ht, dp);
 }
 
+void Text::reflow(Renderer& r, i32 width) {
+    if (dirty) shaped(r);
+    if (width > text.width()) return;
+    Log("TODO: Reflow text");
+}
+
+auto Text::shaped(Renderer& r) const -> const ShapedText& {
+    if (dirty) {
+        dirty = false;
+        text = r.make_text(content, text.font_size(), align);
+    }
+
+    return text;
+}
+
 // =============================================================================
 //  Initialisation
 // =============================================================================
@@ -513,6 +525,10 @@ void Renderer::draw_text(
 
     // Dew it.
     text.vao.draw_vertices();
+}
+
+void Renderer::draw_text(const Text& text, xy pos, Colour c) {
+    draw_text(text.shaped(*this), pos, c);
 }
 
 void Renderer::draw_texture(

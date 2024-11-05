@@ -43,7 +43,7 @@ public:
     ErrorScreen(Client& c);
 
     /// Set the text to display and the screen to return to.
-    void enter(Client& c, std::string_view t, Screen& return_to);
+    void enter(Client& c, std::string t, Screen& return_to);
 };
 
 /// Screen that is displayed while we connect to a server.
@@ -122,5 +122,5 @@ public:
     void run();
 
     /// Show an error to the user.
-    void show_error(std::string_view error, Screen& return_to);
+    void show_error(std::string error, Screen& return_to);
 };

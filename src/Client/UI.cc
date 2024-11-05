@@ -72,17 +72,26 @@ void Button::draw(Renderer& r) {
 }
 
 void Label::draw(Renderer& r) {
-    r.draw_text(text, auto{pos}.voffset(i32(text.depth())).absolute(r.size(), text.size()));
+    auto& shaped = text.shaped(r);
+    r.draw_text(shaped, auto{pos}.voffset(i32(shaped.depth())).absolute(r.size(), shaped.size()));
+}
+
+void Label::refresh(Renderer& r) {
+    if (not reflow) return;
+    auto sz = parent() ? parent()->bounding_box().width() : r.size().wd;
+    text.reflow(r, sz);
 }
 
 TextBox::TextBox(
+    Element* parent,
     ShapedText text,
     ShapedText placeholder,
     Position pos,
     i32 padding,
     i32 min_wd,
     i32 min_ht
-) : placeholder{std::move(placeholder)},
+) : Element{parent},
+    placeholder{std::move(placeholder)},
     pos{pos},
     padding{padding},
     min_wd{min_wd},
@@ -112,16 +121,16 @@ void TextBox::draw(Renderer& r) {
     );
 }
 
-void TextBox::refresh(Size screen_size) {
-    SetBoundingBox(AABB(pos.absolute(screen_size, sz), sz));
+void TextBox::refresh(Renderer& r) {
+    SetBoundingBox(AABB(pos.absolute(r.size(), sz), sz));
 }
 
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
         auto shaped = hide_text
-            ? r.make_text(std::u32string(text.size(), U'•'), size, TextAlign::SingleLine, &clusters)
-            : r.make_text(text, size, TextAlign::SingleLine, &clusters);
+                        ? r.make_text(std::u32string(text.size(), U'•'), size, TextAlign::SingleLine, &clusters)
+                        : r.make_text(text, size, TextAlign::SingleLine, &clusters);
         UpdateText(std::move(shaped));
     }
 
@@ -312,7 +321,10 @@ void TextEdit::event_input(InputSystem& input) {
     }
 }
 
-Throbber::Throbber(Position pos) : vao(VertexLayout::Position2D), pos(pos) {
+Throbber::Throbber(Element* parent, Position pos)
+    : Element(parent),
+      vao(VertexLayout::Position2D),
+      pos(pos) {
     vec2 verts[]{
         {-R, -R},
         {-R, R},
@@ -341,6 +353,7 @@ void Throbber::draw(Renderer& r) {
 }
 
 Card::Card(
+    Element* parent,
     Renderer& r,
     Position pos,
     std::string_view _code,
@@ -348,7 +361,7 @@ Card::Card(
     std::string_view _middle,
     std::string_view _special,
     u8 count
-) : pos(pos), count(count) {
+) : Element(parent), pos(pos), count(count) {
     s = Field;
     code[OtherPlayer] = r.make_text(_code, FontSize::Text);
     name[OtherPlayer] = r.make_text(_name, FontSize::Small);
@@ -453,13 +466,16 @@ void InputSystem::update_selection(bool is_element_selected) {
 // =============================================================================
 //  Screen
 // =============================================================================
-void Screen::refresh(Size screen_size) {
-    for (auto& e : children) e->refresh(screen_size);
-}
-
-void Screen::render(Renderer& r) {
+void Screen::draw(Renderer& r) {
     r.set_cursor(Cursor::Default);
     for (auto& e : children) e->draw(r);
+}
+
+void Screen::refresh(Renderer& r) {
+    SetBoundingBox(AABB({0, 0}, r.size()));
+    if (prev_size == r.size()) return;
+    prev_size = r.size();
+    for (auto& e : children) e->refresh(r);
 }
 
 void Screen::tick(InputSystem& input) {

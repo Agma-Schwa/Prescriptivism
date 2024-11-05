@@ -11,6 +11,7 @@ module;
 export module pr.client.render;
 
 import pr.utils;
+import base.text;
 import pr.client.render.gl;
 
 export namespace pr::client {
@@ -22,6 +23,7 @@ struct xy;
 class Renderer;
 class Font;
 class ShapedText;
+class Text;
 
 enum struct FontSize : u32;
 enum struct TextAlign : u8;
@@ -98,6 +100,9 @@ struct pr::client::Size {
 
     constexpr Size() = default;
     constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
+
+private:
+    friend constexpr bool operator==(Size, Size) = default;
 };
 
 // XY position that is destructurable.
@@ -115,6 +120,7 @@ struct pr::client::xy {
     constexpr auto vec() const -> vec2 { return {f32(x), f32(y)}; }
 
 private:
+    friend constexpr bool operator==(xy, xy) = default;
     friend constexpr xy operator+(xy a, xy b) { return {a.x + b.x, a.y + b.y}; }
     friend constexpr xy operator-(xy a, xy b) { return {a.x - b.x, a.y - b.y}; }
 };
@@ -131,6 +137,12 @@ struct pr::client::AABB {
 
     /// Check if this box contains a point.
     auto contains(xy) const -> bool;
+
+    /// Get the height of this box.
+    constexpr auto height() const -> i32 { return max.y - min.y; }
+
+    /// Get the width of this box.
+    constexpr auto width() const -> i32 { return max.x - min.x; }
 };
 
 // =============================================================================
@@ -161,8 +173,13 @@ private:
         : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht), dp(dp) {}
 
 public:
-    /// Create an empty text object.
-    ShapedText();
+    /// Create an empty text object that optionally stores a font size.
+    explicit ShapedText(FontSize sz = FontSize::Text)
+        : vao{VertexLayout::PositionTexture4D},
+          fsize{+sz},
+          wd{},
+          ht{},
+          dp{} {}
 
     /// Debugging function that dumps the contents of a HarfBuzz buffer;
     /// must be called after shaping.
@@ -188,6 +205,35 @@ public:
 
     /// Get the width of the text.
     auto width() const -> f32 { return wd; }
+};
+
+/// Text to be rendered that also stores the characters of the text.
+class pr::client::Text {
+    mutable ShapedText text{FontSize::Text};
+    std::string content;
+    TextAlign align = TextAlign::SingleLine;
+    mutable bool dirty = false;
+
+public:
+    Text() {}
+    Text(ShapedText t, TextAlign align = TextAlign::SingleLine) : text{std::move(t)}, align{align} {}
+    Text(std::string s, FontSize sz, TextAlign align) : text{sz}, content{std::move(s)}, align{align}, dirty{true} {}
+    Text(std::u32string_view s, FontSize sz, TextAlign align) : Text{base::text::ToUTF8(s), sz, align} {}
+
+    /// Check if this text is empty.
+    bool empty() const { return content.empty() and text.size() == Size{}; }
+
+    /// Reflow the text to fit within the given width.
+    void reflow(Renderer& r, i32 width);
+
+    /// Update the text.
+    void set(std::string new_text) {
+        content = std::move(new_text);
+        dirty = true;
+    }
+
+    /// Get this as shaped text, shaping it if it is not already shaped.
+    auto shaped(Renderer& r) const -> const ShapedText&;
 };
 
 /// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
@@ -316,6 +362,7 @@ public:
 
     /// Draw text at a position in world coordinates.
     void draw_text(const ShapedText& text, xy pos, Colour c = Colour::White);
+    void draw_text(const Text& text, xy pos, Colour c = Colour::White);
 
     /// Draw a texture at a position in world coordinates.
     void draw_texture(const DrawableTexture& tex, xy pos);

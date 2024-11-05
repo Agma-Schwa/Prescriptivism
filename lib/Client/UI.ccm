@@ -125,8 +125,10 @@ public:
     void update_selection(bool is_element_selected);
 };
 
+/// The root of the UI element hierarchy.
 class pr::client::Element {
     AABB box;
+    Element* parent_element = nullptr;
 
 public:
     bool hovered    : 1 = false;
@@ -134,7 +136,7 @@ public:
     bool selected   : 1 = false;
 
 protected:
-    Element() = default;
+    explicit Element(Element* parent) : parent_element(parent) {}
     void SetBoundingBox(AABB aabb) { box = aabb; }
 
 public:
@@ -152,8 +154,11 @@ public:
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
 
+    /// Get the parent of this element.
+    auto parent() -> Element* { return parent_element; }
+
     /// Recompute bounding box etc.
-    virtual void refresh(Size) {}
+    virtual void refresh(Renderer& r) {}
 
     /// Reset properties at the start of a tick.
     void reset_properties() {
@@ -162,7 +167,10 @@ public:
     }
 };
 
-class pr::client::Screen {
+/// A screen that displays elements and controls user
+/// interaction. A screen is an element mainly so we
+/// can set it as the parent of an element.
+class pr::client::Screen : public Element {
     LIBBASE_IMMOVABLE(Screen);
 
     /// List of children.
@@ -171,16 +179,17 @@ class pr::client::Screen {
     /// The selected element.
     Element* selected = nullptr;
 
+    /// Previous size so we don’t refresh every frame.
+    Size prev_size = {};
+
 protected:
-    Screen() = default;
+    Screen() : Element(nullptr) {}
 
 public:
-    virtual ~Screen() = default;
-
-    /// Create an element.
+    /// Create an element with the screen as its parent.
     template <std::derived_from<Element> El, typename... Args>
     auto Create(Args&&... args) -> El& {
-        auto el = std::make_unique<El>(std::forward<Args>(args)...);
+        auto el = std::make_unique<El>(this, std::forward<Args>(args)...);
         auto& ref = *el;
         children.push_back(std::move(el));
         return ref;
@@ -189,17 +198,17 @@ public:
     /// Code to run to reset a screen when it is entered.
     virtual void on_entered() {}
 
-    /// Refresh all element positions.
-    ///
-    /// This recomputes the position of each element after the screen
-    /// has been resized and before ticking/rendering.
-    void refresh(Size screen_size);
-
     /// Render this screen.
     ///
     /// The default renderer renders all UI elements that are part of
     /// this screen.
-    virtual void render(Renderer& r);
+    void draw(Renderer& r) override;
+
+    /// Refresh all element positions.
+    ///
+    /// This recomputes the position of each element after the screen
+    /// has been resized and before ticking/rendering.
+    void refresh(Renderer& r) override;
 
     /// Tick this screen.
     ///
@@ -209,17 +218,35 @@ public:
     virtual void tick(InputSystem& input);
 };
 
+/// Label that supports reflowing text automatically.
 class pr::client::Label : public Element {
-    // TODO: Reflow text.
-    ShapedText text;
+    Text text;
     Position pos{};
+    bool reflow = false;
 
 public:
-    explicit Label(ShapedText text, Position pos) : text(std::move(text)), pos(pos) {}
-    explicit Label(Position pos) : pos(pos) {}
+    explicit Label(Element* parent, Position pos) : Element(parent), pos(pos) {}
+    explicit Label(Element* parent, ShapedText text, Position pos)
+        : Element(parent),
+          text(std::move(text)),
+          pos(pos) {}
+
+    explicit Label(Element* parent, FontSize sz, TextAlign align, Position pos, bool reflow = true)
+        : Element(parent),
+          text("", sz, align),
+          pos(pos),
+          reflow(reflow) {}
+
+    explicit Label(Element* parent, std::string text, FontSize sz, TextAlign align, Position pos, bool reflow = true)
+        : Label(parent, sz, align, pos, reflow) {
+        update_text(std::move(text));
+    }
 
     void draw(Renderer& r) override;
-    void update_text(ShapedText new_text) { text = std::move(new_text); }
+    void refresh(Renderer& r) override;
+    void update_text(std::string new_text) {
+        text.set(std::move(new_text));
+    }
 };
 
 class pr::client::TextBox : public Element {
@@ -234,6 +261,7 @@ protected:
     i32 cursor_offs = -1; // Cursor offset from the start of the text; -1 to disable.
 
     explicit TextBox(
+        Element* parent,
         ShapedText label,
         ShapedText placeholder,
         Position pos,
@@ -247,15 +275,21 @@ protected:
 
 public:
     void draw(Renderer& r) override;
-    void refresh(Size screen_size) override;
+    void refresh(Renderer& r) override;
 };
 
 class pr::client::Button : public TextBox {
 public:
     std::function<void()> on_click{};
 
-    explicit Button(ShapedText label, Position pos, i32 padding, i32 min_wd = 0, i32 min_ht = 0)
-        : TextBox(std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {}
+    explicit Button(
+        Element* parent,
+        ShapedText label,
+        Position pos,
+        i32 padding,
+        i32 min_wd = 0,
+        i32 min_ht = 0
+    ) : TextBox(parent, std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {}
 
     void event_click(InputSystem&) override {
         if (on_click) on_click();
@@ -281,16 +315,18 @@ class pr::client::TextEdit : public TextBox {
 
 public:
     TextEdit(
+        Element* parent,
         Position pos,
         FontSize size,
         i32 padding,
         i32 min_wd = 0,
         i32 min_ht = 0
-    ) : TextBox(ShapedText(), ShapedText(), pos, padding, min_wd, min_ht), size{size} {
+    ) : TextBox(parent, ShapedText(), ShapedText(), pos, padding, min_wd, min_ht), size{size} {
         selectable = true;
     }
 
     TextEdit(
+        Element* parent,
         Position pos,
         FontSize size,
         ShapedText placeholder,
@@ -298,7 +334,7 @@ public:
         bool hide_text = false,
         i32 min_wd = 0,
         i32 min_ht = 0
-    ) : TextBox(ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht),
+    ) : TextBox(parent, ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht),
         size{size},
         hide_text{hide_text} {
         selectable = true;
@@ -322,7 +358,7 @@ class pr::client::Throbber : public Element {
     bool show = true;
 
 public:
-    Throbber(Position pos);
+    Throbber(Element* parent, Position pos);
 
     void draw(Renderer& r) override;
 };
@@ -350,6 +386,7 @@ private:
 
 public:
     Card(
+        Element* parent,
         Renderer& r,
         Position pos,
         std::string_view code,
