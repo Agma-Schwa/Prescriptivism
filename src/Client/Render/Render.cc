@@ -357,6 +357,7 @@ auto Font::shape(
                 // in a *really narrow* line, in which case we may have to break
                 // mid-word.
                 if (last_ws_cluster_index == -1) {
+                    ws_width = x - adv; // Referenced by AddSubline().
                     AddSubline(
                         hb_glyph_info_get_glyph_flags(&info) & HB_GLYPH_FLAG_UNSAFE_TO_BREAK,
                         start_cluster_index,
