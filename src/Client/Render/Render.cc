@@ -168,6 +168,14 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
     }
 }
 
+auto Font::AllocBuffer() -> hb_buffer_t* {
+    auto in_use = hb_buffers_in_use++;
+    if (in_use == hb_bufs.size()) hb_bufs.push_back(
+        HarfBuzzBufferHandle{hb_buffer_create(), hb_buffer_destroy}
+    );
+    return hb_bufs[in_use].get();
+}
+
 /// Shape text using this font.
 ///
 /// The resulting object is position-independent and can
@@ -175,10 +183,21 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
 auto Font::shape(
     std::u32string_view text,
     TextAlign align,
-    std::vector<ShapedText::Cluster>* clusters
+    i32 desired_text_width,
+    std::vector<ShapedText::Cluster>* clusters,
+    bool* multiline
 ) -> ShapedText {
+    if (multiline) *multiline = false;
     if (text.empty()) return ShapedText{};
     auto font = hb_font.get();
+
+    // Free buffers after we’re done.
+    defer { hb_buffers_in_use = 0; };
+
+    // Refuse to go below a certain width to save us from major headaches.
+    static constexpr i32 MinTextWidth = 40;
+    const bool reflow = desired_text_width != 0;
+    const f32 desired_width = desired_text_width == 0 ? 0 : std::max(desired_text_width, MinTextWidth);
 
     // Convert to UTF-32 in canonical decomposition form; this helps
     // with fonts that may not have certain precombined characters, but
@@ -189,25 +208,43 @@ auto Font::shape(
     auto norm = Normalise(text, text::NormalisationForm::NFD).value_or(U"<ERROR>");
 
     // Get the glyph information and position from a HarfBuzz buffer.
-    auto GetInfo = [](hb_buffer_t* buf) -> std::pair<std::span<hb_glyph_info_t>, std::span<hb_glyph_position_t>> {
+    auto GetInfo = [](hb_buffer_t* buf, i32 start = 0, i32 end = 0) -> std::pair<std::span<hb_glyph_info_t>, std::span<hb_glyph_position_t>> {
         unsigned count;
         auto info_ptr = hb_buffer_get_glyph_infos(buf, &count);
         auto pos_ptr = hb_buffer_get_glyph_positions(buf, &count);
+
+        // Sanity check.
         if (not info_ptr or not pos_ptr) count = 0;
         auto infos = std::span{info_ptr, count};
         auto positions = std::span{pos_ptr, count};
+
+        // We might only want to reference part of the buffer.
+        if (start != 0 or end != 0) {
+            infos = infos.subspan(start, end - start);
+            positions = positions.subspan(start, end - start);
+        }
+
         return {infos, positions};
+    };
+
+    // Shaped data and width of a single physical line.
+    struct Line {
+        // Buffer that contains the shaped data.
+        hb_buffer_t* buf;
+
+        // The width of this line.
+        f32 width;
+
+        // If not both 0, this references part of a shaped buffer. Only
+        // use the range [start, end) for this line.
+        i32 start = 0, end = 0;
     };
 
     // Shape a single line; we need to do line breaks manually, so
     // we might have to call this multiple times.
-    std::vector<f32> line_widths;
+    std::vector<Line> lines;
     static constexpr int Scale = 64;
-    auto ShapeLine = [&, line_idx = u32(0)](std::u32string_view line) mutable {
-        // Get a HarfBuzz buffer.
-        if (hb_bufs.size() <= line_idx) hb_bufs.push_back(HarfBuzzBufferHandle{hb_buffer_create(), hb_buffer_destroy});
-        auto buf = hb_bufs[line_idx++].get();
-
+    auto ShapeLine = [&](std::u32string_view line, hb_buffer_t* buf) mutable -> f32 {
         // Add the text and compute properties.
         hb_buffer_clear_contents(buf);
         hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
@@ -235,14 +272,130 @@ auto Font::shape(
         f32 x = 0;
         auto [_, positions] = GetInfo(buf);
         for (const auto& pos : positions) x += pos.x_advance / f32(Scale);
-        line_widths.push_back(x);
+        return x;
+    };
+
+    // Shape multiple lines; this performs reflowing if need be.
+    auto ShapeLines = [&](std::span<std::u32string_view> lines_to_shape) -> f32 {
+        Assert(not lines_to_shape.empty(), "Should have returned earlier");
+
+        // First, shape all lines in any case.
+        for (auto l : lines_to_shape) {
+            auto buf = AllocBuffer();
+            lines.emplace_back(buf, ShapeLine(l, buf));
+        }
+
+        // If we don’t need to reflow, we’re done.
+        auto max_x = rgs::max_element(lines, {}, &Line::width)->width;
+        if (not reflow or max_x <= f32(desired_width)) return max_x;
+
+        // Reflow each line that is too wide.
+        auto old_lines = std::exchange(lines, {});
+        for (auto [i, l] : old_lines | vws::enumerate) {
+            // Line is narrow enough; retain it as-is.
+            if (l.width <= desired_width) {
+                lines.push_back(l);
+                continue;
+            }
+
+            // This is the actual hart part: reflowing the line; fortunately,
+            // we may not have to reshape the line since HarfBuzz keeps track
+            // of positions that are ‘safe to break’, i.e. where we can split
+            // the line w/o having to reshape.
+            //
+            // The text we’ve been passed might be very long, so start scanning
+            // from the front of the line.
+            isz last_cluster = -1;                    // The last cluster we checked for whitespace.
+            isz last_ws_pos = -1;                     // The position of the last whitespace character.
+            usz first_char_pos = 0;                   // The first character of this subline.
+            bool force_reshape = false;               // Whether we must reshape the next subline.
+            bool line_buffer_referenced = false;      // If set, we must not reuse the buffer for this line.
+            f32 x = 0;                                // The width of the current subline.
+            f32 ws_width = 0, ws_advance = 0;         // The width up to (but excluding) the last whitespace character.
+            auto source_line = lines_to_shape[i];     // Text of the entire line we’re splitting.
+            auto [infos, positions] = GetInfo(l.buf); // Pre-split shaping data for the entire line.
+
+            // Reshape a subline.
+            auto AddSubline = [&](bool reshape, usz start, usz end, bool last = false) {
+                // Reshape the line, reusing the buffer for this line if it was never referenced.
+                if (reshape) {
+                    auto buf = last and not line_buffer_referenced ? l.buf : AllocBuffer();
+                    auto new_line = ShapeLine(source_line.substr(start, end - start), buf);
+                    lines.emplace_back(buf, new_line);
+                    force_reshape = true;
+                }
+
+                // Reference the existing shaping data.
+                else {
+                    line_buffer_referenced = true;
+                    lines.emplace_back(l.buf, last ? x : ws_width, i32(start), i32(end));
+                    force_reshape = false;
+                }
+            };
+
+            // Go through all characters and split this line into sublines.
+            for (auto [i, data] : vws::zip(infos, positions) | vws::enumerate) {
+                auto& [info, pos] = data;
+
+                // If this is whitespace and safe to break, remember its position.
+                f32 adv = pos.x_advance / f32(Scale);
+                if (info.cluster != last_cluster and source_line[info.cluster] == U' ') {
+                    last_ws_pos = i;
+                    ws_width = x;
+                    ws_advance = adv;
+                }
+
+                // Don’t check the same cluster multiple times.
+                last_cluster = info.cluster;
+
+                // If this character would bring us above the width limit, break here.
+                x += adv;
+                if (x <= desired_width) continue;
+
+                // Handle the degenerate case of us shaping a *really long* word
+                // in a *really narrow* line, in which case we may have to break
+                // mid-word.
+                if (last_ws_pos == -1) {
+                    AddSubline(
+                        hb_glyph_info_get_glyph_flags(&info) & HB_GLYPH_FLAG_UNSAFE_TO_BREAK,
+                        first_char_pos,
+                        usz(i)
+                    );
+
+                    first_char_pos = usz(i);
+                    x = 0;
+                }
+
+                // If we’re not in the middle of a word, break at the last whitespace position; in
+                // this case, we assume that it is always safe to break.
+                else {
+                    AddSubline(force_reshape, first_char_pos, usz(last_ws_pos));
+                    x -= ws_width + ws_advance;
+                    first_char_pos = usz(last_ws_pos + 1);
+                }
+
+                // Note: we may end up rescanning the last cluster here, but that’s not really that
+                // problematic since we don’t expect the glyphs to get much larger or smaller as a
+                // result (strictly speaking, we’d have to reshape the rest of the line here if we
+                // broke a ligature, but we don’t need to be *that* precise).
+                last_cluster = -1;
+                last_ws_pos = -1;
+                ws_width = 0;
+            }
+
+            // We almost certainly have characters left here, since we only break if the line gets
+            // too long, in which case there is more text left in to process. Add the last subline.
+            AddSubline(force_reshape, first_char_pos, source_line.size(), true);
+        }
+
+        // Finally, once again determine the largest line.
+        return rgs::max_element(lines, {}, &Line::width)->width;
     };
 
     // Add the vertices for a line to the vertex buffer.
-    f32 ybase = 0; // The y-coordinate of the baseline.
     std::vector<vec4> verts;
-    auto AddVertices = [&](hb_buffer_t* buf, f32 xbase) -> std::pair<f32, f32> {
-        auto [infos, positions] = GetInfo(buf);
+    auto AddVertices = [&](const Line& l, f32 xbase, f32 ybase) -> std::pair<f32, f32> {
+        auto [infos, positions] = GetInfo(l.buf, l.start, l.end);
         f32 x = xbase;
         f32 line_ht = 0, line_dp = 0;
 
@@ -297,40 +450,39 @@ auto Font::shape(
         return {line_ht, line_dp};
     };
 
-    // This shouldn’t happen, but still...
-    auto lines = u32stream{norm}.lines();
-    if (lines.empty()) return ShapedText{};
-
-    // Shape each line and compute the width of each line.
-    for (auto l : lines) ShapeLine(l.text());
-    auto max_x = *rgs::max_element(line_widths);
+    // Shape (and if need be reflow) the lines.
+    auto lines_to_shape = u32stream{norm}.lines() | vws::transform(&u32stream::text) | rgs::to<std::vector>();
+    if (lines_to_shape.empty()) return ShapedText{};
+    f32 max_x = ShapeLines(lines_to_shape);
+    if (multiline) *multiline = lines.size() > 1;
 
     // Now, add vertices for each line.
+    f32 ybase = 0;
     f32 ht = 0, dp = 0;
-    for (usz i = 0, end = usz(rgs::distance(lines)); i < end; i++) {
+    for (const auto& line : lines) {
         // Determine the starting X position for this line.
         f32 xbase = [&] -> f32 {
             switch (align) {
                 case TextAlign::Left: return 0;
-                case TextAlign::Center: return (max_x - line_widths[i]) / 2;
-                case TextAlign::Right: return max_x - line_widths[i];
+                case TextAlign::Center: return (max_x - line.width) / 2;
+                case TextAlign::Right: return max_x - line.width;
             }
             Unreachable();
         }();
 
         // Build the vertices for this line.
-        auto [line_ht, line_dp] = AddVertices(hb_bufs[i].get(), xbase);
-
-        // Add interline skip before the next line.
-        ybase -= std::max(line_ht + line_dp, f32(skip));
+        auto [line_ht, line_dp] = AddVertices(line, xbase, ybase);
 
         // Update the total height and width.
-        if (i == 0) {
+        if (ybase == 0) {
             ht = line_ht;
             dp = line_dp;
         } else {
             dp += line_ht + line_dp;
         }
+
+        // Add interline skip before the next line.
+        ybase -= std::max(line_ht + line_dp, f32(skip));
     }
 
     // Upload the vertices.
@@ -341,18 +493,30 @@ auto Font::shape(
 }
 
 void Text::reflow(Renderer& r, i32 width) {
-    if (dirty) shaped(r);
-    if (width > text.width()) return;
-    Log("TODO: Reflow text");
+    // This looks a bit weird, but essentially, if we need to reshape
+    // anyway, pass in the width right away; if not, we already know
+    // the width, in which case reshape if it’s too large or always
+    // reshape if we’re taking up multiple lines in case we just got
+    // more space.
+    if (dirty) shape(r, width);
+    else if (width < text.width() or needs_multiple_lines) shape(r, width);
 }
 
 auto Text::shaped(Renderer& r) const -> const ShapedText& {
-    if (dirty) {
-        dirty = false;
-        text = r.make_text(content, text.font_size(), align);
-    }
-
+    if (dirty) shape(r, 0);
     return text;
+}
+
+void Text::shape(Renderer& r, i32 desired_width) const {
+    dirty = false;
+    text = r.make_text(
+        content,
+        text.font_size(),
+        align,
+        desired_width,
+        nullptr,
+        &needs_multiple_lines
+    );
 }
 
 // =============================================================================
@@ -616,18 +780,22 @@ auto Renderer::make_text(
     std::string_view text,
     FontSize size,
     TextAlign align,
-    std::vector<ShapedText::Cluster>* clusters
+    i32 desired_width,
+    std::vector<ShapedText::Cluster>* clusters,
+    bool* multiline
 ) -> ShapedText {
-    return font(+size).shape(text::ToUTF32(text), align, clusters);
+    return font(+size).shape(text::ToUTF32(text), align, desired_width, clusters, multiline);
 }
 
 auto Renderer::make_text(
     std::u32string_view text,
     FontSize size,
     TextAlign align,
-    std::vector<ShapedText::Cluster>* clusters
+    i32 desired_width,
+    std::vector<ShapedText::Cluster>* clusters,
+    bool* multiline
 ) -> ShapedText {
-    return font(+size).shape(text, align, clusters);
+    return font(+size).shape(text, align, desired_width, clusters, multiline);
 }
 
 void Renderer::reload_shaders() {

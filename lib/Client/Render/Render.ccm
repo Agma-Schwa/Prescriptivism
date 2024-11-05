@@ -213,6 +213,7 @@ class pr::client::Text {
     std::string content;
     TextAlign align = TextAlign::SingleLine;
     mutable bool dirty = false;
+    mutable bool needs_multiple_lines = false;
 
 public:
     Text() {}
@@ -234,6 +235,9 @@ public:
 
     /// Get this as shaped text, shaping it if it is not already shaped.
     auto shaped(Renderer& r) const -> const ShapedText&;
+
+private:
+    void shape(Renderer& r, i32 desired_width = 0) const;
 };
 
 /// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
@@ -250,6 +254,7 @@ class pr::client::Font {
 
     /// Cached HarfBuzz buffers to use for shaping.
     std::vector<HarfBuzzBufferHandle> hb_bufs;
+    usz hb_buffers_in_use = 0;
 
     /// Metrics for all glyphs in the font.
     std::vector<Metrics> glyphs{};
@@ -284,10 +289,14 @@ public:
     ///
     /// The resulting object is position-independent and can
     /// be drawn at any coordinates.
+    ///
+    /// Prefer to call Renderer::make_text() instead.
     auto shape(
         std::u32string_view text,
         TextAlign align,
-        std::vector<ShapedText::Cluster>* clusters = nullptr
+        i32 desired_width,
+        std::vector<ShapedText::Cluster>* clusters,
+        bool* multiline
     ) -> ShapedText;
 
     /// Activate the font for rendering.
@@ -304,6 +313,9 @@ public:
     /// Get the total width and height of the atlas.
     auto height() const -> u32 { return atlas_rows * atlas_entry_height; }
     auto width() const -> u32 { return atlas_columns * atlas_entry_width; }
+
+private:
+    auto AllocBuffer() -> hb_buffer_t*;
 };
 
 // =============================================================================
@@ -371,18 +383,31 @@ public:
     auto frame() -> Frame;
 
     /// Create a text object that can be drawn.
+    ///
+    /// \param text The text to be shaped.
+    /// \param size The font size to use.
+    /// \param align The alignment of the text.
+    /// \param desired_width The width to fit the text into; pass 0 to disable wrapping.
+    /// \param clusters Out parameter for clusters that allow mapping shaped text to original text.
+    /// \param multiline Out parameter for whether the text requires multiple lines to display.
+    /// \return The shaped text object.
     auto make_text(
         std::string_view text,
         FontSize size,
         TextAlign align = TextAlign::Left,
-        std::vector<ShapedText::Cluster>* clusters = nullptr
+        i32 desired_width = 0,
+        std::vector<ShapedText::Cluster>* clusters = nullptr,
+        bool* multiline = nullptr
     ) -> ShapedText;
 
+    /// As make_text(), but takes a UTF-32 string.
     auto make_text(
         std::u32string_view text,
         FontSize size,
         TextAlign align = TextAlign::Left,
-        std::vector<ShapedText::Cluster>* clusters = nullptr
+        i32 desired_width = 0,
+        std::vector<ShapedText::Cluster>* clusters = nullptr,
+        bool* multiline = nullptr
     ) -> ShapedText;
 
     /// Reload all shaders.
