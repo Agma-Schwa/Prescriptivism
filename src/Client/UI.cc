@@ -72,11 +72,13 @@ void Button::draw(Renderer& r) {
 }
 
 void Label::draw(Renderer& r) {
+    if (need_refresh) refresh(r);
     auto& shaped = text.shaped(r);
     r.draw_text(shaped, auto{pos}.voffset(i32(shaped.depth())).absolute(r.size(), shaped.size()));
 }
 
 void Label::refresh(Renderer& r) {
+    need_refresh = false;
     if (not reflow) return;
     auto sz = parent() ? parent()->bounding_box().width() : r.size().wd;
     text.reflow(r, sz);

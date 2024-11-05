@@ -223,6 +223,7 @@ class pr::client::Label : public Element {
     Text text;
     Position pos{};
     bool reflow = false;
+    bool need_refresh = false;
 
 public:
     explicit Label(Element* parent, Position pos) : Element(parent), pos(pos) {}
@@ -246,6 +247,7 @@ public:
     void refresh(Renderer& r) override;
     void update_text(std::string new_text) {
         text.set(std::move(new_text));
+        need_refresh = true;
     }
 };
 
