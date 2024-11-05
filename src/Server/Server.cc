@@ -91,6 +91,13 @@ void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
 
 void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     Log("Login: name = {}, password = {}", login.name, login.password);
+    auto erased = std::erase_if(pending_connexions, [&](auto& x) {
+        return client == x.conn;
+    });
+    if (erased != 1) {
+        Kick(client, DisconnectReason::InvalidPacket);
+        return;
+    }
     bool assigned = false;
     for (auto& p : players) {
         if (p->name == login.name) {
@@ -108,9 +115,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     if (not assigned) {
         players.push_back(std::make_unique<Player>(client, std::move(login.name)));
     }
-    std::erase_if(pending_connexions, [&](auto& x) {
-        return client == x.conn;
-    });
+
 
 }
 
