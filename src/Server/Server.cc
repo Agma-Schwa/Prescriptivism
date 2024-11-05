@@ -115,8 +115,6 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     if (not assigned) {
         players.push_back(std::make_unique<Player>(client, std::move(login.name)));
     }
-
-
 }
 
 // =============================================================================
