@@ -414,7 +414,7 @@ void Renderer::draw_line(xy start, xy end, Colour c) {
     VertexArrays vao{VertexLayout::Position2D};
     vec2 verts[]{start.vec(), end.vec()};
     vao.add_buffer(verts, GL_LINES);
-    vao.draw();
+    vao.draw_vertices();
 }
 
 void Renderer::draw_rect(xy pos, Size size, Colour c) {
@@ -429,7 +429,7 @@ void Renderer::draw_rect(xy pos, Size size, Colour c) {
         {x + size.wd, y + size.ht}
     };
     vao.add_buffer(verts, GL_TRIANGLE_STRIP);
-    vao.draw();
+    vao.draw_vertices();
 }
 
 void Renderer::draw_text(
@@ -446,7 +446,7 @@ void Renderer::draw_text(
     font(+text.font_size()).use();
 
     // Dew it.
-    text.vao.draw();
+    text.vao.draw_vertices();
 }
 
 void Renderer::draw_texture(
@@ -455,7 +455,7 @@ void Renderer::draw_texture(
 ) {
     use(image_shader);
     image_shader.uniform("position", pos.vec());
-    tex.draw();
+    tex.draw_vertices();
 }
 
 void Renderer::frame_end() {

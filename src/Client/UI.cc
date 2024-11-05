@@ -315,7 +315,7 @@ void Throbber::draw(Renderer& r) {
     r.throbber_shader.uniform("rotation", xfrm);
     r.throbber_shader.uniform("r", R);
 
-    vao.draw();
+    vao.draw_vertices();
 }
 
 // =============================================================================

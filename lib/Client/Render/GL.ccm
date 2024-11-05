@@ -7,6 +7,7 @@ export module pr.client.render.gl;
 
 import pr.utils;
 import pr.client.utils;
+import base.fs;
 
 using namespace gl;
 using namespace pr;
@@ -161,7 +162,7 @@ public:
     void bind() const { glBindVertexArray(descriptor); }
 
     /// Draw the vertex array.
-    void draw() const {
+    void draw_vertices() const {
         bind();
         for (const auto& vbo : buffers) vbo.draw();
     }
@@ -276,6 +277,8 @@ private:
     }
 };
 
+/// This is an internal handle to texture data. You probably
+/// wand DrawableTexture instead.
 class client::Texture : Descriptor<glDeleteTextures> {
     GLenum target{};
     GLenum unit{};
@@ -288,6 +291,8 @@ public:
     Texture() = default;
 
     /// Allocate a texture with the given width and height.
+    ///
+    /// \see DrawableTexture for loading textures from a file.
     Texture(
         const void* data,
         u32 width,
@@ -295,7 +300,8 @@ public:
         GLenum format,
         GLenum type,
         GLenum target = GL_TEXTURE_2D,
-        GLenum unit = GL_TEXTURE0
+        GLenum unit = GL_TEXTURE0,
+        bool tile = false
     ) : target{target},
         unit{unit},
         format{format},
@@ -315,8 +321,9 @@ public:
             data
         );
 
-        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        auto param = tile ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, param);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, param);
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -379,8 +386,9 @@ public:
         GLenum format,
         GLenum type,
         GLenum target = GL_TEXTURE_2D,
-        GLenum unit = GL_TEXTURE0
-    ) : Texture(data, width, height, format, type, target, unit) {
+        GLenum unit = GL_TEXTURE0,
+        bool tile = false
+    ) : Texture(data, width, height, format, type, target, unit, tile) {
         // Flip the texture uv coordinates upside-down since the origin
         // is in the bottom-left corner, but that’s not how images work.
         vec4 verts[] {
@@ -393,9 +401,27 @@ public:
         vao.add_buffer(verts, GL_TRIANGLE_STRIP);
     }
 
+    DrawableTexture(
+        const void* data,
+        u32 width,
+        u32 height,
+        GLenum format,
+        GLenum type,
+        bool tile
+    ) : DrawableTexture(data, width, height, format, type, GL_TEXTURE_2D, GL_TEXTURE0, tile) {}
+
+    /// Load a texture from a file.
+    ///
+    /// If the texture cannot be loaded, e.g. because it doesn’t exist
+    /// or because it is not a valid image, this returns a builtin default
+    /// texture.
+    static auto LoadFromFile(base::File::PathRef path) -> DrawableTexture;
+
     /// Draw the texture.
-    void draw() const {
+    ///
+    /// Prefer to call Renderer::draw_texture() instead.
+    void draw_vertices() const {
         bind();
-        vao.draw();
+        vao.draw_vertices();
     }
 };
