@@ -104,7 +104,7 @@ auto MakeNonBlocking(impl::Socket sock) -> Result<> {
 
 auto CreateSocket() -> Result<impl::SocketHolder> {
     // Create the socket.
-    impl::SocketHolder sock{socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)};
+    impl::SocketHolder sock{socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)};
     if (sock.handle() == impl::InvalidSocket) return Error(
         "Failed to create TCP socket: {}",
         std::strerror(errno)
