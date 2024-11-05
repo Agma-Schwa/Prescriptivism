@@ -63,11 +63,7 @@ struct pr::client::Colour {
     u8 a;
 
     /// Create a new colour.
-    constexpr Colour(u8 r, u8 g, u8 b, u8 a = 255)
-        : r(r)
-        , g(g)
-        , b(b)
-        , a(a) {}
+    constexpr Colour(u8 r, u8 g, u8 b, u8 a = 255) : r(r), g(g), b(b), a(a) {}
     constexpr static auto ABGR(u32 abgr) -> Colour {
         if constexpr (std::endian::native == std::endian::big)
             abgr = std::byteswap(abgr);
@@ -96,9 +92,7 @@ struct pr::client::Size {
     i32 ht{};
 
     Size() = default;
-    Size(i32 wd, i32 ht)
-        : wd(wd)
-        , ht(ht) {}
+    Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
 };
 
 // XY position that is destructurable.
@@ -107,21 +101,11 @@ struct pr::client::xy {
     i32 y{};
 
     xy() = default;
-    xy(i32 x, i32 y)
-        : x(x)
-        , y(y) {}
-    xy(vec2 v)
-        : x(i32(v.x))
-        , y(i32(v.y)) {}
-    xy(f32 x, f32 y)
-        : x(i32(x))
-        , y(i32(y)) {}
-    xy(f64 x, f64 y)
-        : x(i32(x))
-        , y(i32(y)) {}
-    xy(Size sz)
-        : x(sz.wd)
-        , y(sz.ht) {}
+    xy(i32 x, i32 y) : x(x), y(y) {}
+    xy(vec2 v) : x(i32(v.x)), y(i32(v.y)) {}
+    xy(f32 x, f32 y) : x(i32(x)), y(i32(y)) {}
+    xy(f64 x, f64 y) : x(i32(x)), y(i32(y)) {}
+    xy(Size sz) : x(sz.wd), y(sz.ht) {}
 
     auto vec() const -> vec2 { return {f32(x), f32(y)}; }
 
@@ -136,15 +120,9 @@ struct pr::client::AABB {
     xy max;
 
     AABB() = default;
-    AABB(i32 x, i32 y, i32 wd, i32 ht)
-        : min(x, y)
-        , max(x + wd, y + ht) {}
-    AABB(xy min, xy max)
-        : min(min)
-        , max(max) {}
-    AABB(xy pos, Size sz)
-        : min(pos)
-        , max(pos.x + sz.wd, pos.y + sz.ht) {}
+    AABB(i32 x, i32 y, i32 wd, i32 ht) : min(x, y), max(x + wd, y + ht) {}
+    AABB(xy min, xy max) : min(min), max(max) {}
+    AABB(xy pos, Size sz) : min(pos), max(pos.x + sz.wd, pos.y + sz.ht) {}
 
     /// Check if this box contains a point.
     auto contains(xy) const -> bool;
@@ -175,11 +153,7 @@ private:
     f32 dp;
 
     explicit ShapedText(VertexArrays vao, u32 fsize, f32 wd, f32 ht, f32 dp)
-        : vao(std::move(vao))
-        , fsize(fsize)
-        , wd(wd)
-        , ht(ht)
-        , dp(dp) {}
+        : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht), dp(dp) {}
 
 public:
     /// Create an empty text object.

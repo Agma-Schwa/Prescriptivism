@@ -41,6 +41,24 @@ auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
     auto [obj_wd, obj_ht] = object_size;
     auto x = i32(parent.x) + Clamp(base.x, obj_wd, sx) + xadjust;
     auto y = i32(parent.y) + Clamp(base.y, obj_ht, sy) + yadjust;
+
+    auto Adjust = [&](i32 xa, i32 ya) {
+        if (base.x != Centered) x -= xa;
+        if (base.y != Centered) y -= ya;
+    };
+
+    switch (anchor) {
+        case Anchor::North: Adjust(obj_wd / 2, obj_ht); break;
+        case Anchor::NorthEast: Adjust(obj_wd, obj_ht); break;
+        case Anchor::East: Adjust(obj_wd, obj_ht / 2); break;
+        case Anchor::SouthEast: Adjust(obj_wd, 0); break;
+        case Anchor::South: Adjust(obj_wd / 2, 0); break;
+        case Anchor::SouthWest: break;
+        case Anchor::West: Adjust(0, obj_ht / 2); break;
+        case Anchor::NorthWest: Adjust(0, obj_ht); break;
+        case Anchor::Center: Adjust(obj_wd / 2, obj_ht / 2); break;
+    }
+
     return {x, y};
 }
 

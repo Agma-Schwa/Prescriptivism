@@ -4,6 +4,7 @@ module;
 #include <limits>
 #include <memory>
 #include <SDL3/SDL.h>
+#include <numeric>
 export module pr.client.ui;
 
 import base.text;
@@ -20,12 +21,28 @@ class TextEdit;
 class InputSystem;
 class Label;
 class Throbber;
+
+enum class Anchor : u8;
 }
 
 namespace pr::client {
 /// Intermediate widget that consists of a box that wraps some text.
 class TextBox;
 }
+
+/// An anchor point for positioning elements.
+enum class pr::client::Anchor : base::u8 {
+    North,
+    NorthEast,
+    East,
+    SouthEast,
+    South,
+    SouthWest,
+    West,
+    NorthWest,
+    Center,
+    Default = SouthWest,
+};
 
 /// A position of an element, which may be absolute or relative
 /// to its parent element.
@@ -38,24 +55,33 @@ struct pr::client::Position {
     /// Separate adjustment fields since the position may be centered,
     /// in which case adjustments can only be applied when the position
     /// is computed. These are always relative to the base position.
-    i32 xadjust{};
-    i32 yadjust{};
+    i16 xadjust{};
+    i16 yadjust{};
+
+    /// Anchor of the position.
+    Anchor anchor = Anchor::Default;
 
     Position() = default;
-    Position(xy base) : base(base) {}
-    Position(i32 x, i32 y) : base(x, y) {}
+    Position(xy base, Anchor a = Anchor::Default) : base(base), anchor(a) {}
+    Position(i32 x, i32 y, Anchor a = Anchor::Default) : base(x, y), anchor(a) {}
 
     /// Create a position that is centered horizontally or vertically.
-    static auto HCenter(i32 y) -> Position { return {Centered, y}; }
-    static auto VCenter(i32 x) -> Position { return {x, Centered}; }
-    static auto Center() -> Position { return {Centered, Centered}; }
+    static auto HCenter(i32 y, Anchor a = Anchor::Default) -> Position { return {Centered, y, a}; }
+    static auto VCenter(i32 x, Anchor a = Anchor::Default) -> Position { return {x, Centered, a}; }
+    static auto Center(Anchor a = Anchor::Default) -> Position { return {Centered, Centered, a}; }
 
     /// Convert to an absolute position.
     auto absolute(Size screen_size, Size object_size) -> xy;
 
+    /// Anchor the position.
+    auto anchor_to(Anchor a) -> Position& {
+        anchor = a;
+        return *this;
+    }
+
     /// Offset horizontally.
     auto hoffset(i32 offset) -> Position& {
-        xadjust += offset;
+        xadjust += std::saturate_cast<i16>(offset);
         return *this;
     }
 
@@ -64,7 +90,7 @@ struct pr::client::Position {
 
     /// Offset vertically.
     auto voffset(i32 offset) -> Position& {
-        yadjust += offset;
+        yadjust += std::saturate_cast<i16>(offset);
         return *this;
     }
 };
@@ -266,4 +292,12 @@ public:
     Throbber(Position pos);
 
     void draw(Renderer& r) override;
+};
+
+template <>
+struct std::formatter<pr::client::xy> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(pr::client::xy p, FormatContext& ctx) const {
+        return std::formatter<std::string>::format(std::format("({}, {})", p.x, p.y), ctx);
+    }
 };
