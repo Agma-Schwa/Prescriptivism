@@ -157,7 +157,7 @@ void ConnexionScreen::tick(InputSystem& input) {
             auto conn = connexion_thread.value();
             if (not conn) {
                 client.show_error(
-                    std::format("Connexion failed: {}", conn.error()),
+                    std::format("Connexion failed ffffffffffffffffffffffff: {}", conn.error()),
                     client.menu_screen
                 );
                 return;

@@ -169,11 +169,12 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
-    auto in_use = hb_buffers_in_use++;
-    if (in_use == hb_bufs.size()) hb_bufs.push_back(
-        HarfBuzzBufferHandle{hb_buffer_create(), hb_buffer_destroy}
-    );
-    return hb_bufs[in_use].get();
+    Assert(hb_buffers_in_use <= hb_bufs.size());
+    if (hb_buffers_in_use == hb_bufs.size()) {
+        hb_bufs.push_back(HarfBuzzBufferHandle{hb_buffer_create(), hb_buffer_destroy});
+        return hb_bufs.back().get();
+    }
+    return hb_bufs[hb_buffers_in_use++].get();
 }
 
 /// Shape text using this font.
@@ -219,9 +220,9 @@ auto Font::shape(
         auto positions = std::span{pos_ptr, count};
 
         // We might only want to reference part of the buffer.
-        if (start != 0 or end != 0) {
-            infos = infos.subspan(start, end - start);
-            positions = positions.subspan(start, end - start);
+        if (end != 0) {
+            infos = infos.subspan(start, std::clamp(end - start, 0, i32(count)));
+            positions = positions.subspan(start, std::clamp(end - start, 0, i32(count)));
         }
 
         return {infos, positions};
@@ -291,7 +292,7 @@ auto Font::shape(
 
         // Reflow each line that is too wide.
         auto old_lines = std::exchange(lines, {});
-        for (auto [i, l] : old_lines | vws::enumerate) {
+        for (auto [lineno, l] : old_lines | vws::enumerate) {
             // Line is narrow enough; retain it as-is.
             if (l.width <= desired_width) {
                 lines.push_back(l);
@@ -305,22 +306,23 @@ auto Font::shape(
             //
             // The text we’ve been passed might be very long, so start scanning
             // from the front of the line.
-            isz last_cluster = -1;                    // The last cluster we checked for whitespace.
-            isz last_ws_pos = -1;                     // The position of the last whitespace character.
-            usz first_char_pos = 0;                   // The first character of this subline.
-            bool force_reshape = false;               // Whether we must reshape the next subline.
-            bool line_buffer_referenced = false;      // If set, we must not reuse the buffer for this line.
-            f32 x = 0;                                // The width of the current subline.
-            f32 ws_width = 0, ws_advance = 0;         // The width up to (but excluding) the last whitespace character.
-            auto source_line = lines_to_shape[i];     // Text of the entire line we’re splitting.
-            auto [infos, positions] = GetInfo(l.buf); // Pre-split shaping data for the entire line.
+            isz last_ws_cluster_index = -1;            // The index in the cluster array of the last whitespace cluster.
+            usz start_cluster_index = 0;               // The index in the cluster array of the first cluster of this subline.
+            bool force_reshape = false;                // Whether we must reshape the next subline.
+            bool line_buffer_referenced = false;       // If set, we must not reuse the buffer for this line.
+            f32 x = 0;                                 // The width of the current subline.
+            f32 ws_width = 0, ws_advance = 0;          // The width up to (but excluding) the last whitespace character.
+            auto source_line = lines_to_shape[lineno]; // Text of the entire line we’re splitting.
+            auto [infos, positions] = GetInfo(l.buf);  // Pre-split shaping data for the entire line.
 
             // Reshape a subline.
             auto AddSubline = [&](bool reshape, usz start, usz end, bool last = false) {
                 // Reshape the line, reusing the buffer for this line if it was never referenced.
                 if (reshape) {
+                    auto si = infos[start].cluster;
+                    auto ei = infos[end - 1].cluster;
                     auto buf = last and not line_buffer_referenced ? l.buf : AllocBuffer();
-                    auto new_line = ShapeLine(source_line.substr(start, end - start), buf);
+                    auto new_line = ShapeLine(source_line.substr(si, ei - si), buf);
                     lines.emplace_back(buf, new_line);
                     force_reshape = true;
                 }
@@ -333,20 +335,19 @@ auto Font::shape(
                 }
             };
 
-            // Go through all characters and split this line into sublines.
-            for (auto [i, data] : vws::zip(infos, positions) | vws::enumerate) {
+            // Go through all clusters and split this line into sublines.
+            for (auto [cluster_index, data] : vws::zip(infos, positions) | vws::enumerate) {
                 auto& [info, pos] = data;
 
-                // If this is whitespace and safe to break, remember its position.
+                // If this is whitespace and safe to break, remember its position; we
+                // check the cluster index directly because whitespace we care about
+                // shouldn’t be merged with anything else.
                 f32 adv = pos.x_advance / f32(Scale);
-                if (info.cluster != last_cluster and source_line[info.cluster] == U' ') {
-                    last_ws_pos = i;
+                if (source_line[info.cluster] == U' ') {
+                    last_ws_cluster_index = cluster_index;
                     ws_width = x;
                     ws_advance = adv;
                 }
-
-                // Don’t check the same cluster multiple times.
-                last_cluster = info.cluster;
 
                 // If this character would bring us above the width limit, break here.
                 x += adv;
@@ -355,37 +356,32 @@ auto Font::shape(
                 // Handle the degenerate case of us shaping a *really long* word
                 // in a *really narrow* line, in which case we may have to break
                 // mid-word.
-                if (last_ws_pos == -1) {
+                if (last_ws_cluster_index == -1) {
                     AddSubline(
                         hb_glyph_info_get_glyph_flags(&info) & HB_GLYPH_FLAG_UNSAFE_TO_BREAK,
-                        first_char_pos,
-                        usz(i)
+                        start_cluster_index,
+                        usz(cluster_index)
                     );
 
-                    first_char_pos = usz(i);
+                    start_cluster_index = cluster_index;
                     x = 0;
                 }
 
                 // If we’re not in the middle of a word, break at the last whitespace position; in
                 // this case, we assume that it is always safe to break.
                 else {
-                    AddSubline(force_reshape, first_char_pos, usz(last_ws_pos));
+                    AddSubline(force_reshape, start_cluster_index, usz(last_ws_cluster_index));
                     x -= ws_width + ws_advance;
-                    first_char_pos = usz(last_ws_pos + 1);
+                    start_cluster_index = usz(last_ws_cluster_index + 1);
                 }
 
-                // Note: we may end up rescanning the last cluster here, but that’s not really that
-                // problematic since we don’t expect the glyphs to get much larger or smaller as a
-                // result (strictly speaking, we’d have to reshape the rest of the line here if we
-                // broke a ligature, but we don’t need to be *that* precise).
-                last_cluster = -1;
-                last_ws_pos = -1;
+                last_ws_cluster_index = -1;
                 ws_width = 0;
             }
 
             // We almost certainly have characters left here, since we only break if the line gets
             // too long, in which case there is more text left in to process. Add the last subline.
-            AddSubline(force_reshape, first_char_pos, source_line.size(), true);
+            AddSubline(force_reshape, start_cluster_index, positions.size(), true);
         }
 
         // Finally, once again determine the largest line.
