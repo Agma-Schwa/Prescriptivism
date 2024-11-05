@@ -2,11 +2,11 @@ module;
 #include <algorithm>
 #include <base/Assert.hh>
 #include <cmath>
+#include <pr/gl-headers.hh>
 #include <ranges>
 #include <SDL3/SDL.h>
 #include <string_view>
 #include <utility>
-#include <pr/gl-headers.hh>
 module pr.client.ui;
 
 import base.text;
@@ -335,6 +335,40 @@ void Throbber::draw(Renderer& r) {
 
     vao.draw_vertices();
 }
+
+Card::Card(Renderer& r, Position pos, std::string_view _code, std::string_view _name, std::string_view _middle, std::string_view _special, u8 count) : pos(pos), count(count) {
+    s = Field;
+    code[OtherPlayer] = r.make_text(_code, FontSize::Text);
+    name[OtherPlayer] = r.make_text(_name, FontSize::Small);
+    middle[OtherPlayer] = r.make_text(_middle, FontSize::Medium);
+    special[OtherPlayer] = r.make_text(_special, FontSize::Small);
+    code[Field] = r.make_text(_code, FontSize::Medium);
+    name[Field] = r.make_text(_name, FontSize::Text);
+    middle[Field] = r.make_text(_middle, FontSize::Huge);
+    special[Field] = r.make_text(_special, FontSize::Text);
+    code[Large] = r.make_text(_code, FontSize::Huge);
+    name[Large] = r.make_text(_name, FontSize::Medium);
+    middle[Large] = r.make_text(_middle, FontSize::Title);
+    special[Large] = r.make_text(_special, FontSize::Medium);
+}
+
+void Card::setScale(const Scale _s){
+    s = _s;
+}
+
+
+void Card::draw(Renderer& r) {
+    auto at = pos.absolute(r.size(), card_size[s]);
+    r.draw_rect(at, card_size[s]);
+    r.draw_text(code[s], Position{offset_factor[s], -offset_factor[s]}.relative(at, card_size[s], code[s].size()), Colour::Black);
+    for (int i = 0; i < count; ++i) {
+        r.draw_rect(Position{-3*offset_factor[s],-(2*offset_factor[s]+2*i*offset_factor[s])}.relative(at, card_size[s], {5*offset_factor[s], offset_factor[s]}), {5*offset_factor[s], offset_factor[s]}, Colour::Black);
+    }
+    r.draw_text(name[s], Position{offset_factor[s], -2*offset_factor[s]-code[s].size().ht}.relative(at, card_size[s], name[s].size()), Colour::Black);
+    r.draw_text(middle[s], Position::Center().relative(at, card_size[s], middle[s].size()), Colour::Black);
+    r.draw_text(special[s], Position::HCenter(5*offset_factor[s]+special[s].size().ht).relative(at, card_size[s], special[s].size()), Colour::Black);
+}
+
 
 // =============================================================================
 //  Input Handler.

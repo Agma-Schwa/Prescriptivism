@@ -21,6 +21,7 @@ class TextEdit;
 class InputSystem;
 class Label;
 class Throbber;
+class Card;
 
 enum class Anchor : u8;
 }
@@ -292,6 +293,27 @@ public:
     Throbber(Position pos);
 
     void draw(Renderer& r) override;
+};
+
+class pr::client::Card : public Element {
+public:
+    enum Scale : u32 {
+        Field = 0, OtherPlayer = 1, Large = 2
+    };
+private:
+    Scale s;
+    Position pos;
+    ShapedText code[3];
+    ShapedText name[3];
+    ShapedText middle[3];
+    ShapedText special[3];
+    u8 count;
+    static constexpr Size card_size[3] = {Size{120, 180}, Size{60, 90},  Size{240, 360}};
+    static constexpr u16 offset_factor[3] = {2, 1, 4};
+public:
+    Card(Renderer& r, Position pos, std::string_view code, std::string_view name, std::string_view middle, std::string_view special, u8 count);
+    void draw(Renderer& r) override;
+    void setScale(Scale _s);
 };
 
 template <>

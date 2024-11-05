@@ -148,12 +148,48 @@ void ConnexionScreen::set_address(std::string addr) {
 // =============================================================================
 //  Game Screen
 // =============================================================================
+
+GameScreen::GameScreen(Client& c): client(c) {
+
+    auto& card = Create<Card>(
+        c.renderer,
+        Position::Center(),
+        "P3M5",
+        "Voiced\nvelar\nstop",
+        "g",
+        "-> ɣ\n-> w",
+        10
+    );
+
+    auto& small = Create<Button>(
+        c.renderer.make_text("Small", FontSize::Medium),
+        Position{30, 30},
+        10, 125
+    );
+
+    auto& medium = Create<Button>(
+        c.renderer.make_text("Medium", FontSize::Medium),
+        Position::HCenter(30),
+        10, 125
+    );
+
+    auto& large = Create<Button>(
+        c.renderer.make_text("Large", FontSize::Medium),
+        Position{-30, 30},
+        10, 125
+    );
+
+    small.on_click = [&]{ card.setScale(Card::OtherPlayer); };
+    medium.on_click = [&] {card.setScale(Card::Field);};
+    large.on_click = [&]{card.setScale(Card::Large);};
+}
+
 void GameScreen::enter(net::TCPConnexion conn) {
     server_connexion = std::move(conn);
     client.enter_screen(*this);
 }
 
-void GameScreen::tick([[maybe_unused]] InputSystem& input) {
+void GameScreen::tick(InputSystem& input) {
     // Server has gone away.
     if (server_connexion->disconnected()) {
         server_connexion.reset();
@@ -163,6 +199,7 @@ void GameScreen::tick([[maybe_unused]] InputSystem& input) {
 
     // Receive data from the server.
     tick_networking();
+    Screen::tick(input);
 }
 
 void GameScreen::tick_networking() {
