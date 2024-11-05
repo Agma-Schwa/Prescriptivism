@@ -31,7 +31,7 @@ public:
     std::string name;
 
     /// Create a new player.
-    Player(net::TCPConnexion client_connexion, std::string name);
+    Player(net::TCPConnexion client_connexion, std::string name) : client_connexion(std::move(client_connexion)), name(std::move(name)) {}
 
     /// Check if this player is currently connected to the server.
     [[nodiscard]] auto connected() const -> bool {

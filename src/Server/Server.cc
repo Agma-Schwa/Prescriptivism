@@ -91,6 +91,26 @@ void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
 
 void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     Log("Login: name = {}, password = {}", login.name, login.password);
+    auto erased = std::erase_if(pending_connexions, [&](auto& x) {
+        return client == x.conn;
+    });
+    if (erased != 1) {
+        Kick(client, DisconnectReason::InvalidPacket);
+        return;
+    }
+    for (auto& p : players) {
+        if (p->name == login.name) {
+            if (p->connected()) {
+                Log("{} is already connected", login.name);
+                Kick(client, DisconnectReason::UsernameInUse);
+                return;
+            }
+            Log("Player {} loging back in", login.name);
+            p->client_connexion = client;
+            return;
+        }
+    }
+    players.push_back(std::make_unique<Player>(client, std::move(login.name)));
 }
 
 // =============================================================================
