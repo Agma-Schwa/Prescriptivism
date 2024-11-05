@@ -274,6 +274,7 @@ class pr::client::TextEdit : public TextBox {
     std::vector<ShapedText::Cluster> clusters;
     FontSize size;
     bool dirty = false;
+    bool hide_text = false;
     i32 cursor = 0;
     u32 no_blink_ticks = 0; // Used to inhibit blinking during typing.
     Selection sel{};
@@ -294,9 +295,12 @@ public:
         FontSize size,
         ShapedText placeholder,
         i32 padding,
+        bool hide_text = false,
         i32 min_wd = 0,
         i32 min_ht = 0
-    ) : TextBox(ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht), size{size} {
+    ) : TextBox(ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht),
+        size{size},
+        hide_text{hide_text} {
         selectable = true;
     }
 

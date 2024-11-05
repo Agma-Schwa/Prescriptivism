@@ -119,7 +119,10 @@ void TextBox::refresh(Size screen_size) {
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
-        UpdateText(r.make_text(text, size, TextAlign::SingleLine, &clusters));
+        auto shaped = hide_text
+            ? r.make_text(std::u32string(text.size(), U'•'), size, TextAlign::SingleLine, &clusters)
+            : r.make_text(text, size, TextAlign::SingleLine, &clusters);
+        UpdateText(std::move(shaped));
     }
 
     // Use HarfBuzz cluster information to position the cursor: if the cursor

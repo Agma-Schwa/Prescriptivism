@@ -64,6 +64,7 @@ MenuScreen::MenuScreen(Client& c) {
         FontSize::Medium,
         c.renderer.make_text("Server Address", FontSize::Medium),
         10,
+        false,
         250,
         25
     );
@@ -73,6 +74,7 @@ MenuScreen::MenuScreen(Client& c) {
         FontSize::Medium,
         c.renderer.make_text("Your Name", FontSize::Medium),
         10,
+        false,
         250,
         25
     );
@@ -82,6 +84,7 @@ MenuScreen::MenuScreen(Client& c) {
         FontSize::Medium,
         c.renderer.make_text("Password", FontSize::Medium),
         10,
+        true,
         250,
         25
     );
