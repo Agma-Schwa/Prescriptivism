@@ -338,7 +338,8 @@ void TCPConnexion::Impl::Receive(std::function<void(ReceiveBuffer&)> callback) {
     // Receive data.
     auto sz = recv(handle(), receive_buffer.data() + old_sz, ReceivePerTick, 0);
     if (sz == -1) {
-        if (errno == EWOULDBLOCK or errno == EAGAIN) return;
+        receive_buffer.resize(old_sz);
+        if (errno == EWOULDBLOCK or errno == EAGAIN)return;
         return Disconnect();
     }
 
