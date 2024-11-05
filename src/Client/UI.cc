@@ -112,6 +112,19 @@ void TextEdit::draw(Renderer& r) {
     // If there is no entry, find the smallest cluster value 's' closest to the
     // cursor position, take the difference between it and the next cluster, and
     // lerp the cursor in the middle of the character at 's'.
+    //
+    // Concretely, there are 3 possible cases here:
+    //
+    //   1. The cursor is at the start/end of the text, in which case it has
+    //      index 0/n (where n is the number of characters in the text); draw
+    //      it before the first / after the last character.
+    //
+    //   2. The cursor corresponds to the index of a cluster; draw it before
+    //      that cluster.
+    //
+    //   3. The cursor corresponds to an index that is in between two clusters;
+    //      interpolate between them to position the cluster in the middle
+    //      somewhere.
     if (no_blink_ticks) no_blink_ticks--;
     if (selected and not clusters.empty() and (no_blink_ticks or r.blink_cursor())) {
         cursor_offs = [&] -> i32 {
@@ -119,24 +132,49 @@ void TextEdit::draw(Renderer& r) {
             if (cursor == 0) return 0;
             if (cursor == i32(text.size())) return i32(label.width());
 
-            // Cursor is too far right. Put it at the very end.
+            // Find the smallest cluster with an index greater than or equal
+            // to the cursor position. We interpolate the cursor’s position
+            // between it and the previous cluster.
+            //
+            // Note that there *must* always be a cluster with an index *smaller*
+            // than the cursor, since there will always be a cluster with index
+            // 0, and the cursor index cannot be zero (because we checked for that
+            // above).
             auto it = rgs::lower_bound(clusters, cursor, {}, &ShapedText::Cluster::index);
-            if (it == clusters.end()) it = clusters.begin() + clusters.size() - 1;
-
-            // Cursor is right before a character.
-            if (it->index == cursor) return i32(it->xoffs);
-
-            // Cursor is in the middle of a character; interpolate into it. If we
-            // get here, lower_bound will have returned something that is larger.
-            Assert(it->index > cursor, "lower_bound didn’t do what we expected?");
-            Assert(it != clusters.begin(), "lower_bound returned the first element?");
             auto prev = std::prev(it);
-            auto x1 = prev->xoffs;
-            auto x2 = it->xoffs;
-            auto i1 = prev->index;
-            auto i2 = it->index;
-            auto x = i32(std::lerp(x1, x2, f32(cursor - i1) / f32(i2 - i1)));
-            return x;
+            i32 x1 = prev->xoffs;
+            i32 i1 = prev->index;
+            i32 x2, i2;
+
+            // If we get here, the cursor must not be at the very start or end
+            // of the text; despite that, there may not be a cluster with an
+            // index larger than the cursor’s.
+            //
+            // This can happen e.g. if we have a ligature at the end of the text.
+            // For instance, if the text is 'fl', which is converted to a single
+            // ligature, the clusters array contains a single cluster with index 0.
+            //
+            // In this case, cursor index 1—despite being larger than the index of
+            // any cluster—is *not* at the end of the text. However, we can resolve
+            // this by pretending there is an additional cluster at the end of the
+            // array whose index is the size of the text, and then interpolate between
+            // that and the last actual cluster.
+            if (it != clusters.end()) {
+                // Cursor is right before a character.
+                if (it->index == cursor) return i32(it->xoffs);
+
+                // Cursor is between two clusters.
+                x2 = it->xoffs;
+                i2 = it->index;
+            }
+
+            // Interpolate between the last cluster and the end of the text.
+            else {
+                x2 = i32(label.width());
+                i2 = i32(text.size());
+            }
+
+            return i32(std::lerp(x1, x2, f32(cursor - i1) / f32(i2 - i1)));
         }();
     } else {
         cursor_offs = -1;
