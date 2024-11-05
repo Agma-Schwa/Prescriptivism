@@ -459,6 +459,7 @@ auto Font::shape(
     // Now, add vertices for each line.
     f32 ybase = 0;
     f32 ht = 0, dp = 0;
+    f32 last_line_skip = 0;
     for (const auto& line : lines) {
         // Determine the starting X position for this line.
         f32 xbase = [&] -> f32 {
@@ -478,11 +479,13 @@ auto Font::shape(
             ht = line_ht;
             dp = line_dp;
         } else {
-            dp += line_ht + line_dp;
+            dp += line_ht + line_dp + last_line_skip;
         }
 
         // Add interline skip before the next line.
-        ybase -= std::max(line_ht + line_dp, f32(skip));
+        f32 skip_amount = std::max(line_ht + line_dp, f32(skip));
+        last_line_skip = skip_amount - line_ht + line_dp;
+        ybase -= skip_amount;
     }
 
     // Upload the vertices.
