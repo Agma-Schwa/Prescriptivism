@@ -98,7 +98,6 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
         Kick(client, DisconnectReason::InvalidPacket);
         return;
     }
-    bool assigned = false;
     for (auto& p : players) {
         if (p->name == login.name) {
             if (p->connected()) {
@@ -108,13 +107,10 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
             }
             Log("Player {} loging back in", login.name);
             p->client_connexion = client;
-            assigned = true;
-            break;
+            return;
         }
     }
-    if (not assigned) {
-        players.push_back(std::make_unique<Player>(client, std::move(login.name)));
-    }
+    players.push_back(std::make_unique<Player>(client, std::move(login.name)));
 }
 
 // =============================================================================
