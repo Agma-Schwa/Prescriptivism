@@ -352,21 +352,21 @@ Card::Card(Renderer& r, Position pos, std::string_view _code, std::string_view _
     special[Large] = r.make_text(_special, FontSize::Medium);
 }
 
-void Card::setScale(const Scale _s){
+void Card::set_scale(const Scale _s){
     s = _s;
 }
 
 
 void Card::draw(Renderer& r) {
-    auto at = pos.absolute(r.size(), card_size[s]);
-    r.draw_rect(at, card_size[s]);
-    r.draw_text(code[s], Position{offset_factor[s], -offset_factor[s]}.relative(at, card_size[s], code[s].size()), Colour::Black);
+    auto at = pos.absolute(r.size(), CardSize[s]);
+    r.draw_rect(at, CardSize[s]);
+    r.draw_text(code[s], Position{Offset[s], -Offset[s]}.relative(at, CardSize[s], code[s].size()), Colour::Black);
     for (int i = 0; i < count; ++i) {
-        r.draw_rect(Position{-3*offset_factor[s],-(2*offset_factor[s]+2*i*offset_factor[s])}.relative(at, card_size[s], {5*offset_factor[s], offset_factor[s]}), {5*offset_factor[s], offset_factor[s]}, Colour::Black);
+        r.draw_rect(Position{-3*Offset[s],-(2*Offset[s]+2*i*Offset[s])}.relative(at, CardSize[s], {5*Offset[s], Offset[s]}), {5*Offset[s], Offset[s]}, Colour::Black);
     }
-    r.draw_text(name[s], Position{offset_factor[s], -2*offset_factor[s]-code[s].size().ht}.relative(at, card_size[s], name[s].size()), Colour::Black);
-    r.draw_text(middle[s], Position::Center().relative(at, card_size[s], middle[s].size()), Colour::Black);
-    r.draw_text(special[s], Position::HCenter(5*offset_factor[s]+special[s].size().ht).relative(at, card_size[s], special[s].size()), Colour::Black);
+    r.draw_text(name[s], Position{Offset[s], -2*Offset[s]-code[s].size().ht}.relative(at, CardSize[s], name[s].size()), Colour::Black);
+    r.draw_text(middle[s], Position::Center().relative(at, CardSize[s], middle[s].size()), Colour::Black);
+    r.draw_text(special[s], Position::HCenter(5*Offset[s]+special[s].size().ht).relative(at, CardSize[s], special[s].size()), Colour::Black);
 }
 
 

@@ -179,9 +179,9 @@ GameScreen::GameScreen(Client& c): client(c) {
         10, 125
     );
 
-    small.on_click = [&]{ card.setScale(Card::OtherPlayer); };
-    medium.on_click = [&] {card.setScale(Card::Field);};
-    large.on_click = [&]{card.setScale(Card::Large);};
+    small.on_click = [&]{ card.set_scale(Card::OtherPlayer); };
+    medium.on_click = [&] {card.set_scale(Card::Field);};
+    large.on_click = [&]{card.set_scale(Card::Large);};
 }
 
 void GameScreen::enter(net::TCPConnexion conn) {

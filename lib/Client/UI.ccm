@@ -298,22 +298,22 @@ public:
 class pr::client::Card : public Element {
 public:
     enum Scale : u32 {
-        Field = 0, OtherPlayer = 1, Large = 2
+        OtherPlayer, Field, Large, NumScales
     };
 private:
     Scale s;
     Position pos;
-    ShapedText code[3];
-    ShapedText name[3];
-    ShapedText middle[3];
-    ShapedText special[3];
+    ShapedText code[NumScales];
+    ShapedText name[NumScales];
+    ShapedText middle[NumScales];
+    ShapedText special[NumScales];
     u8 count;
-    static constexpr Size card_size[3] = {Size{120, 180}, Size{60, 90},  Size{240, 360}};
-    static constexpr u16 offset_factor[3] = {2, 1, 4};
+    static constexpr Size CardSize[NumScales] = {Size{60, 90}, Size{120, 180}, Size{240, 360}};
+    static constexpr u16 Offset[NumScales] = {1, 2, 4};
 public:
     Card(Renderer& r, Position pos, std::string_view code, std::string_view name, std::string_view middle, std::string_view special, u8 count);
     void draw(Renderer& r) override;
-    void setScale(Scale _s);
+    void set_scale(Scale _s);
 };
 
 template <>
