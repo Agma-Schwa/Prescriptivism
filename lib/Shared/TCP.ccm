@@ -1,5 +1,6 @@
 module;
 #include <base/Macros.hh>
+#include <bit>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -38,28 +39,37 @@ public:
             (void) ((*this >> fields, ok) and ...);
         }
 
-        /// Read a type from this packet.
-        template <typename T>
-        requires std::is_trivially_copyable_v<T>
+        /// Read a number from this packet.
+        template <std::integral T>
         T read() {
             T t;
-            Copy(&t, sizeof(T));
+            *this >> t;
             return t;
         }
 
-        /// Read a type from this packet.
+        template <std::integral T>
+        auto operator>>(T& t) -> Reader& {
+            Copy(&t, sizeof(T));
+            if constexpr (std::endian::native != std::endian::little) t = std::byteswap(t);
+            return *this;
+        }
+
         template <typename T>
-        requires std::is_trivially_copyable_v<T>
-        void operator>>(T& number) {
-            Copy(&number, sizeof(T));
+        requires std::is_enum_v<T>
+        auto operator>>(T& t) -> Reader& {
+            std::underlying_type_t<T> u;
+            *this >> u;
+            t = static_cast<T>(u);
+            return *this;
         }
 
         /// Read a string from this packet.
-        void operator>>(std::string& s) {
+        auto operator>>(std::string& s) -> Reader& {
             s.resize_and_overwrite(
                 read<usz>(),
                 [&](char* ptr, usz count) { return Copy(ptr, count); }
             );
+            return *this;
         }
 
         /// Check if we could read the entire thing.
@@ -127,29 +137,17 @@ public:
     /// bytes in the buffer.
     template <typename T>
     [[nodiscard]] auto read() -> std::optional<T> {
-        // Type requires deserialisation.
-        if constexpr (requires (T t, Reader r) { t.deserialise(r); } ) {
-            T res;
-            Reader reader{data};
-            res.deserialise(reader);
-            if (not reader) return std::nullopt;
-            data = data.subspan(data.size() - reader.size());
-            return res;
-        }
+        static_assert(
+            requires (T t, Reader r) { t.deserialise(r); },
+            "Type must implement deserialise()"
+        );
 
-        // Type can simply be copied from the buffer.
-        else {
-            static_assert(
-                std::is_trivially_copyable_v<T>,
-                "Type must be trivially copyable or implement deserialise()"
-            );
-
-            if (data.size() < sizeof(T)) return std::nullopt;
-            auto n = read(sizeof(T));
-            T res;
-            std::memcpy(&res, n.data(), sizeof(T));
-            return res;
-        }
+        T res;
+        Reader reader{data};
+        res.deserialise(reader);
+        if (not reader) return std::nullopt;
+        data = data.subspan(data.size() - reader.size());
+        return res;
     }
 
     /// How many bytes are in the buffer.
@@ -176,10 +174,16 @@ public:
     }
 
     /// Write a type to this packet.
-    template <typename T>
-    requires std::is_trivially_copyable_v<T>
-    void write(const T& t) {
+    template <std::integral T>
+    void write(T t) {
+        if constexpr (std::endian::native != std::endian::little) t = std::byteswap(t);
         Append(&t, sizeof(T));
+    }
+
+    template <typename T>
+    requires std::is_enum_v<T>
+    void write(T t) {
+        write(std::to_underlying(t));
     }
 
     /// Write a string to this packet.

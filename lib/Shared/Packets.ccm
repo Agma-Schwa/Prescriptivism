@@ -89,6 +89,7 @@ DefinePacket(Disconnect) {
     };
 
     Ctor(Disconnect)(Reason reason) : reason(reason) {}
+    Serialisable(reason)
 
     Reason reason = Reason::Unspecified;
 };
@@ -102,6 +103,7 @@ namespace pr::packets::sc {
 /// turn.
 DefinePacket(HeartbeatRequest) {
     Ctor(HeartbeatRequest)(u32 seq_no) : seq_no(seq_no) {}
+    Serialisable(seq_no);
 
     /// Sequence number of the heartbeat packet; used to see if the
     /// client is actually responding to the right packet.
@@ -115,6 +117,7 @@ DefinePacket(HeartbeatRequest) {
 namespace pr::packets::cs {
 DefinePacket(HeartbeatResponse) {
     Ctor(HeartbeatResponse)(u32 seq_no) : seq_no(seq_no) {}
+    Serialisable(seq_no);
 
     /// The sequence number of the corresponding server packet.
     u32 seq_no;
