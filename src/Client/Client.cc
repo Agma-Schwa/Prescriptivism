@@ -273,6 +273,7 @@ void GameScreen::handle(sc::Disconnect packet) {
             case Reason::ServerFull: return "Disconnected: Server full";
             case Reason::InvalidPacket: return "Disconnected: Client sent invalid packet";
             case Reason::UsernameInUse: return "Disconnected: User name already in use";
+            case Reason::WrongPassword: return "Disconnected: Invalid Password";
             default: return "Disconnected: <<<Invalid>>>";
         }
     }();
