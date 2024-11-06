@@ -10,6 +10,7 @@ module;
 #include <ranges>
 #include <SDL3/SDL.h>
 #include <webp/decode.h>
+#include <cstring>
 
 // clang-format off
 // Include order matters here!
@@ -136,9 +137,8 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
     u32 texture_width = atlas_columns * atlas_entry_width;
     u32 texture_height = atlas_rows * atlas_entry_height;
 
-    // Allocate the atlas.
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    atlas = Texture(texture_width, texture_height, GL_RED, GL_UNSIGNED_BYTE);
+    // Allocate memory for the texture.
+    auto data = std::make_unique<u8[]>(texture_width * texture_height);
     glyphs.resize(ft_face->num_glyphs);
 
     // And copy each glyph.
@@ -150,22 +150,25 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
             continue;
         }
 
-        u32 x = g % atlas_columns;
-        u32 y = g / atlas_columns;
+        u32 row = g / atlas_columns;
+        u32 col = g % atlas_columns;
 
-        atlas.write(
-            x * atlas_entry_width,
-            y * atlas_entry_height,
-            ft_face->glyph->bitmap.width,
-            ft_face->glyph->bitmap.rows,
-            ft_face->glyph->bitmap.buffer
-        );
+        for (usz r = 0; r < ft_face->glyph->bitmap.rows; r++) {
+            std::memcpy(
+                data.get() + (row * atlas_entry_height + r) * texture_width + col * atlas_entry_width,
+                ft_face->glyph->bitmap.buffer + r * ft_face->glyph->bitmap.width,
+                ft_face->glyph->bitmap.width
+            );
+        }
 
         glyphs[g] = {
             {ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows},
             {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
         };
     }
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    atlas = Texture(data.get(), texture_width, texture_height, GL_RED, GL_UNSIGNED_BYTE);
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
