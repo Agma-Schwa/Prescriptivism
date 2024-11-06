@@ -87,6 +87,7 @@ DefinePacket(Disconnect) {
         InvalidPacket, ///< Peer sent invalid packet.
         ServerFull,    ///< Server already has the maximum number of players.
         UsernameInUse, ///< Username is already in Use
+        WrongPassword, ///< The password was incorrect
     };
 
     Ctor(Disconnect)(Reason reason) : reason(reason) {}
