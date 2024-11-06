@@ -98,6 +98,10 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
         Kick(client, DisconnectReason::InvalidPacket);
         return;
     }
+    if (login.password != password) {
+        Kick(client, DisconnectReason::WrongPassword);
+        return;
+    }
     for (auto& p : players) {
         if (p->name == login.name) {
             if (p->connected()) {
@@ -125,7 +129,7 @@ void Server::Tick() {
 // =============================================================================
 //  API
 // =============================================================================
-Server::Server(u16 port) : server(net::TCPServer::Create(port, 200).value()) {
+Server::Server(u16 port, std::string password) : server(net::TCPServer::Create(port, 200).value()), password(std::move(password)) {
     server.set_callbacks(*this);
 }
 

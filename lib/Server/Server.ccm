@@ -58,9 +58,12 @@ class pr::server::Server : net::TCPServerCallbacks {
     /// List of connexions that have not yet been assigned a player.
     std::vector<PendingConnexion> pending_connexions;
 
+    /// The password of the server
+    std::string password;
+
 public:
     /// Create and start the server.
-    Server(u16 port);
+    Server(u16 port, std::string password);
 
     /// Disconnect a client.
     void Kick(net::TCPConnexion& client, DisconnectReason reason);
