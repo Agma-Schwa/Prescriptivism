@@ -501,13 +501,7 @@ auto Font::shape(
 }
 
 void Text::reflow(Renderer& r, i32 width) {
-    // This looks a bit weird, but essentially, if we need to reshape
-    // anyway, pass in the width right away; if not, we already know
-    // the width, in which case reshape if it’s too large or always
-    // reshape if we’re taking up multiple lines in case we just got
-    // more space.
-    if (dirty) shape(r, width);
-    else if (width < text.width() or needs_multiple_lines) shape(r, width);
+    if (dirty or width < text.width() or needs_multiple_lines) shape(r, width);
 }
 
 auto Text::shaped(Renderer& r) const -> const ShapedText& {
