@@ -803,7 +803,7 @@ void Renderer::reload_shaders() {
     auto Reload = [&](ShaderProgram& program, std::string_view shader_name) {
         auto vert = File::Read(std::format("./assets/Shaders/{}.vert", shader_name)).value();
         auto frag = File::Read(std::format("./assets/Shaders/{}.frag", shader_name)).value();
-        program = ShaderProgram{std::span{vert}, std::span{frag}};
+        program = ShaderProgram{vert.view(), frag.view()};
     };
 
     Reload(primitive_shader, "Primitive");

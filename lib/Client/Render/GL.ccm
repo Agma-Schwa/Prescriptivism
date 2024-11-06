@@ -417,7 +417,7 @@ public:
     /// If the texture cannot be loaded, e.g. because it doesn’t exist
     /// or because it is not a valid image, this returns a builtin default
     /// texture.
-    static auto LoadFromFile(base::File::PathRef path) -> DrawableTexture;
+    static auto LoadFromFile(fs::PathRef path) -> DrawableTexture;
 
     /// Draw the texture.
     ///

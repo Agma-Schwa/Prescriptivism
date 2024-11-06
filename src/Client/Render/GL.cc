@@ -4,6 +4,7 @@ module;
 #include <pr/gl-headers.hh>
 #include <webp/decode.h>
 module pr.client.render.gl;
+import pr.utils;
 
 using namespace gl;
 using namespace pr;
@@ -21,7 +22,7 @@ auto GetDefaultTexture() -> DrawableTexture {
     return DrawableTexture(data, wd, ht, GL_RGBA, GL_UNSIGNED_BYTE, true);
 }
 
-auto DrawableTexture::LoadFromFile(File::PathRef path) -> DrawableTexture {
+auto DrawableTexture::LoadFromFile(fs::PathRef path) -> DrawableTexture {
     auto file = File::Read(path);
     if (not file) {
         Log("Could not read file '{}': {}", path.string(), file.error());
@@ -29,7 +30,7 @@ auto DrawableTexture::LoadFromFile(File::PathRef path) -> DrawableTexture {
     }
 
     int wd, ht;
-    auto data = WebPDecodeRGBA(reinterpret_cast<const u8*>(file.value().data()), file.value().size(), &wd, &ht);
+    auto data = WebPDecodeRGBA(file.value().data<u8>(), file.value().size(), &wd, &ht);
     if (not data) {
         Log("Could not decode image '{}'", path.string());
         return GetDefaultTexture();

@@ -8,6 +8,7 @@ module;
 #include <thread>
 export module pr.utils;
 export import base;
+export import base.fs;
 export namespace pr {
 using namespace base;
 
