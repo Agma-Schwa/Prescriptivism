@@ -132,11 +132,10 @@ Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip)
     // of width.
     atlas_columns = max_texture_size / atlas_entry_width;
     atlas_rows = u32(std::ceil(f64(ft_face->num_glyphs) / atlas_columns));
-    u32 texture_width = atlas_columns * atlas_entry_width;
-    u32 texture_height = atlas_rows * atlas_entry_height;
+    auto [texture_width, texture_height] = texture_size();
 
     // Allocate memory for the texture.
-    raw_atlas_data = std::make_unique<u8[]>(texture_width * texture_height);
+    raw_atlas_data = std::make_unique<u8[]>(usz(texture_width * texture_height));
     glyphs.resize(ft_face->num_glyphs);
 
     // And copy each glyph.
@@ -152,7 +151,7 @@ Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip)
         u32 col = g % atlas_columns;
         for (usz r = 0; r < ft_face->glyph->bitmap.rows; r++) {
             std::memcpy(
-                raw_atlas_data.get() + (row * atlas_entry_height + r) * texture_width + col * atlas_entry_width,
+                raw_atlas_data.get() + (row * atlas_entry_height + r) * u32(texture_width) + col * atlas_entry_width,
                 ft_face->glyph->bitmap.buffer + r * ft_face->glyph->bitmap.width,
                 ft_face->glyph->bitmap.width
             );
@@ -429,8 +428,7 @@ auto Font::shape(
             // Compute the offset of the glyph in the atlas.
             f64 tx = f64(g % atlas_columns) * atlas_entry_width;
             f64 ty = f64(g / atlas_columns) * atlas_entry_height;
-            f64 atlas_width = f64(atlas_columns * atlas_entry_width);
-            f64 atlas_height = f64(atlas_rows * atlas_entry_height);
+            auto [atlas_width, atlas_height] = texture_size();
 
             // Compute the uv coordinates of the glyph; note that the glyph
             // is likely smaller than the width of an atlas cell, so perform
