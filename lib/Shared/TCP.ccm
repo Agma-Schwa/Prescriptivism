@@ -10,6 +10,7 @@ module;
 #include <vector>
 export module pr.tcp;
 import pr.utils;
+import pr.serialisation;
 
 export namespace pr::net {
 class TCPServerCallbacks;
@@ -24,72 +25,6 @@ constexpr u16 DefaultPort = 33'014;
 /// Buffer for receiving data from a TCP connexion.
 class pr::net::ReceiveBuffer {
     LIBBASE_IMMOVABLE(ReceiveBuffer);
-
-public:
-    /// Helper class to (partially) deserialise objects.
-    class Reader {
-        std::span<std::byte> data;
-        bool ok;
-
-    public:
-        explicit Reader(std::span<std::byte> data) : data(data), ok(true) {}
-
-        /// Read several fields from this packet.
-        void operator()(auto&... fields) {
-            (void) ((*this >> fields, ok) and ...);
-        }
-
-        /// Read a number from this packet.
-        template <std::integral T>
-        T read() {
-            T t;
-            *this >> t;
-            return t;
-        }
-
-        template <std::integral T>
-        auto operator>>(T& t) -> Reader& {
-            Copy(&t, sizeof(T));
-            if constexpr (std::endian::native != std::endian::little) t = std::byteswap(t);
-            return *this;
-        }
-
-        template <typename T>
-        requires std::is_enum_v<T>
-        auto operator>>(T& t) -> Reader& {
-            std::underlying_type_t<T> u;
-            *this >> u;
-            t = static_cast<T>(u);
-            return *this;
-        }
-
-        /// Read a string from this packet.
-        auto operator>>(std::string& s) -> Reader& {
-            s.resize_and_overwrite(
-                read<usz>(),
-                [&](char* ptr, usz count) { return Copy(ptr, count); }
-            );
-            return *this;
-        }
-
-        /// Check if we could read the entire thing.
-        [[nodiscard]] explicit operator bool() { return ok; }
-
-        /// Check how many bytes are left in the buffer.
-        [[nodiscard]] auto size() const -> usz { return data.size(); }
-
-    private:
-        usz Copy(void* ptr, usz count) {
-            if (data.size() < count or not ok) {
-                ok = false;
-                return 0;
-            }
-
-            std::memcpy(ptr, data.data(), count);
-            data = data.subspan(count);
-            return count;
-        }
-    };
 
 private:
     std::span<std::byte> data;
@@ -138,13 +73,13 @@ public:
     template <typename T>
     [[nodiscard]] auto read() -> std::optional<T> {
         static_assert(
-            requires (T t, Reader r) { t.deserialise(r); },
-            "Type must implement deserialise()"
+            requires (T t, ser::Reader& r) { r >> t; },
+            "Type must be serialisable"
         );
 
         T res;
-        Reader reader{data};
-        res.deserialise(reader);
+        ser::Reader reader{data};
+        reader >> res;
         if (not reader) return std::nullopt;
         data = data.subspan(data.size() - reader.size());
         return res;
@@ -152,51 +87,6 @@ public:
 
     /// How many bytes are in the buffer.
     [[nodiscard]] auto size() const -> usz { return data.size(); }
-};
-
-/// Helper for serialising data into a buffer.
-class pr::net::SendBuffer {
-    std::vector<std::byte> data;
-
-    friend TCPConnexion;
-
-public:
-    /// Write several fields to this packet.
-    void operator()(auto&... fields) {
-        (*this << ... << fields);
-    }
-
-    /// Write a type to this packet.
-    template <typename T>
-    auto operator<<(const T& t) -> SendBuffer& {
-        write(t);
-        return *this;
-    }
-
-    /// Write a type to this packet.
-    template <std::integral T>
-    void write(T t) {
-        if constexpr (std::endian::native != std::endian::little) t = std::byteswap(t);
-        Append(&t, sizeof(T));
-    }
-
-    template <typename T>
-    requires std::is_enum_v<T>
-    void write(T t) {
-        write(std::to_underlying(t));
-    }
-
-    /// Write a string to this packet.
-    void write(const std::string& s) {
-        write(s.size());
-        Append(s.data(), s.size());
-    }
-
-private:
-    void Append(const void* ptr, usz count) {
-        auto* p = static_cast<const std::byte*>(ptr);
-        data.insert(data.end(), p, p + count);
-    }
 };
 
 /// Class that implements common functionality for TCP server
@@ -259,17 +149,15 @@ public:
     template <typename T>
     void send(const T& t) {
         // Type requires serialisation.
-        if constexpr (requires (T t, SendBuffer s) { t.serialise(s); }) {
-            SendBuffer buffer;
-            t.serialise(buffer);
-            send(std::span<const std::byte>{buffer.data});
+        if constexpr (requires (T t, ser::Writer& s) { s << t; }) {
+            send(std::span<const std::byte>{ser::Serialise(t)});
         }
 
         // Type can be sent as-is.
         else {
             static_assert(
                 std::is_trivially_copyable_v<T>,
-                "Type must be trivially copyable or implement serialise()"
+                "Type must be trivially copyable or serialisable"
             );
 
             send(std::span{reinterpret_cast<const std::byte*>(&t), sizeof(T)});

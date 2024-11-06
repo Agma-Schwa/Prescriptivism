@@ -24,6 +24,7 @@ module;
 module pr.client.render;
 import pr.client.utils;
 import pr.client.render.gl;
+import pr.serialisation;
 
 import base.text;
 import base.fs;
@@ -113,14 +114,7 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
 
 Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip)
     : size{size}, skip{skip} {
-    // Set the font size.
-    FT_Set_Pixel_Sizes(ft_face, 0, size);
-
-    // Create a HarfBuzz font for it.
-    auto f = hb_ft_font_create(ft_face, nullptr);
-    Assert(f, "Failed to create HarfBuzz font");
-    hb_font = f;
-    hb_ft_font_set_funcs(hb_font.get());
+    finalise(ft_face);
 
     // Determine the maximum width and height amongst all glyphs.
     for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
@@ -180,6 +174,18 @@ auto Font::AllocBuffer() -> hb_buffer_t* {
     return hb_bufs[hb_buffers_in_use++].get();
 }
 
+void Font::finalise(FT_Face ft_face) {
+    // Set the font size.
+    FT_Set_Pixel_Sizes(ft_face, 0, size);
+
+    // Create a HarfBuzz font for it.
+    auto f = hb_ft_font_create(ft_face, nullptr);
+    Assert(f, "Failed to create HarfBuzz font");
+    hb_font = f;
+    hb_ft_font_set_funcs(hb_font.get());
+}
+
+
 /// Shape text using this font.
 ///
 /// The resulting object is position-independent and can
@@ -194,6 +200,7 @@ auto Font::shape(
     if (multiline) *multiline = false;
     if (text.empty()) return ShapedText{};
     auto font = hb_font.get();
+    Assert(font, "Forgot to call finalise()!");
 
     // Free buffers after we’re done.
     defer { hb_buffers_in_use = 0; };
@@ -892,8 +899,38 @@ void AssetLoader::load(std::stop_token stop) {
         }
     ) {
         if (stop.stop_requested()) return;
-        fonts[+f] = Font(ft_face.get(), max_texture_size, +f);
+        LoadFont(f);
     }
+}
+
+void AssetLoader::LoadFont(FontSize size) {
+    // Try to see if we’ve cached this font.
+    // FIXME: Use the name of the font file here.
+    auto cache = fs::Path{"./.cache/"} / std::format("font-{}.bin", +size);
+    auto TryReadCachedFont = [&] -> Result<> {
+        auto data = Try(File::Read(cache));
+        fonts[+size] = Try(ser::Deserialise<Font>(std::span{data.data(), data.size()}));
+        fonts[+size].finalise(ft_face.get());
+        return {};
+    };
+
+    // Load the font from the cache if it exists.
+    if (File::Exists(cache)) {
+        auto res = TryReadCachedFont();
+        if (res) return;
+        Log("Failed to read cached font file: {}", res.error());
+    }
+
+    // If the font can’t be found or if we failed to load it,
+    // recreate if from the font face.
+    fonts[+size] = Font(ft_face.get(), max_texture_size, +size);
+
+    // And cache it so we have it next time.
+    auto data = ser::Serialise(fonts[+size]);
+    if (auto res = File::Write(cache, data); not res) Log(
+        "Failed to write font file to cache: {}",
+        res.error()
+    );
 }
 
 /// Finish loading assets.

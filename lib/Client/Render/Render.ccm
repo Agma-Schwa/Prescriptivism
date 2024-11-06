@@ -4,6 +4,7 @@ module;
 #include <glm/glm.hpp>
 #include <hb.h>
 #include <memory>
+#include <pr/Utils.hh>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
 #include <stop_token>
@@ -14,6 +15,7 @@ export module pr.client.render;
 import pr.utils;
 import base.text;
 import pr.client.render.gl;
+import pr.serialisation;
 
 export namespace pr::client {
 struct Colour;
@@ -62,6 +64,8 @@ enum struct pr::client::Cursor : base::u32 {
 };
 
 struct pr::client::Colour {
+    PR_SERIALISE(r, g, b, a);
+
     u8 r;
     u8 g;
     u8 b;
@@ -97,11 +101,16 @@ constexpr pr::client::Colour pr::client::Colour::Black = {0, 0, 0, 255};
 constexpr pr::client::Colour pr::client::Colour::Grey = {128, 128, 128, 255};
 
 struct pr::client::Size {
+    PR_SERIALISE(wd, ht);
+
     i32 wd{};
     i32 ht{};
 
     constexpr Size() = default;
     constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
+
+    // Compute the area of this size.
+    constexpr auto area() const -> i32 { return wd * ht; }
 
 private:
     friend constexpr bool operator==(Size, Size) = default;
@@ -109,6 +118,8 @@ private:
 
 // XY position that is destructurable.
 struct pr::client::xy {
+    PR_SERIALISE(x, y);
+
     i32 x{};
     i32 y{};
 
@@ -129,6 +140,8 @@ private:
 
 /// Axis-aligned bounding box.
 struct pr::client::AABB {
+    PR_SERIALISE(min, max);
+
     xy min;
     xy max;
 
@@ -244,11 +257,24 @@ private:
 
 /// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
 class pr::client::Font {
+public:
+    PR_SERIALISE(
+        ser::Magic{'P', 'r', u8(0), u8(0)}, // Magic number contains the version.
+        glyphs,
+        atlas_entry_width, atlas_entry_height,
+        atlas_columns, atlas_rows,
+        size, skip,
+        ser::Blob{raw_atlas_data, usz(texture_size().area())}
+    )
+
     friend AssetLoader;
 
+private:
     using HarfBuzzFontHandle = Handle<hb_font_t*, hb_font_destroy>;
     using HarfBuzzBufferHandle = Handle<hb_buffer_t*, hb_buffer_destroy>;
     struct Metrics {
+        PR_SERIALISE(size, bearing);
+
         vec2 size;
         vec2 bearing;
     };
@@ -307,6 +333,17 @@ public:
         bool* multiline
     ) -> ShapedText;
 
+    /// Must be called after deserialisation.
+    void finalise(FT_Face ft_face);
+
+    /// Get the size of the font texture.
+    auto texture_size() const -> Size {
+        return {
+            i32(atlas_columns * atlas_entry_width),
+            i32(atlas_rows * atlas_entry_height),
+        };
+    }
+
     /// Activate the font for rendering.
     void use() const { atlas.bind(); }
 
@@ -321,10 +358,8 @@ public:
     /// Get the total width and height of the atlas.
     auto height() const -> u32 { return atlas_rows * atlas_entry_height; }
     auto width() const -> u32 { return atlas_columns * atlas_entry_width; }
-
 private:
     auto AllocBuffer() -> hb_buffer_t*;
-    void finalise(Renderer& r);
 };
 
 // =============================================================================
@@ -356,6 +391,7 @@ public:
 
 private:
     static auto Load(u32 max_texture_size, std::stop_token stop) -> AssetLoader;
+    void LoadFont(FontSize size);
     void load(std::stop_token stop);
 };
 

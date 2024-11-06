@@ -7,6 +7,8 @@ export module pr.client.render.gl;
 
 import pr.utils;
 import pr.client.utils;
+import pr.serialisation;
+
 import base.fs;
 
 using namespace gl;
@@ -43,6 +45,17 @@ struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
         if constexpr (n >= 4) s += std::format(", {}", vec.w);
         s += ")";
         return std::formatter<std::string_view>::format(s, ctx);
+    }
+};
+
+template <typename T, std::size_t n>
+struct pr::ser::Serialiser<glm::vec<n, T>> {
+    static void Serialise(Writer& w, const glm::vec<n, T>& vec) {
+        for (int i = 0; i < int(n); ++i) w(vec[i]);
+    }
+
+    static void Deserialise(Reader& r, glm::vec<n, T>& vec) {
+        for (int i = 0; i < int(n); ++i) r(vec[i]);
     }
 };
 

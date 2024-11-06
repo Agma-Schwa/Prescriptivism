@@ -2,9 +2,11 @@ module;
 #include <base/Assert.hh>
 #include <cstring>
 #include <pr/Packets.hh>
+#include <pr/Utils.hh>
 #include <utility>
 export module pr.packets;
 
+import pr.serialisation;
 import pr.utils;
 import pr.tcp;
 
@@ -31,9 +33,7 @@ private:                       \
 public:                        \
     name
 
-#define Serialisable(...)                                                    \
-    void serialise(pr::net::SendBuffer& buf) const { buf(id, __VA_ARGS__); } \
-    void deserialise(pr::net::ReceiveBuffer::Reader& buf) { buf(id, __VA_ARGS__); }
+#define Serialisable(...) PR_SERIALISE(id, __VA_ARGS__)
 
 // =============================================================================
 //  Enumerations
@@ -90,7 +90,7 @@ DefinePacket(Disconnect) {
     };
 
     Ctor(Disconnect)(Reason reason) : reason(reason) {}
-    Serialisable(reason)
+    Serialisable(reason);
 
     Reason reason = Reason::Unspecified;
 };
