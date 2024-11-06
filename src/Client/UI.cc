@@ -511,3 +511,29 @@ void Screen::tick(InputSystem& input) {
     // selected element.
     input.update_selection(selected != nullptr);
 }
+
+// =============================================================================
+//  Game Loop.
+// =============================================================================
+void InputSystem::game_loop(std::function<void()> tick) {
+    constexpr chr::milliseconds ClientTickDuration = 16ms;
+    while (not quit) {
+        auto start_of_tick = chr::system_clock::now();
+
+        // Handle user input.
+        process_events();
+
+        tick();
+
+        const auto end_of_tick = chr::system_clock::now();
+        const auto tick_duration = chr::duration_cast<chr::milliseconds>(end_of_tick - start_of_tick);
+        if (tick_duration < ClientTickDuration) {
+            SDL_WaitEventTimeout(
+                nullptr,
+                i32((ClientTickDuration - tick_duration).count())
+            );
+        } else {
+            Log("Client tick took too long: {}ms", tick_duration.count());
+        }
+    }
+}

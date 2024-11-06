@@ -106,21 +106,24 @@ public:
     GameScreen game_screen{*this};
 
 private:
-    Screen* current_screen;
+    Screen* current_screen = nullptr;
 
     /// TCP Connexion to the server.
     std::optional<net::TCPConnexion> server_connexion;
 
+    explicit Client(Renderer r);
+
 public:
-    /// Create a new client.
-    explicit Client();
+    /// Run the client for ever.
+    static void Run();
 
     /// Enter a screen.
     void enter_screen(Screen& s);
 
-    /// Run the client for ever.
-    void run();
-
     /// Show an error to the user.
     void show_error(std::string error, Screen& return_to);
+
+private:
+    void frame();
+    void run();
 };

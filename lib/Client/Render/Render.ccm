@@ -6,6 +6,7 @@ module;
 #include <memory>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
+#include <stop_token>
 #include <unordered_map>
 #include <vector>
 export module pr.client.render;
@@ -20,6 +21,7 @@ struct Size;
 struct AABB;
 struct xy;
 
+class AssetLoader;
 class Renderer;
 class Font;
 class ShapedText;
@@ -242,15 +244,17 @@ private:
 
 /// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
 class pr::client::Font {
-    using HarfBuzzFontHandle = std::unique_ptr<hb_font_t, decltype(&hb_font_destroy)>;
-    using HarfBuzzBufferHandle = std::unique_ptr<hb_buffer_t, decltype(&hb_buffer_destroy)>;
+    friend AssetLoader;
+
+    using HarfBuzzFontHandle = Handle<hb_font_t*, hb_font_destroy>;
+    using HarfBuzzBufferHandle = Handle<hb_buffer_t*, hb_buffer_destroy>;
     struct Metrics {
         vec2 size;
         vec2 bearing;
     };
 
     /// HarfBuzz font to use for shaping.
-    HarfBuzzFontHandle hb_font = {nullptr, hb_font_destroy};
+    HarfBuzzFontHandle hb_font;
 
     /// Cached HarfBuzz buffers to use for shaping.
     std::vector<HarfBuzzBufferHandle> hb_bufs;
@@ -279,11 +283,15 @@ class pr::client::Font {
     /// The atlas texture.
     Texture atlas;
 
+    /// Intermediate texture data.
+    std::unique_ptr<u8[]> raw_atlas_data;
+
+    Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip);
+    Font(FT_Face ft_face, u32 max_texture_size, u32 size)
+        : Font(ft_face, max_texture_size, size, u32(size * 1.2)) {}
+
 public:
     Font() = default;
-    Font(FT_Face ft_face, u32 size, u32 skip);
-    Font(FT_Face ft_face, u32 size)
-        : Font(ft_face, size, u32(size * 1.2)) {}
 
     /// Shape text using this font.
     ///
@@ -316,17 +324,49 @@ public:
 
 private:
     auto AllocBuffer() -> hb_buffer_t*;
+    void finalise(Renderer& r);
 };
 
 // =============================================================================
 //  Renderer
 // =============================================================================
+namespace pr {
+using FTLibraryHandle = Handle<FT_Library, FT_Done_FreeType>;
+using FTFaceHandle = Handle<FT_Face, FT_Done_Face>;
+using SDLWindowHandle = Handle<SDL_Window*, SDL_DestroyWindow>;
+using SDLGLContextStateHandle = Handle<SDL_GLContextState*, SDL_GL_DestroyContext>;
+}
+
+class pr::client::AssetLoader {
+    FTLibraryHandle ft;
+    FTFaceHandle ft_face;
+    std::unordered_map<u32, Font> fonts;
+    u32 max_texture_size;
+
+    AssetLoader() = default;
+
+public:
+    /// Load assets; this is an expensive operation and happens
+    /// in a separate thread. This does *NOT* create any OpenGL
+    /// objects.
+    static auto Create(Renderer& r) -> Thread<AssetLoader>;
+
+    /// Finish loading assets.
+    void finalise(Renderer& r);
+
+private:
+    static auto Load(u32 max_texture_size, std::stop_token stop) -> AssetLoader;
+    void load(std::stop_token stop);
+};
+
 /// A renderer that renders to a window.
 class pr::client::Renderer {
-    LIBBASE_IMMOVABLE(Renderer);
+    LIBBASE_MOVE_ONLY(Renderer);
 
-    SDL_Window* window;
-    SDL_GLContextState* context;
+    friend AssetLoader;
+
+    SDLWindowHandle window;
+    SDLGLContextStateHandle context;
 
 public:
     ShaderProgram primitive_shader;
@@ -335,8 +375,8 @@ public:
     ShaderProgram throbber_shader;
 
 private:
-    FT_Library ft;
-    FT_Face ft_face;
+    FTLibraryHandle ft;
+    FTFaceHandle ft_face;
     std::unordered_map<u32, Font> fonts_by_size;
     std::unordered_map<Cursor, SDL_Cursor*> cursor_cache;
     Cursor active_cursor = Cursor::Default;
@@ -354,9 +394,6 @@ public:
 
     /// Create a new window and renderer.
     Renderer(int initial_wd, int initial_ht);
-
-    /// Clean up resources.
-    ~Renderer();
 
     /// Whether to render blinking cursors.
     ///
@@ -419,7 +456,7 @@ public:
     void set_cursor(Cursor);
 
     /// Get the SDL window.
-    auto sdl_window() -> SDL_Window* { return window; }
+    auto sdl_window() -> SDL_Window* { return window.get(); }
 
     /// Get the size of the window.
     auto size() -> Size;
@@ -436,5 +473,5 @@ private:
     void frame_start();
 
     /// Set the current cursor.
-    void set_cursor_impl();
+    void SetCursorImpl();
 };

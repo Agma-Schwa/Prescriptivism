@@ -2,6 +2,7 @@ module;
 #include <algorithm>
 #include <base/Assert.hh>
 #include <base/Macros.hh>
+#include <cstring>
 #include <hb-ft.h>
 #include <hb.h>
 #include <libassert/assert.hpp>
@@ -10,12 +11,14 @@ module;
 #include <ranges>
 #include <SDL3/SDL.h>
 #include <webp/decode.h>
-#include <cstring>
 
 // clang-format off
 // Include order matters here!
 #include <ft2build.h>
 #include FT_FREETYPE_H
+
+#include <mutex>
+#include <stop_token>
 // clang-format on
 
 module pr.client.render;
@@ -108,15 +111,16 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     Log("Buffer: {}", debug);
 }
 
-Font::Font(FT_Face ft_face, u32 size, u32 skip)
+Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip)
     : size{size}, skip{skip} {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, size);
 
     // Create a HarfBuzz font for it.
-    hb_font.reset(hb_ft_font_create(ft_face, nullptr));
+    auto f = hb_ft_font_create(ft_face, nullptr);
+    Assert(f, "Failed to create HarfBuzz font");
+    hb_font = f;
     hb_ft_font_set_funcs(hb_font.get());
-    Assert(hb_font, "Failed to create HarfBuzz font");
 
     // Determine the maximum width and height amongst all glyphs.
     for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
@@ -132,13 +136,13 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
     // Determine how many characters we can fit in a single row since an
     // entire font tends to exceed OpenGL’s texture size limits in terms
     // of width.
-    atlas_columns = Texture::MaxSize() / atlas_entry_width;
+    atlas_columns = max_texture_size / atlas_entry_width;
     atlas_rows = u32(std::ceil(f64(ft_face->num_glyphs) / atlas_columns));
     u32 texture_width = atlas_columns * atlas_entry_width;
     u32 texture_height = atlas_rows * atlas_entry_height;
 
     // Allocate memory for the texture.
-    auto data = std::make_unique<u8[]>(texture_width * texture_height);
+    raw_atlas_data = std::make_unique<u8[]>(texture_width * texture_height);
     glyphs.resize(ft_face->num_glyphs);
 
     // And copy each glyph.
@@ -152,10 +156,9 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
 
         u32 row = g / atlas_columns;
         u32 col = g % atlas_columns;
-
         for (usz r = 0; r < ft_face->glyph->bitmap.rows; r++) {
             std::memcpy(
-                data.get() + (row * atlas_entry_height + r) * texture_width + col * atlas_entry_width,
+                raw_atlas_data.get() + (row * atlas_entry_height + r) * texture_width + col * atlas_entry_width,
                 ft_face->glyph->bitmap.buffer + r * ft_face->glyph->bitmap.width,
                 ft_face->glyph->bitmap.width
             );
@@ -166,15 +169,12 @@ Font::Font(FT_Face ft_face, u32 size, u32 skip)
             {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
         };
     }
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    atlas = Texture(data.get(), texture_width, texture_height, GL_RED, GL_UNSIGNED_BYTE);
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
     Assert(hb_buffers_in_use <= hb_bufs.size());
     if (hb_buffers_in_use == hb_bufs.size()) {
-        hb_bufs.push_back(HarfBuzzBufferHandle{hb_buffer_create(), hb_buffer_destroy});
+        hb_bufs.emplace_back(hb_buffer_create());
         return hb_bufs.back().get();
     }
     return hb_bufs[hb_buffers_in_use++].get();
@@ -526,17 +526,21 @@ void Text::shape(Renderer& r, i32 desired_width) const {
 //  Initialisation
 // =============================================================================
 Renderer::Renderer(int initial_wd, int initial_ht) {
-    check SDL_Init(SDL_INIT_VIDEO);
+    static std::once_flag GlobalInit;
+    std::call_once(GlobalInit, [] {
+        check SDL_Init(SDL_INIT_VIDEO);
+        std::atexit(SDL_Quit);
 
-    // OpenGL 3.3, core profile.
-    check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    check SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        // OpenGL 3.3, core profile.
+        check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        check SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    // Enable double buffering, 24-bit depth buffer, and 8-bit stencil buffer.
-    check SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    check SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    check SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+        // Enable double buffering, 24-bit depth buffer, and 8-bit stencil buffer.
+        check SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        check SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        check SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    });
 
     // Create the window.
     window = check SDL_CreateWindow(
@@ -547,10 +551,10 @@ Renderer::Renderer(int initial_wd, int initial_ht) {
     );
 
     // Create the OpenGL context.
-    context = check SDL_GL_CreateContext(window);
+    context = check SDL_GL_CreateContext(*window);
 
     // Initialise OpenGL.
-    check SDL_GL_MakeCurrent(window, context);
+    check SDL_GL_MakeCurrent(*window, *context);
     glbinding::useCurrentContext();
     glbinding::initialize(SDL_GL_GetProcAddress);
 
@@ -615,30 +619,9 @@ Renderer::Renderer(int initial_wd, int initial_ht) {
     // Enable blending.
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // Load the font.
-    ftcall FT_Init_FreeType(&ft);
-    ftcall FT_New_Memory_Face(
-        ft,
-        reinterpret_cast<const FT_Byte*>(DefaultFontRegular),
-        sizeof DefaultFontRegular,
-        0,
-        &ft_face
-    );
-
-    fonts_by_size[96] = Font(ft_face, 96);
 }
 
-Renderer::~Renderer() {
-    SDL_GL_DestroyContext(context);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    FT_Done_Face(ft_face);
-    FT_Done_FreeType(ft);
-}
-
-Renderer::Frame::Frame(Renderer& r)
-    : r(r) { r.frame_start(); }
+Renderer::Frame::Frame(Renderer& r) : r(r) { r.frame_start(); }
 Renderer::Frame::~Frame() { r.frame_end(); }
 
 // =============================================================================
@@ -743,7 +726,7 @@ void Renderer::frame_end() {
 #endif
 
     // Swap buffers.
-    check SDL_GL_SwapWindow(window);
+    check SDL_GL_SwapWindow(*window);
 }
 
 void Renderer::frame_start() {
@@ -758,7 +741,7 @@ void Renderer::frame_start() {
     // Set the active cursor if it has changed.
     if (requested_cursor != active_cursor) {
         active_cursor = requested_cursor;
-        set_cursor_impl();
+        SetCursorImpl();
     }
 }
 
@@ -772,9 +755,17 @@ void Renderer::use(ShaderProgram& shader) {
 //  Creating Objects
 // =============================================================================
 auto Renderer::font(u32 size) -> Font& {
+    // Make sure the font exists.
     auto it = fonts_by_size.find(size);
-    if (it != fonts_by_size.end()) return it->second;
-    return fonts_by_size[size] = Font(ft_face, size);
+    Assert(
+        it != fonts_by_size.end(),
+        "Font with size {} has not been built yet. Make sure to load this "
+        "font size in the asset loader (AssetLoader::load()) if you want to "
+        "use it",
+        size
+    );
+
+    return it->second;
 }
 
 auto Renderer::frame() -> Frame { return Frame(*this); }
@@ -823,7 +814,7 @@ void Renderer::set_cursor(Cursor c) {
     requested_cursor = c;
 }
 
-void Renderer::set_cursor_impl() {
+void Renderer::SetCursorImpl() {
     auto it = cursor_cache.find(active_cursor);
     if (it != cursor_cache.end()) {
         check SDL_SetCursor(it->second);
@@ -844,7 +835,7 @@ bool Renderer::blink_cursor() {
 
 auto Renderer::size() -> Size {
     i32 wd, ht;
-    check SDL_GetWindowSize(window, &wd, &ht);
+    check SDL_GetWindowSize(*window, &wd, &ht);
     return {wd, ht};
 }
 
@@ -853,4 +844,79 @@ auto Renderer::size() -> Size {
 // =============================================================================
 auto AABB::contains(xy pos) const -> bool {
     return pos.x >= min.x and pos.x <= max.x and pos.y >= min.y and pos.y <= max.y;
+}
+
+// =============================================================================
+//  Startup
+// =============================================================================
+// The renderer parameter is unused and is only passed in
+// to ensure that we create the renderer before the asset
+// loader since we need to query OpenGL information before
+// creating a separate thread.
+auto AssetLoader::Create(Renderer&) -> Thread<AssetLoader> {
+    return Thread<AssetLoader>{&Load, Texture::MaxSize()};
+}
+
+auto AssetLoader::Load(u32 max_texture_size, std::stop_token stop) -> AssetLoader {
+    AssetLoader loader;
+    loader.max_texture_size = max_texture_size;
+    loader.load(stop);
+    return loader;
+}
+
+void AssetLoader::load(std::stop_token stop) {
+    // Load the font face.
+    FT_Library lib;
+    FT_Face face;
+    ftcall FT_Init_FreeType(&lib);
+    ftcall FT_New_Memory_Face(
+        lib,
+        reinterpret_cast<const FT_Byte*>(DefaultFontRegular),
+        sizeof DefaultFontRegular,
+        0,
+        &face
+    );
+
+    ft = lib;
+    ft_face = face;
+
+    // Load each predefined font.
+    for (
+        auto f : {
+            FontSize::Small,
+            FontSize::Text,
+            FontSize::Medium,
+            FontSize::Large,
+            FontSize::Huge,
+            FontSize::Title,
+        }
+    ) {
+        if (stop.stop_requested()) return;
+        fonts[+f] = Font(ft_face.get(), max_texture_size, +f);
+    }
+}
+
+/// Finish loading assets.
+void AssetLoader::finalise(Renderer& r) {
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    // Copy resources.
+    r.ft = std::move(ft);
+    r.ft_face = std::move(ft_face);
+
+    // Build font textures.
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    r.fonts_by_size = std::move(fonts);
+    for (auto& [_, f] : r.fonts_by_size) {
+        f.atlas = Texture(
+            f.raw_atlas_data.get(),
+            f.atlas_columns * f.atlas_entry_width,
+            f.atlas_rows * f.atlas_entry_height,
+            GL_RED,
+            GL_UNSIGNED_BYTE
+        );
+
+        // Free the raw font data since we don’t need it anymore.
+        f.raw_atlas_data.reset();
+    }
 }

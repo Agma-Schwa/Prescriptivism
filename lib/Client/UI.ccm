@@ -121,6 +121,7 @@ public:
 
     InputSystem(Renderer& r) : renderer(r) {}
 
+    void game_loop(std::function<void()> tick);
     void process_events();
     void update_selection(bool is_element_selected);
 };
@@ -158,7 +159,7 @@ public:
     auto parent() -> Element* { return parent_element; }
 
     /// Recompute bounding box etc.
-    virtual void refresh(Renderer& r) {}
+    virtual void refresh(Renderer&) {}
 
     /// Reset properties at the start of a tick.
     void reset_properties() {

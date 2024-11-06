@@ -15,6 +15,9 @@ using namespace base;
 struct Profile;
 struct ZTermString;
 
+template <typename T, auto deleter>
+class Handle;
+
 template <typename T>
 class LateInit;
 
@@ -30,6 +33,36 @@ void Log(std::format_string<Args...> fmt, Args&&... args);
 namespace pr {
 void LogImpl(std::string);
 }
+
+template <typename T, auto deleter>
+class pr::Handle {
+    T value{};
+
+public:
+    Handle() = default;
+    Handle(T value) : value(std::move(value)) {}
+    Handle(const Handle&) = delete;
+    Handle& operator=(const Handle&) = delete;
+    ~Handle() { Delete(); }
+
+    Handle(Handle&& other) noexcept : value(std::exchange(other.value, T{})) {}
+    auto operator=(Handle&& other) noexcept -> Handle& {
+        if (this != &other) {
+            Delete();
+            value = std::exchange(other.value, T{});
+        }
+        return *this;
+    }
+
+    [[nodiscard]] auto operator->() -> T* { return &value; }
+    [[nodiscard]] auto operator*() -> T& { return value; }
+    [[nodiscard]] auto get() const -> const T& { return value; }
+
+private:
+    void Delete() {
+        if (value) deleter(value);
+    }
+};
 
 template <typename T>
 class pr::LateInit {
@@ -92,12 +125,22 @@ struct pr::Profile {
 template <typename ResultType>
 class pr::Thread {
     LIBBASE_IMMOVABLE(Thread);
-    std::jthread thread;
     std::atomic_bool run_flag = false;
     Result<ResultType> result = Error("Thread was aborted");
 
+    // The thread MUST be the last member of this class, otherwise, we
+    // might try to write to the result or run flag after they have been
+    // destroyed if the thread is joined in the destructor.
+    std::jthread thread;
+
 public:
-    Thread() = default;
+    explicit Thread() = default;
+
+    template <typename Callable, typename... Args>
+    requires (not std::is_same_v<Callable, Thread>)
+    explicit Thread(Callable&& c, Args&&... args) {
+        start(std::forward<Callable>(c), std::forward<Args>(args)...);
+    }
 
     /// Check if the thread is running.
     [[nodiscard]] bool running() const { return run_flag.load(std::memory_order::acquire); }
@@ -114,6 +157,8 @@ public:
         ](
             std::stop_token stop
         ) {
+            // Stop token goes at the end because the first argument
+            // might be 'this' if the callable is a member function.
             result = std::invoke(callable, args..., stop);
             run_flag.store(false, std::memory_order::release);
         }};

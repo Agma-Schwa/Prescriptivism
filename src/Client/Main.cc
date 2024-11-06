@@ -16,5 +16,5 @@ int main() {
         Log("Failed to set up path: {}", res.error());
 
     // Run the client.
-    client::Client().run();
+    client::Client::Run();
 }

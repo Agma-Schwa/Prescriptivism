@@ -286,8 +286,55 @@ void GameScreen::handle(sc::HeartbeatRequest req) {
 // =============================================================================
 //  API
 // =============================================================================
-Client::Client() : renderer(Renderer(800, 600)) {
+Client::Client(Renderer r) : renderer(std::move(r)) {
     enter_screen(menu_screen);
+}
+
+void Client::Run() {
+    // Load assets and display a minimal window in the meantime; we
+    // can’t access most features of the renderer (e.g. text) while
+    // this is happening, but we can clear the screen and draw a
+    // throbber.
+    //
+    // Note: Asset loading doesn’t perform OpenGL calls until we
+    // call finalise(), so the reason we can’t do much here is not
+    // that another thread is using OpenGl, but rather simply the
+    // fact that we don’t have the required assets yet.
+    Renderer r{800, 600};
+    Thread asset_loader{AssetLoader::Create(r)};
+    Throbber throb{nullptr, Position::Center()};
+    InputSystem startup{r};
+
+    // Flag used to avoid a race condition in case the thread
+    // finishes just after the user has pressed 'close' since
+    // we set the 'quit' flag of the startup input system to
+    // tell it to stop the game loop.
+    bool done = false;
+
+    // Display only the throbber until the assets are loaded.
+    startup.game_loop([&] {
+        Renderer::Frame _ = r.frame();
+        throb.draw(r);
+        if (not asset_loader.running()) {
+            done = true;
+            startup.quit = true;
+        }
+    });
+
+    // If we get here, and 'done' isn’t set, then the user
+    // pressed the close button. Also tell the asset loader
+    // to stop since we don’t need the assets anymore.
+    if (not done) {
+        asset_loader.stop_and_release();
+        return;
+    }
+
+    // Finish asset loading.
+    asset_loader.value().value().finalise(r);
+
+    // Run the actual game.
+    Client c{std::move(r)};
+    c.run();
 }
 
 void Client::enter_screen(Screen& s) {
@@ -295,35 +342,21 @@ void Client::enter_screen(Screen& s) {
     s.on_entered();
 }
 
+void Client::frame() {
+    Renderer::Frame _ = renderer.frame();
+
+    // Refresh screen info.
+    current_screen->refresh(renderer);
+
+    // Tick the screen.
+    current_screen->tick(input_system);
+
+    // Draw it.
+    current_screen->draw(renderer);
+}
+
 void Client::run() {
-    constexpr chr::milliseconds ClientTickDuration = 16ms;
-    while (not input_system.quit) {
-        Renderer::Frame _ = renderer.frame();
-        auto start_of_tick = chr::system_clock::now();
-
-        // Handle user input.
-        input_system.process_events();
-
-        // Refresh screen info.
-        current_screen->refresh(renderer);
-
-        // Tick the screen.
-        current_screen->tick(input_system);
-
-        // Draw it.
-        current_screen->draw(renderer);
-
-        const auto end_of_tick = chr::system_clock::now();
-        const auto tick_duration = chr::duration_cast<chr::milliseconds>(end_of_tick - start_of_tick);
-        if (tick_duration < ClientTickDuration) {
-            SDL_WaitEventTimeout(
-                nullptr,
-                i32((ClientTickDuration - tick_duration).count())
-            );
-        } else {
-            Log("Client tick took too long: {}ms", tick_duration.count());
-        }
-    }
+    input_system.game_loop([&] { frame(); });
 }
 
 void Client::show_error(std::string error, Screen& return_to) {
