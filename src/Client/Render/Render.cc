@@ -167,6 +167,7 @@ Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip)
 auto Font::AllocBuffer() -> hb_buffer_t* {
     Assert(hb_buffers_in_use <= hb_bufs.size());
     if (hb_buffers_in_use == hb_bufs.size()) {
+        hb_buffers_in_use++;
         hb_bufs.emplace_back(hb_buffer_create());
         return hb_bufs.back().get();
     }
