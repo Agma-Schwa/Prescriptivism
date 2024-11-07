@@ -89,7 +89,19 @@ constexpr char ThrobberFragmentShaderData[]{
 };
 
 constexpr char DefaultFontRegular[]{
-#embed PRESCRIPTIVISM_DEFAULT_FONT_PATH
+#embed "Fonts/Regular.ttf"
+};
+
+[[maybe_unused]] constexpr char DefaultFontItalic[]{
+#embed "Fonts/Italic.ttf"
+};
+
+[[maybe_unused]] constexpr char DefaultFontBold[]{
+#embed "Fonts/Bold.ttf"
+};
+
+[[maybe_unused]] constexpr char DefaultFontBoldItalic[]{
+#embed "Fonts/BoldItalic.ttf"
 };
 
 // =============================================================================
@@ -185,7 +197,6 @@ void Font::finalise(FT_Face ft_face) {
     hb_ft_font_set_funcs(hb_font.get());
 }
 
-
 /// Shape text using this font.
 ///
 /// The resulting object is position-independent and can
@@ -270,14 +281,23 @@ auto Font::shape(
         hb_font_set_scale(font, size * Scale, size * Scale);
 
         // Enable the following OpenType features: 'liga'.
-        hb_feature_t ligatures{};
-        ligatures.tag = HB_TAG('l', 'i', 'g', 'a');
-        ligatures.value = 1;
-        ligatures.start = HB_FEATURE_GLOBAL_START;
-        ligatures.end = HB_FEATURE_GLOBAL_END;
+        std::array features{
+            hb_feature_t {
+                .tag = HB_TAG('l', 'i', 'g', 'a'),
+                .value = 1,
+                .start = HB_FEATURE_GLOBAL_START,
+                .end = HB_FEATURE_GLOBAL_END,
+            },
+            hb_feature_t {
+                .tag = HB_TAG('s', 's', '1', '3'),
+                .value = 1,
+                .start = HB_FEATURE_GLOBAL_START,
+                .end = HB_FEATURE_GLOBAL_END,
+            }
+        };
 
         // Shape the text.
-        hb_shape(font, buf, &ligatures, 1);
+        hb_shape(font, buf, features.data(), features.size());
 
         // Compute the width of this line.
         f32 x = 0;

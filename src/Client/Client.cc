@@ -300,6 +300,14 @@ void GameScreen::handle(sc::HeartbeatRequest req) {
     server_connexion->send(cs::HeartbeatResponse{req.seq_no});
 }
 
+void GameScreen::handle(sc::StartTurn) {
+    Log("TODO: Handle StartTurn");
+}
+
+void GameScreen::handle(sc::EndTurn) {
+    Log("TODO: Handle EndTurn");
+}
+
 // =============================================================================
 //  API
 // =============================================================================
