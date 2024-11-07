@@ -8,19 +8,20 @@ import pr.utils;
 using namespace pr;
 using namespace command_line_options;
 
-using options = clopts<
-        option<"--port", "The port to listen too", i64>,
-        option<"--pwd", "Password to the game">,
-        help<>
-    >;
+using options = clopts< // clang-format off
+    option<"--port", "The port to listen on", i64>,
+    option<"--pwd", "Password to the game">,
+    help<>
+>; // clang-format on
 
 int main(int argc, char* argv[]) {
     auto opts = options::parse(argc, argv);
+
     i64 port = opts.get_or<"--port">(net::DefaultPort);
     if (port <= 0 or port > std::numeric_limits<u16>::max()) {
-        std::println(stderr,"ERROR: invalid port {}", port);
+        std::println(stderr, "ERROR: invalid port {}", port);
         return 1;
     }
-    auto pwd = opts.get_or<"--pwd">("");
-    server::Server(u16(port), std::move(pwd)).Run();
+
+    server::Server(u16(port), opts.get_or<"--pwd">("")).Run();
 }

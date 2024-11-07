@@ -120,13 +120,13 @@ constexpr std::span<const char> Fonts[]{
 
 // Currently hard-coded because they’re expensive to calculate; eventually,
 // we should calculate these when the fonts are loaded and cache them.
-const std::unordered_map<u32, FontDimensions> FontDimensionData {
-    {6, {4082, 15, 11}},
-    {12, {4082, 29, 22}},
-    {24, {4082, 57, 44}},
-    {36, {4082, 85, 66}},
-    {48, {4082, 113, 88}},
-    {96, {4082, 224, 176}},
+const std::unordered_map<u32, FontDimensions> FontDimensionData{
+    {6, {4'082, 15, 11}},
+    {12, {4'082, 29, 22}},
+    {24, {4'082, 57, 44}},
+    {36, {4'082, 85, 66}},
+    {48, {4'082, 113, 88}},
+    {96, {4'082, 224, 176}},
 };
 
 // =============================================================================

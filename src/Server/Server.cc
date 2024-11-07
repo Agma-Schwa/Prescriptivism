@@ -92,38 +92,50 @@ void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
 
 void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     Log("Login: name = {}, password = {}", login.name, login.password);
+
+    // Mark this as no longer pending and also check whether it was
+    // pending in the first place. Clients that are already connected
+    // to a player are not supposed to send a login packet.
     auto erased = std::erase_if(pending_connexions, [&](auto& x) {
         return client == x.conn;
     });
-    if (erased != 1) {
-        Kick(client, DisconnectReason::InvalidPacket);
-        return;
-    }
+    if (erased != 1) return Kick(client, DisconnectReason::InvalidPacket);
+
+    // Check that the password matches.
     if (login.password != password) {
         Kick(client, DisconnectReason::WrongPassword);
         return;
     }
+
+    // Try to match this connexion to an existing player.
     for (auto& p : players) {
         if (p->name == login.name) {
+            // Someone is trying to connect to a player that is
+            // already connected.
             if (p->connected()) {
                 Log("{} is already connected", login.name);
                 Kick(client, DisconnectReason::UsernameInUse);
                 return;
             }
+
             Log("Player {} loging back in", login.name);
             p->client_connexion = client;
             return;
         }
     }
+
+    // Create a new player. This is also the only place where we can
+    // reach the player limit for the first time, so perform game
+    // initialisation here if we have enough players.
     players.push_back(std::make_unique<Player>(client, std::move(login.name)));
-    if (players.size() == PlayersNeeded) SetupGame();
+    if (players.size() == PlayersNeeded) SetUpGame();
 }
 
 // =============================================================================
 //  Game Logic
 // =============================================================================
-void Server::SetupGame() {
-    // Consonants
+void Server::SetUpGame() {
+    // Consonants.
     for (u8 i = 0; i < 2; ++i) {
         deck.emplace_back(CardType::C_b);
         deck.emplace_back(CardType::C_d);
@@ -133,6 +145,7 @@ void Server::SetupGame() {
         deck.emplace_back(CardType::C_z);
         deck.emplace_back(CardType::C_ʒ);
     }
+
     for (u8 i = 0; i < 4; ++i) {
         deck.emplace_back(CardType::C_p);
         deck.emplace_back(CardType::C_t);
@@ -151,8 +164,10 @@ void Server::SetupGame() {
         deck.emplace_back(CardType::C_ɲ);
         deck.emplace_back(CardType::C_ŋ);
     }
+
     auto num_consonants = deck.size();
-    // Vowels
+
+    // Vowels.
     for (u8 i = 0; i < 3; ++i) {
         deck.emplace_back(CardType::V_y);
         deck.emplace_back(CardType::V_ʊ);
@@ -160,11 +175,13 @@ void Server::SetupGame() {
         deck.emplace_back(CardType::V_ɐ);
         deck.emplace_back(CardType::V_ɔ);
     }
+
     for (u8 i = 0; i < 5; ++i) {
         deck.emplace_back(CardType::V_ɨ);
         deck.emplace_back(CardType::V_æ);
         deck.emplace_back(CardType::V_ɑ);
     }
+
     for (u8 i = 0; i < 7; ++i) {
         deck.emplace_back(CardType::V_i);
         deck.emplace_back(CardType::V_u);
@@ -173,6 +190,8 @@ void Server::SetupGame() {
         deck.emplace_back(CardType::V_o);
         deck.emplace_back(CardType::V_a);
     }
+
+    // Draw the cards for reach player’s word.
     rgs::shuffle(deck.begin(), deck.begin() + num_consonants, rng);
     rgs::shuffle(deck.begin() + num_consonants, deck.end(), rng);
     for (auto& p : players) {
@@ -184,7 +203,7 @@ void Server::SetupGame() {
         }
     }
 
-    // Special cards
+    // Special cards.
     deck.emplace_back(CardType::P_Babel);
     deck.emplace_back(CardType::P_Superstratum);
     deck.emplace_back(CardType::P_Substratum);
@@ -216,6 +235,7 @@ void Server::SetupGame() {
     deck.emplace_back(CardType::P_Descriptivism);
     deck.emplace_back(CardType::P_Elision);
     deck.emplace_back(CardType::P_Elision);
+
     for (u8 i = 0; i < 3; ++i) {
         deck.emplace_back(CardType::P_Nope);
         deck.emplace_back(CardType::P_LinguaFranca);
@@ -223,7 +243,10 @@ void Server::SetupGame() {
         deck.emplace_back(CardType::P_Descriptivism);
         deck.emplace_back(CardType::P_Elision);
     }
+
     for (u8 i = 0; i < 10; ++i) deck.emplace_back(CardType::P_SpellingReform);
+
+    // Draw each player’s hand.
     rgs::shuffle(deck, rng);
     for (auto& p : players) {
         for (u8 i = 0; i < 7; ++i) {
@@ -231,6 +254,7 @@ void Server::SetupGame() {
             deck.pop_back();
         }
     }
+
     // TODO Let the players make their words
     rgs::shuffle(players, rng);
     player().client_connexion.send(sc::StartTurn());
@@ -246,7 +270,9 @@ void Server::NextPlayer() {
 // =============================================================================
 //  API
 // =============================================================================
-Server::Server(u16 port, std::string password) : server(net::TCPServer::Create(port, 200).value()), password(std::move(password)) {
+Server::Server(u16 port, std::string password)
+    : server(net::TCPServer::Create(port, 200).value()),
+      password(std::move(password)) {
     server.set_callbacks(*this);
 }
 

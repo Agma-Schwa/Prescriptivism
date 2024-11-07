@@ -292,7 +292,7 @@ void GameScreen::handle(sc::Disconnect packet) {
     server_connexion->disconnect();
     auto reason = [&] -> std::string_view {
         switch (packet.reason) {
-            using Reason = packets::sc::Disconnect::Reason;
+            using Reason = sc::Disconnect::Reason;
             case Reason::Unspecified: return "Disconnected";
             case Reason::ServerFull: return "Disconnected: Server full";
             case Reason::InvalidPacket: return "Disconnected: Client sent invalid packet";

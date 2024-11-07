@@ -33,7 +33,7 @@ private:                       \
 public:                        \
     name
 
-#define Serialisable(...) PR_SERIALISE(id __VA_OPT__(,) __VA_ARGS__)
+#define Serialisable(...) PR_SERIALISE(id __VA_OPT__(, ) __VA_ARGS__)
 
 // =============================================================================
 //  Enumerations
@@ -86,8 +86,8 @@ DefinePacket(Disconnect) {
         Unspecified,   ///< Unknown.
         InvalidPacket, ///< Peer sent invalid packet.
         ServerFull,    ///< Server already has the maximum number of players.
-        UsernameInUse, ///< Username is already in Use
-        WrongPassword, ///< The password was incorrect
+        UsernameInUse, ///< Username is already in use.
+        WrongPassword, ///< The password was incorrect.
     };
 
     Ctor(Disconnect)(Reason reason) : reason(reason) {}
@@ -119,7 +119,6 @@ DefinePacket(StartTurn) {
 DefinePacket(EndTurn) {
     Serialisable();
 };
-
 } // namespace pr::packets::sc
 
 // =============================================================================

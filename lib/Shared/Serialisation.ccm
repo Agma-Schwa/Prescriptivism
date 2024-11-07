@@ -260,8 +260,8 @@ public:
     template <usz sz>
     consteval explicit Magic(const char (&m)[sz]) { std::copy_n(m, n, magic); }
 
-    template <utils::is<char, u8, std::byte> ...Vals>
-    consteval explicit Magic(Vals ...vals) : magic{char(vals)...} {}
+    template <utils::is<char, u8, std::byte>... Vals>
+    consteval explicit Magic(Vals... vals) : magic{char(vals)...} {}
 
     void deserialise(Reader& r) const {
         std::byte buf[n]{};
@@ -320,7 +320,7 @@ export namespace pr::ser {
 template <usz n>
 Magic(const char (&)[n]) -> Magic<n - 1>;
 
-template <typename ...args>
+template <typename... args>
 Magic(args...) -> Magic<sizeof...(args)>;
 
 template <typename T>
