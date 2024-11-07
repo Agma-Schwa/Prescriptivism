@@ -50,8 +50,6 @@ void Server::Tick() {
 }
 
 bool Server::accept(net::TCPConnexion& connexion) {
-
-
     // Make sure we’re not full yet.
     if (players.size() + pending_connexions.size() == PlayersNeeded) {
         connexion.send(packets::sc::Disconnect{DisconnectReason::ServerFull});
@@ -125,7 +123,6 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
 //  Game Logic
 // =============================================================================
 void Server::SetupGame() {
-
     // Consonants
     for (u8 i = 0; i < 2; ++i) {
         deck.emplace_back(CardType::C_b);
@@ -176,15 +173,14 @@ void Server::SetupGame() {
         deck.emplace_back(CardType::V_o);
         deck.emplace_back(CardType::V_a);
     }
-    rgs::shuffle(deck.begin(), deck.begin()+num_consonants, rng);
-    rgs::shuffle(deck.begin()+num_consonants, deck.end(), rng);
+    rgs::shuffle(deck.begin(), deck.begin() + num_consonants, rng);
+    rgs::shuffle(deck.begin() + num_consonants, deck.end(), rng);
     for (auto& p : players) {
         for (u8 i = 0; i < 3; ++i) {
-            p->hand.push_back(std::move(deck.back()));
+            p->word.push_back(std::move(deck.back()));
             deck.pop_back();
-            p->hand.push_back(std::move(deck.front()));
+            p->word.push_back(std::move(deck.front()));
             deck.erase(deck.begin());
-
         }
     }
 
