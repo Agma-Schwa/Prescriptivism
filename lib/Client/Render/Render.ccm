@@ -200,8 +200,19 @@ private:
     f32 dp;
     TextStyle fstyle;
 
-    explicit ShapedText(VertexArrays vao, u32 fsize, TextStyle style, f32 wd, f32 ht, f32 dp)
-        : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht), dp(dp), fstyle(style) {}
+    explicit ShapedText(
+        VertexArrays vao,
+        u32 fsize,
+        TextStyle style,
+        f32 wd,
+        f32 ht,
+        f32 dp
+    ) : vao(std::move(vao)),
+        fsize(fsize),
+        wd(wd),
+        ht(ht),
+        dp(dp),
+        fstyle(style) {}
 
 public:
     /// Create an empty text object that optionally stores a font size.
@@ -296,17 +307,19 @@ private:
 class pr::client::Font {
 public:
     PR_SERIALISE(
-        ser::Magic{'P', 'r', u8(0), u8(1)}, // Magic number contains the version.
-        glyphs,
+        ser::Magic{'P', 'r', u8(0), u8(2)}, // Magic number contains the version.
+                                            //        glyphs, // TODO: Serialise
+        glyphs_ordered,
+        atlas_buffer,
         atlas_entry_width,
         atlas_entry_height,
-        atlas_columns,
+        atlas_width,
         atlas_rows,
+        atlas_entries,
         size,
         style,
-        skip,
-        ser::Blob{raw_atlas_data, usz(texture_size().area())}
-    )
+        skip
+    );
 
     friend AssetLoader;
 
@@ -314,8 +327,9 @@ private:
     using HarfBuzzFontHandle = Handle<hb_font_t*, hb_font_destroy>;
     using HarfBuzzBufferHandle = Handle<hb_buffer_t*, hb_buffer_destroy>;
     struct Metrics {
-        PR_SERIALISE(size, bearing);
+        PR_SERIALISE(atlas_index, size, bearing);
 
+        u32 atlas_index;
         vec2 size;
         vec2 bearing;
     };
@@ -323,20 +337,40 @@ private:
     /// HarfBuzz font to use for shaping.
     HarfBuzzFontHandle hb_font;
 
+    /// Font to pull characters from.
+    FT_Face face;
+
     /// Cached HarfBuzz buffers to use for shaping.
     std::vector<HarfBuzzBufferHandle> hb_bufs;
     usz hb_buffers_in_use = 0;
 
     /// Metrics for all glyphs in the font.
-    std::vector<Metrics> glyphs{};
+    std::unordered_map<FT_UInt, Metrics> glyphs{};
+
+    /// List of glyphs, in order, that have been added to the atlas; this
+    /// has the same contents as the map, except it’s ordered.
+    std::vector<FT_UInt> glyphs_ordered{};
+
+    /// Memory buffer for texture atlas allocation.
+    std::vector<std::byte> atlas_buffer;
+
+    /// Whether the atlas needs to be rebuilt.
+    bool dirty = false;
 
     /// The width and height of a cell in the texture atlas.
     u32 atlas_entry_width{};
     u32 atlas_entry_height{};
 
-    /// The number of columns and rows in the texture atlas.
-    u32 atlas_columns{};
+    /// The width of the atlas; to prevent glyphs that are already in the
+    /// atlas from moving, we always set the atlas width to the maximum row
+    /// size.
+    u32 atlas_width{};
+
+    /// The number of rows in the texture atlas.
     u32 atlas_rows{};
+
+    /// The number of entries in the atlas.
+    u32 atlas_entries{};
 
     /// The font size.
     u32 size{};
@@ -353,12 +387,9 @@ private:
     /// The atlas texture.
     Texture atlas;
 
-    /// Intermediate texture data.
-    std::unique_ptr<u8[]> raw_atlas_data;
-
-    Font(FT_Face ft_face, u32 max_texture_size, u32 size, TextStyle style, u32 skip);
-    Font(FT_Face ft_face, u32 max_texture_size, u32 size, TextStyle style)
-        : Font(ft_face, max_texture_size, size, style, u32(size * 1.2)) {}
+    Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip);
+    Font(FT_Face ft_face, u32 size, TextStyle style)
+        : Font(ft_face, size, style, u32(size * 1.2)) {}
 
 public:
     Font() = default;
@@ -377,31 +408,14 @@ public:
         bool* multiline
     ) -> ShapedText;
 
-    /// Must be called after deserialisation.
-    void finalise(FT_Face ft_face);
-
     /// Get the size of the font texture.
-    auto texture_size() const -> Size {
-        return {
-            i32(atlas_columns * atlas_entry_width),
-            i32(atlas_rows * atlas_entry_height),
-        };
+    auto atlas_height() const -> i32 {
+        return i32(atlas_rows * atlas_entry_height);
     }
 
     /// Activate the font for rendering.
     void use() const { atlas.bind(); }
 
-    /// Get the height and width of a cell in the atlas.
-    auto cell_height() const -> u32 { return atlas_entry_height; }
-    auto cell_width() const -> u32 { return atlas_entry_width; }
-
-    /// Get the number of rows and columns in the atlas.
-    auto columns() const -> u32 { return atlas_columns; }
-    auto rows() const -> u32 { return atlas_rows; }
-
-    /// Get the total width and height of the atlas.
-    auto height() const -> u32 { return atlas_rows * atlas_entry_height; }
-    auto width() const -> u32 { return atlas_columns * atlas_entry_width; }
 private:
     auto AllocBuffer() -> hb_buffer_t*;
 };
@@ -435,7 +449,6 @@ struct FontData {
 
 class pr::client::AssetLoader {
     FontData font_data;
-    u32 max_texture_size;
 
     AssetLoader() = default;
 
@@ -449,8 +462,7 @@ public:
     void finalise(Renderer& r);
 
 private:
-    static auto Load(u32 max_texture_size, std::stop_token stop) -> AssetLoader;
-    void LoadFont(FontSize size, TextStyle style);
+    static auto Load(std::stop_token stop) -> AssetLoader;
     void load(std::stop_token stop);
 };
 

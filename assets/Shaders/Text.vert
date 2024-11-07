@@ -5,6 +5,7 @@ out vec2 tex;
 
 uniform vec2 position;
 uniform mat4 projection;
+uniform float atlas_height;
 
 void main() {
     gl_Position = projection * vec4(
@@ -14,5 +15,7 @@ void main() {
         1.0
     );
 
-    tex = vertex.zw;
+    // Atlas width is constant, but the height might change,
+    // so recompute the V coordinate based on the height.
+    tex = vec2(vertex.z, vertex.w / atlas_height);
 }

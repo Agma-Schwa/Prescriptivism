@@ -104,12 +104,29 @@ constexpr char DefaultFontRegular[]{
 #embed "Fonts/BoldItalic.ttf"
 };
 
+struct FontDimensions {
+    u32 glyph_count;
+    u32 max_width;
+    u32 max_height;
+};
+
 // These MUST follow the order of the enumerators in 'TextStyle'.
 constexpr std::span<const char> Fonts[]{
     DefaultFontRegular,
     DefaultFontBold,
     DefaultFontItalic,
     DefaultFontBoldItalic,
+};
+
+// Currently hard-coded because they’re expensive to calculate; eventually,
+// we should calculate these when the fonts are loaded and cache them.
+const std::unordered_map<u32, FontDimensions> FontDimensionData {
+    {6, {4082, 15, 11}},
+    {12, {4082, 29, 22}},
+    {24, {4082, 57, 44}},
+    {36, {4082, 85, 66}},
+    {48, {4082, 113, 88}},
+    {96, {4082, 224, 176}},
 };
 
 // =============================================================================
@@ -132,56 +149,24 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     Log("Buffer: {}", debug);
 }
 
-Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, TextStyle style, u32 skip)
-    : size{size}, style{style}, skip{skip} {
-    finalise(ft_face);
+Font::Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip)
+    : face{ft_face}, size{size}, style{style}, skip{skip} {
+    // Set the font size.
+    FT_Set_Pixel_Sizes(ft_face, 0, size);
 
-    // Determine the maximum width and height amongst all glyphs.
-    for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
-        if (FT_Load_Glyph(ft_face, g, FT_LOAD_BITMAP_METRICS_ONLY) != 0) {
-            Log("Failed to load glyph #{}", g);
-            continue;
-        }
+    // Create a HarfBuzz font for it.
+    auto f = hb_ft_font_create(ft_face, nullptr);
+    Assert(f, "Failed to create HarfBuzz font");
+    hb_font = f;
+    hb_ft_font_set_funcs(hb_font.get());
 
-        atlas_entry_width = std::max(atlas_entry_width, ft_face->glyph->bitmap.width);
-        atlas_entry_height = std::max(atlas_entry_height, ft_face->glyph->bitmap.rows);
-    }
-
-    // Determine how many characters we can fit in a single row since an
-    // entire font tends to exceed OpenGL’s texture size limits in terms
-    // of width.
-    atlas_columns = max_texture_size / atlas_entry_width;
-    atlas_rows = u32(std::ceil(f64(ft_face->num_glyphs) / atlas_columns));
-    auto [texture_width, texture_height] = texture_size();
-
-    // Allocate memory for the texture.
-    raw_atlas_data = std::make_unique<u8[]>(usz(texture_width * texture_height));
-    glyphs.resize(ft_face->num_glyphs);
-
-    // And copy each glyph.
-    for (FT_UInt g = 0; g < FT_UInt(ft_face->num_glyphs); g++) {
-        // This *should* never fail because we're loading glyphs and
-        // not codepoints, but prefer not to crash if it does fail.
-        if (FT_Load_Glyph(ft_face, g, FT_LOAD_RENDER) != 0) {
-            Log("Failed to load glyph #{}", g);
-            continue;
-        }
-
-        u32 row = g / atlas_columns;
-        u32 col = g % atlas_columns;
-        for (usz r = 0; r < ft_face->glyph->bitmap.rows; r++) {
-            std::memcpy(
-                raw_atlas_data.get() + (row * atlas_entry_height + r) * u32(texture_width) + col * atlas_entry_width,
-                ft_face->glyph->bitmap.buffer + r * ft_face->glyph->bitmap.width,
-                ft_face->glyph->bitmap.width
-            );
-        }
-
-        glyphs[g] = {
-            {ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows},
-            {ft_face->glyph->bitmap_left, ft_face->glyph->bitmap_top},
-        };
-    }
+    // Determine the maximum width and height amongst all glyphs; we
+    // need to do this now to ensure that the atlas dimensions don’t
+    // change when we add glyphs; otherwise, we’d be invalidating the
+    // vertex data for already shaped text.
+    auto& dims = FontDimensionData.at(size);
+    atlas_entry_width = dims.max_width;
+    atlas_entry_height = dims.max_height;
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
@@ -192,17 +177,6 @@ auto Font::AllocBuffer() -> hb_buffer_t* {
         return hb_bufs.back().get();
     }
     return hb_bufs[hb_buffers_in_use++].get();
-}
-
-void Font::finalise(FT_Face ft_face) {
-    // Set the font size.
-    FT_Set_Pixel_Sizes(ft_face, 0, size);
-
-    // Create a HarfBuzz font for it.
-    auto f = hb_ft_font_create(ft_face, nullptr);
-    Assert(f, "Failed to create HarfBuzz font");
-    hb_font = f;
-    hb_ft_font_set_funcs(hb_font.get());
 }
 
 /// Shape text using this font.
@@ -223,6 +197,9 @@ auto Font::shape(
 
     // Free buffers after we’re done.
     defer { hb_buffers_in_use = 0; };
+
+    // Set the font size.
+    FT_Set_Pixel_Sizes(face, 0, size);
 
     // Refuse to go below a certain width to save us from major headaches.
     static constexpr i32 MinTextWidth = 40;
@@ -290,13 +267,13 @@ auto Font::shape(
 
         // Enable the following OpenType features: 'liga'.
         std::array features{
-            hb_feature_t {
+            hb_feature_t{
                 .tag = HB_TAG('l', 'i', 'g', 'a'),
                 .value = 1,
                 .start = HB_FEATURE_GLOBAL_START,
                 .end = HB_FEATURE_GLOBAL_END,
             },
-            hb_feature_t {
+            hb_feature_t{
                 .tag = HB_TAG('s', 's', '1', '3'),
                 .value = 1,
                 .start = HB_FEATURE_GLOBAL_START,
@@ -427,8 +404,89 @@ auto Font::shape(
         return rgs::max_element(lines, {}, &Line::width)->width;
     };
 
+    // Rebuild the font atlas, adding any new glyphs we need.
+    //
+    // We do this this way since precomputing the atlas for the
+    // entire font is rather expensive in terms of memory usage
+    // (over 100MB for a 96pt font), and time (it takes about 5
+    // second to build the atlas...).
+    auto RebuildAtlas = [&] {
+        // Collect all glyphs that are not part of the atlas.
+        for (auto& l : lines) {
+            auto [infos, _] = GetInfo(l.buf, l.start, l.end);
+            for (auto& i : infos) {
+                // If the glyph is already in the atlas, we don’t need to do anything here.
+                auto g = i.codepoint;
+                if (auto it = glyphs.find(i.codepoint); it != glyphs.end()) continue;
+
+                // Load the glyph’s metrics.
+                glyphs_ordered.push_back(g);
+                if (FT_Load_Glyph(face, g, FT_LOAD_BITMAP_METRICS_ONLY) != 0) {
+                    Log("Failed to load glyph #{}", g);
+                    glyphs[g] = {};
+                    continue;
+                }
+
+                glyphs[g] = {
+                    .atlas_index = u32(glyphs_ordered.size() - 1),
+                    .size = {face->glyph->bitmap.width, face->glyph->bitmap.rows},
+                    .bearing = {face->glyph->bitmap_left, face->glyph->bitmap_top},
+                };
+            }
+        }
+
+        // At this point, we know what glyphs we need.
+        if (atlas_entries == glyphs_ordered.size()) return;
+        defer { atlas_entries = u32(glyphs_ordered.size()); };
+
+        // Determine how many characters we can fit in a single row since an
+        // entire font tends to exceed OpenGL’s texture size limits in terms
+        // of width.
+        auto max_columns = Texture::MaxSize() / atlas_entry_width;
+        atlas_rows = u32(std::ceil(f64(glyphs_ordered.size()) / max_columns));
+        auto texture_height = atlas_height();
+        auto atlas_columns = atlas_width / atlas_entry_width;
+
+        // Allocate memory for the texture.
+        atlas_buffer.resize(usz(atlas_width * texture_height));
+
+        // Rebuild the entire atlas. Even though the atlas *cell* dimensions
+        // never change, the *atlas dimensions* may still have changed.
+        for (auto [i, glyph_index] : glyphs_ordered | vws::enumerate) {
+            // TODO: For any glyphs that have already been loaded, we can just copy
+            //       the texture data around, starting at the last pre-existing glyph.
+            // This *should* never fail because we're loading glyphs and
+            // not codepoints, but prefer not to crash if it does fail.
+            if (FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER) != 0) {
+                Log("Failed to load glyph #{}", glyph_index);
+                continue;
+            }
+
+            u32 row = u32(i) / atlas_columns;
+            u32 col = u32(i) % atlas_columns;
+            for (usz r = 0; r < face->glyph->bitmap.rows; r++) {
+                std::memcpy(
+                    atlas_buffer.data() + (row * atlas_entry_height + r) * u32(atlas_width) + col * atlas_entry_width,
+                    face->glyph->bitmap.buffer + r * face->glyph->bitmap.width,
+                    face->glyph->bitmap.width
+                );
+            }
+        }
+
+        // Rebuild the texture.
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        atlas = Texture(
+            atlas_buffer.data(),
+            atlas_width,
+            texture_height,
+            GL_RED,
+            GL_UNSIGNED_BYTE
+        );
+    };
+
     // Add the vertices for a line to the vertex buffer.
     std::vector<vec4> verts;
+    auto atlas_columns = atlas_width / atlas_entry_width;
     auto AddVertices = [&](const Line& l, f32 xbase, f32 ybase) -> std::pair<f32, f32> {
         auto [infos, positions] = GetInfo(l.buf, l.start, l.end);
         f32 x = xbase;
@@ -441,31 +499,30 @@ auto Font::shape(
 
             // Note: 'codepoint' here is actually a glyph index in the
             // font after shaping, and not a codepoint.
-            u32 g = u32(info.codepoint);
+            auto& g = glyphs.at(u32(info.codepoint));
             f32 xoffs = pos.x_offset / f32(Scale);
             f32 xadv = pos.x_advance / f32(Scale);
             f32 yoffs = pos.y_offset / f32(Scale);
 
             // Compute the x and y position using the glyph’s metrics and
             // the shaping data provided by HarfBuzz.
-            f32 desc = glyphs[g].size.y - glyphs[g].bearing.y;
-            f32 xpos = x + glyphs[g].bearing.x + xoffs;
+            f32 desc = g.size.y - g.bearing.y;
+            f32 xpos = x + g.bearing.x + xoffs;
             f32 ypos = ybase + yoffs - desc;
-            f32 w = glyphs[g].size.x;
-            f32 h = glyphs[g].size.y;
+            f32 w = g.size.x;
+            f32 h = g.size.y;
 
             // Compute the offset of the glyph in the atlas.
-            f64 tx = f64(g % atlas_columns) * atlas_entry_width;
-            f64 ty = f64(g / atlas_columns) * atlas_entry_height;
-            auto [atlas_width, atlas_height] = texture_size();
+            f64 tx = f64(g.atlas_index % atlas_columns) * atlas_entry_width;
+            f64 ty = f64(g.atlas_index / atlas_columns) * atlas_entry_height;
 
             // Compute the uv coordinates of the glyph; note that the glyph
             // is likely smaller than the width of an atlas cell, so perform
             // this calculation in pixels.
             f32 u0 = f32(f64(tx) / atlas_width);
             f32 u1 = f32(f64(tx + w) / atlas_width);
-            f32 v0 = f32(f64(ty) / atlas_height);
-            f32 v1 = f32(f64(ty + h) / atlas_height);
+            f32 v0 = f32(ty);
+            f32 v1 = f32(ty + h);
 
             // Advance past the glyph.
             x += xadv;
@@ -490,7 +547,10 @@ auto Font::shape(
     f32 max_x = ShapeLines(lines_to_shape);
     if (multiline) *multiline = lines.size() > 1;
 
-    // Now, add vertices for each line.
+    // Rebuild the texture atlas.
+    RebuildAtlas();
+
+    // Finally, add vertices for each line.
     f32 ybase = 0;
     f32 ht = 0, dp = 0;
     f32 last_line_skip = 0;
@@ -522,7 +582,7 @@ auto Font::shape(
         ybase -= skip_amount;
     }
 
-    // Upload the vertices.
+    // And upload the vertices.
     VertexArrays vao{VertexLayout::PositionTexture4D};
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
@@ -693,14 +753,16 @@ void Renderer::draw_text(
     Colour colour
 ) {
     if (text.empty()) return;
+    auto& f = font(+text.font_size(), text.style());
 
     // Initialise the text shader.
     use(text_shader);
     text_shader.uniform("text_colour", colour.vec4());
     text_shader.uniform("position", pos.vec());
+    text_shader.uniform("atlas_height", f.atlas_height());
 
     // Bind the font atlas.
-    font(+text.font_size(), text.style()).use();
+    f.use();
 
     // Dew it.
     text.vao.draw_vertices();
@@ -871,15 +933,13 @@ auto AABB::contains(xy pos) const -> bool {
 // =============================================================================
 // The renderer parameter is unused and is only passed in
 // to ensure that we create the renderer before the asset
-// loader since we need to query OpenGL information before
-// creating a separate thread.
+// loader.
 auto AssetLoader::Create(Renderer&) -> Thread<AssetLoader> {
-    return Thread<AssetLoader>{&Load, Texture::MaxSize()};
+    return Thread<AssetLoader>{&Load};
 }
 
-auto AssetLoader::Load(u32 max_texture_size, std::stop_token stop) -> AssetLoader {
+auto AssetLoader::Load(std::stop_token stop) -> AssetLoader {
     AssetLoader loader;
-    loader.max_texture_size = max_texture_size;
     loader.load(stop);
     return loader;
 }
@@ -887,7 +947,7 @@ auto AssetLoader::Load(u32 max_texture_size, std::stop_token stop) -> AssetLoade
 void AssetLoader::load(std::stop_token stop) {
     using enum TextStyle;
 
-    // Load the font face.
+    // Load the font faces.
     for (auto f : {Regular, Italic, Bold, BoldItalic}) {
         if (stop.stop_requested()) return;
         ftcall FT_Init_FreeType(&*font_data.ft[+f]);
@@ -911,14 +971,12 @@ void AssetLoader::load(std::stop_token stop) {
             FontSize::Title,
         }
     ) {
-        for (auto s : {Regular, Italic, Bold, BoldItalic}) {
-            if (stop.stop_requested()) return;
-            LoadFont(f, s);
-        }
+        for (auto s : {Regular, Italic, Bold, BoldItalic})
+            font_data.fonts[{+f, s}] = Font{*font_data.ft_face[+s], +f, s};
     }
 }
 
-void AssetLoader::LoadFont(FontSize size, TextStyle style) {
+/*void AssetLoader::LoadFont(FontSize size, TextStyle style) {
     // Try to see if we’ve cached this font.
     // FIXME: Use the name of the font file here.
     std::string style_text;
@@ -950,19 +1008,18 @@ void AssetLoader::LoadFont(FontSize size, TextStyle style) {
         "Failed to write font file to cache: {}",
         res.error()
     );
-}
+}*/
 
 /// Finish loading assets.
 void AssetLoader::finalise(Renderer& r) {
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-    // Copy resources.
+    // Move resources.
     r.font_data = std::move(font_data);
 
     // Build font textures.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     for (auto& [_, f] : r.font_data.fonts) {
-        f.atlas = Texture(
+        f.atlas_width = Texture::MaxSize();
+        /*f.atlas = Texture(
             f.raw_atlas_data.get(),
             f.atlas_columns * f.atlas_entry_width,
             f.atlas_rows * f.atlas_entry_height,
@@ -971,6 +1028,6 @@ void AssetLoader::finalise(Renderer& r) {
         );
 
         // Free the raw font data since we don’t need it anymore.
-        f.raw_atlas_data.reset();
+        f.raw_atlas_data.reset();*/
     }
 }

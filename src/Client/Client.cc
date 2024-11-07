@@ -46,7 +46,7 @@ void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
 // =============================================================================
 MenuScreen::MenuScreen(Client& c) {
     Create<Label>(
-        c.renderer.make_text("Prescriptivism", FontSize::Title, TextStyle::Italic),
+        c.renderer.make_text("Prescriptivism", FontSize::Title, TextStyle::Regular),
         Position::HCenter(-50)
     );
 
