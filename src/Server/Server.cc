@@ -7,12 +7,18 @@ module;
 #include <ranges>
 #include <thread>
 #include <vector>
+#include <random>
 
 module pr.server;
 import pr.tcp;
 
 using namespace pr;
 using namespace pr::server;
+// ============================================================================
+// Constants
+// ============================================================================
+
+constexpr usz PlayersNeeded = 2;
 
 // =============================================================================
 //  Networking
@@ -22,7 +28,7 @@ void Server::Kick(net::TCPConnexion& client, DisconnectReason reason) {
     client.disconnect();
 }
 
-void Server::TickNetworking() {
+void Server::Tick() {
     // Receive incoming data.
     server.receive();
 
@@ -47,7 +53,7 @@ void Server::TickNetworking() {
 }
 
 bool Server::accept(net::TCPConnexion& connexion) {
-    constexpr usz PlayersNeeded = 2;
+
 
     // Make sure we’re not full yet.
     if (players.size() + pending_connexions.size() == PlayersNeeded) {
@@ -115,15 +121,25 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
         }
     }
     players.push_back(std::make_unique<Player>(client, std::move(login.name)));
+    if (players.size() == PlayersNeeded) SetupGame();
 }
 
 // =============================================================================
 //  Game Logic
 // =============================================================================
-void Server::Tick() {
-    // Some players are not connected; wait for them.
-    if (not rgs::all_of(players, [](const auto& p) { return p->connected(); }))
-        return;
+void Server::SetupGame() {
+    rgs::shuffle(players, rng);
+    // TODO Shuffle the card deck
+    // TODO Distribute the cards
+    // TODO Let the players make their words
+    player().client_connexion.send(sc::StartTurn());
+}
+
+void Server::NextPlayer() {
+    player().client_connexion.send(sc::EndTurn{});
+    // TODO fill back player deck to 7 cards
+    current_player = (current_player + 1) % players.size();
+    player().client_connexion.send(sc::StartTurn{});
 }
 
 // =============================================================================
@@ -139,7 +155,6 @@ void Server::Run() {
     for (;;) {
         const auto start_of_tick = chr::system_clock::now();
 
-        TickNetworking();
         Tick();
 
         // Sleep for a bit.

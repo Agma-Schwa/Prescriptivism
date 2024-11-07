@@ -1,9 +1,11 @@
 module;
+#include <algorithm>
 #include <base/Macros.hh>
+#include <chrono>
 #include <memory>
 #include <pr/Packets.hh>
+#include <random>
 #include <vector>
-#include <chrono>
 export module pr.server;
 import pr.tcp;
 
@@ -21,6 +23,7 @@ using DisconnectReason = packets::sc::Disconnect::Reason;
 }
 
 class pr::server::Player {
+    LIBBASE_IMMOVABLE(Player);
 public:
     /// The connexion for this player, if there is an established
     /// one. This may be unset if the player has (temporarily) left
@@ -55,6 +58,12 @@ class pr::server::Server : net::TCPServerCallbacks {
     /// typically never removed.
     std::vector<std::unique_ptr<Player>> players;
 
+    /// The current player
+    usz current_player = 0;
+
+    /// The random number generator
+    std::mt19937 rng{std::random_device{}()};
+
     /// List of connexions that have not yet been assigned a player.
     std::vector<PendingConnexion> pending_connexions;
 
@@ -78,7 +87,14 @@ public:
 
 private:
     void Tick();
-    void TickNetworking();
+
+    void SetupGame();
+    void NextPlayer();
+
+    auto player() -> Player& { return *players[current_player]; }
+    bool all_players_connected() {
+        return rgs::all_of(players, [](const auto& p) { return p->connected(); });
+    }
 
     bool accept(net::TCPConnexion& connexion) override;
     void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;

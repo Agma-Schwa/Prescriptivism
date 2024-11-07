@@ -33,7 +33,7 @@ private:                       \
 public:                        \
     name
 
-#define Serialisable(...) PR_SERIALISE(id, __VA_ARGS__)
+#define Serialisable(...) PR_SERIALISE(id __VA_OPT__(,) __VA_ARGS__)
 
 // =============================================================================
 //  Enumerations
@@ -111,6 +111,15 @@ DefinePacket(HeartbeatRequest) {
     /// client is actually responding to the right packet.
     u32 seq_no;
 };
+
+DefinePacket(StartTurn) {
+    Serialisable();
+};
+
+DefinePacket(EndTurn) {
+    Serialisable();
+};
+
 } // namespace pr::packets::sc
 
 // =============================================================================

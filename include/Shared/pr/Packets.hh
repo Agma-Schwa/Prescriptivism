@@ -5,7 +5,9 @@
     X(Disconnect)
 
 #define SC_PACKETS(X) \
-    X(HeartbeatRequest)
+    X(HeartbeatRequest) \
+    X(StartTurn) \
+    X(EndTurn)
 
 #define CS_PACKETS(X) \
     X(HeartbeatResponse) \
