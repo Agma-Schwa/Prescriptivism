@@ -1,13 +1,10 @@
 module;
 #include <algorithm>
-#include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <chrono>
 #include <memory>
-#include <ranges>
 #include <thread>
 #include <vector>
-#include <random>
 
 module pr.server;
 import pr.tcp;
@@ -53,8 +50,6 @@ void Server::Tick() {
 }
 
 bool Server::accept(net::TCPConnexion& connexion) {
-
-
     // Make sure we’re not full yet.
     if (players.size() + pending_connexions.size() == PlayersNeeded) {
         connexion.send(packets::sc::Disconnect{DisconnectReason::ServerFull});
@@ -128,10 +123,116 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
 //  Game Logic
 // =============================================================================
 void Server::SetupGame() {
-    rgs::shuffle(players, rng);
-    // TODO Shuffle the card deck
-    // TODO Distribute the cards
+    // Consonants
+    for (u8 i = 0; i < 2; ++i) {
+        deck.emplace_back(CardType::C_b);
+        deck.emplace_back(CardType::C_d);
+        deck.emplace_back(CardType::C_dʒ);
+        deck.emplace_back(CardType::C_g);
+        deck.emplace_back(CardType::C_v);
+        deck.emplace_back(CardType::C_z);
+        deck.emplace_back(CardType::C_ʒ);
+    }
+    for (u8 i = 0; i < 4; ++i) {
+        deck.emplace_back(CardType::C_p);
+        deck.emplace_back(CardType::C_t);
+        deck.emplace_back(CardType::C_tʃ);
+        deck.emplace_back(CardType::C_k);
+        deck.emplace_back(CardType::C_f);
+        deck.emplace_back(CardType::C_s);
+        deck.emplace_back(CardType::C_ʃ);
+        deck.emplace_back(CardType::C_h);
+        deck.emplace_back(CardType::C_w);
+        deck.emplace_back(CardType::C_r);
+        deck.emplace_back(CardType::C_j);
+        deck.emplace_back(CardType::C_ʟ);
+        deck.emplace_back(CardType::C_m);
+        deck.emplace_back(CardType::C_n);
+        deck.emplace_back(CardType::C_ɲ);
+        deck.emplace_back(CardType::C_ŋ);
+    }
+    auto num_consonants = deck.size();
+    // Vowels
+    for (u8 i = 0; i < 3; ++i) {
+        deck.emplace_back(CardType::V_y);
+        deck.emplace_back(CardType::V_ʊ);
+        deck.emplace_back(CardType::V_ɛ);
+        deck.emplace_back(CardType::V_ɐ);
+        deck.emplace_back(CardType::V_ɔ);
+    }
+    for (u8 i = 0; i < 5; ++i) {
+        deck.emplace_back(CardType::V_ɨ);
+        deck.emplace_back(CardType::V_æ);
+        deck.emplace_back(CardType::V_ɑ);
+    }
+    for (u8 i = 0; i < 7; ++i) {
+        deck.emplace_back(CardType::V_i);
+        deck.emplace_back(CardType::V_u);
+        deck.emplace_back(CardType::V_e);
+        deck.emplace_back(CardType::V_ə);
+        deck.emplace_back(CardType::V_o);
+        deck.emplace_back(CardType::V_a);
+    }
+    rgs::shuffle(deck.begin(), deck.begin() + num_consonants, rng);
+    rgs::shuffle(deck.begin() + num_consonants, deck.end(), rng);
+    for (auto& p : players) {
+        for (u8 i = 0; i < 3; ++i) {
+            p->word.push_back(std::move(deck.back()));
+            deck.pop_back();
+            p->word.push_back(std::move(deck.front()));
+            deck.erase(deck.begin());
+        }
+    }
+
+    // Special cards
+    deck.emplace_back(CardType::P_Babel);
+    deck.emplace_back(CardType::P_Superstratum);
+    deck.emplace_back(CardType::P_Substratum);
+    deck.emplace_back(CardType::P_Whorf);
+    deck.emplace_back(CardType::P_Academia);
+    deck.emplace_back(CardType::P_Heffer);
+    deck.emplace_back(CardType::P_GVS);
+    deck.emplace_back(CardType::P_Darija);
+    deck.emplace_back(CardType::P_Brasil);
+    deck.emplace_back(CardType::P_Gvprtskvni);
+    deck.emplace_back(CardType::P_Reconstruction);
+    deck.emplace_back(CardType::P_Chomsky);
+    deck.emplace_back(CardType::P_Pinker);
+    deck.emplace_back(CardType::P_Campbell);
+    deck.emplace_back(CardType::P_Schleicher);
+    deck.emplace_back(CardType::P_Schleyer);
+    deck.emplace_back(CardType::P_Grimm);
+    deck.emplace_back(CardType::P_Vajda);
+    deck.emplace_back(CardType::P_Zamnenhoff);
+    deck.emplace_back(CardType::P_Owl);
+    deck.emplace_back(CardType::P_Revival);
+    deck.emplace_back(CardType::P_Rosetta);
+    deck.emplace_back(CardType::P_Urheimat);
+    deck.emplace_back(CardType::P_ProtoWorld);
+    deck.emplace_back(CardType::P_Vernacular);
+    deck.emplace_back(CardType::P_Assimilation);
+    deck.emplace_back(CardType::P_Dissimilation);
+    deck.emplace_back(CardType::P_Regression);
+    deck.emplace_back(CardType::P_Descriptivism);
+    deck.emplace_back(CardType::P_Elision);
+    deck.emplace_back(CardType::P_Elision);
+    for (u8 i = 0; i < 3; ++i) {
+        deck.emplace_back(CardType::P_Nope);
+        deck.emplace_back(CardType::P_LinguaFranca);
+        deck.emplace_back(CardType::P_Epenthesis);
+        deck.emplace_back(CardType::P_Descriptivism);
+        deck.emplace_back(CardType::P_Elision);
+    }
+    for (u8 i = 0; i < 10; ++i) deck.emplace_back(CardType::P_SpellingReform);
+    rgs::shuffle(deck, rng);
+    for (auto& p : players) {
+        for (u8 i = 0; i < 7; ++i) {
+            p->hand.push_back(std::move(deck.back()));
+            deck.pop_back();
+        }
+    }
     // TODO Let the players make their words
+    rgs::shuffle(players, rng);
     player().client_connexion.send(sc::StartTurn());
 }
 
