@@ -88,6 +88,7 @@ struct pr::client::Position {
     }
 
     /// Convert to a relative position.
+    auto relative(AABB parent_box, Size object_size) -> xy;
     auto relative(xy origin, Size parent_size, Size object_size) -> xy;
 
     /// Offset vertically.
@@ -133,10 +134,11 @@ class pr::client::Element {
     Element* parent_element = nullptr;
 
 public:
-    bool hovered    : 1 = false;
-    bool selectable : 1 = false;
-    bool selected   : 1 = false;
-    bool visible    : 1 = true;
+    bool hovered       : 1 = false; ///< Element is being hovered.
+    bool selectable    : 1 = false; ///< Element can be selected.
+    bool selected      : 1 = false; ///< Element is selected.
+    bool visible       : 1 = true;  ///< Element is rendered, ticked, and interactable.
+    bool needs_refresh : 1 = false; ///< Element requested a refresh.
 
 protected:
     explicit Element(Element* parent) : parent_element(parent) {}
@@ -229,11 +231,12 @@ public:
 /// Label that supports reflowing text automatically.
 class pr::client::Label : public Element {
     Text text;
-    Position pos{};
     bool reflow = false;
-    bool need_refresh = false;
 
 public:
+    Position pos{};
+    Colour colour = Colour::White;
+
     explicit Label(Element* parent, Position pos) : Element(parent), pos(pos) {}
     explicit Label(Element* parent, ShapedText text, Position pos)
         : Element(parent),
@@ -249,26 +252,35 @@ public:
         bool reflow = true
     ) : Element(parent),
         text("", sz, align, style),
-        pos(pos),
-        reflow(reflow) {}
+        reflow(reflow),
+        pos(pos) {}
 
     explicit Label(
         Element* parent,
         std::string text,
-        FontSize sz,
-        TextStyle style,
-        TextAlign align,
         Position pos,
+        FontSize sz = FontSize::Text,
+        TextStyle style = TextStyle::Regular,
+        TextAlign align = TextAlign::SingleLine,
         bool reflow = true
     ) : Label(parent, sz, style, align, pos, reflow) {
         update_text(std::move(text));
     }
 
     void draw(Renderer& r) override;
+    void font_size(FontSize new_size) { text.font_size(new_size); }
     void refresh(Renderer& r) override;
+
+    void should_reflow(bool should_reflow = true) {
+        reflow = should_reflow;
+        needs_refresh = true;
+    }
+
+    auto size(Renderer& r) -> Size { return text.size(r); }
+
     void update_text(std::string new_text) {
         text.set(std::move(new_text));
-        need_refresh = true;
+        needs_refresh = true;
     }
 };
 
@@ -400,37 +412,45 @@ public:
     };
 
 private:
+    using LabelGroup = std::array<Label, NumScales>;
+
     static constexpr Size CardSize[NumScales] = {Size{60, 90}, Size{120, 180}, Size{240, 360}};
     static constexpr u16 Offset[NumScales] = {1, 2, 4};
+    static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge};
+    static constexpr FontSize NameSpecialSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
+    static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
-    ShapedText code[NumScales];
-    ShapedText name[NumScales];
-    ShapedText middle[NumScales];
-    ShapedText special[NumScales];
     Position pos;
-    Scale s;
+    Scale s = Field;
     u8 count;
+    Label code;
+    Label name;
+    Label middle;
+    Label special;
 
 public:
     Card(
         Element* parent,
-        Renderer& r,
         Position pos,
-        std::string_view code,
-        std::string_view name,
-        std::string_view middle,
-        std::string_view special,
+        std::string code,
+        std::string name,
+        std::string middle,
+        std::string special,
         u8 count
     );
 
     void draw(Renderer& r) override;
+    void refresh(Renderer&) override;
     void set_scale(Scale _s);
 };
 
 template <>
-struct std::formatter<pr::client::xy> : std::formatter<std::string> {
+struct std::formatter<pr::client::Position> : std::formatter<std::string> {
     template <typename FormatContext>
-    auto format(pr::client::xy p, FormatContext& ctx) const {
-        return std::formatter<std::string>::format(std::format("({}, {})", p.x, p.y), ctx);
+    auto format(pr::client::Position pos, FormatContext& ctx) const {
+        return std::formatter<std::string>::format(
+            std::format("Position(base={}, xadjust={}, yadjust={}, anchor={})", pos.base, pos.xadjust, pos.yadjust, std::to_underlying(pos.anchor)),
+            ctx
+        );
     }
 };

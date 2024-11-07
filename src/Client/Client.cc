@@ -212,12 +212,11 @@ void ConnexionScreen::set_address(std::string addr) {
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
     auto& card = Create<Card>(
-        c.renderer,
         Position::Center(),
         "P3M5",
         "Voiced\nvelar\nstop",
         "g",
-        "-> ɣ\n-> w",
+        "→ ɣ\n→ w",
         10
     );
 
@@ -372,6 +371,7 @@ void Client::Run() {
 
 void Client::enter_screen(Screen& s) {
     current_screen = &s;
+    s.refresh(renderer);
     s.on_entered();
 }
 

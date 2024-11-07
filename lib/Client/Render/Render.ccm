@@ -171,8 +171,41 @@ struct pr::client::AABB {
     /// Get the height of this box.
     constexpr auto height() const -> i32 { return max.y - min.y; }
 
+    /// Get the origin point of this box.
+    constexpr auto origin() const -> xy { return min; }
+
+    /// Get the size of this box.
+    constexpr auto size() const -> Size { return {width(), height()}; }
+
     /// Get the width of this box.
     constexpr auto width() const -> i32 { return max.x - min.x; }
+};
+
+template <>
+struct std::formatter<pr::client::Size> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(pr::client::Size p, FormatContext& ctx) const {
+        return std::formatter<std::string>::format(std::format("({}, {})", p.wd, p.ht), ctx);
+    }
+};
+
+template <>
+struct std::formatter<pr::client::xy> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(pr::client::xy p, FormatContext& ctx) const {
+        return std::formatter<std::string>::format(std::format("({}, {})", p.x, p.y), ctx);
+    }
+};
+
+template <>
+struct std::formatter<pr::client::AABB> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(pr::client::AABB p, FormatContext& ctx) const {
+        return std::formatter<std::string>::format(
+            std::format("{} -> {}", p.min, p.max),
+            ctx
+        );
+    }
 };
 
 // =============================================================================
@@ -257,8 +290,8 @@ public:
 class pr::client::Text {
     mutable ShapedText text{FontSize::Text};
     std::u32string content;
-    TextAlign align = TextAlign::SingleLine;
-    TextStyle style = TextStyle::Regular;
+    TextAlign text_align = TextAlign::SingleLine;
+    TextStyle text_style = TextStyle::Regular;
     mutable bool dirty = false;
     mutable bool needs_multiple_lines = false;
 
@@ -268,14 +301,14 @@ public:
         ShapedText t,
         TextAlign align = TextAlign::SingleLine,
         TextStyle style = TextStyle::Regular
-    ) : text{std::move(t)}, align{align}, style{style} {}
+    ) : text{std::move(t)}, text_align{align}, text_style{style} {}
 
     Text(
         std::u32string s,
         FontSize sz,
         TextAlign align,
         TextStyle style = TextStyle::Regular
-    ) : text{sz}, content{std::move(s)}, align{align}, style{style}, dirty{true} {}
+    ) : text{sz}, content{std::move(s)}, text_align{align}, text_style{style}, dirty{true} {}
 
     Text(
         std::string_view s,
@@ -284,8 +317,20 @@ public:
         TextStyle style = TextStyle::Regular
     ) : Text{base::text::ToUTF32(s), sz, align, style} {}
 
+    /// Set the alignment.
+    void align(TextAlign a) {
+        text_align = a;
+        dirty = true;
+    }
+
     /// Check if this text is empty.
     bool empty() const { return content.empty() and text.size() == Size{}; }
+
+    /// Set the font size.
+    void font_size(FontSize sz) {
+        text = ShapedText(sz);
+        dirty = true;
+    }
 
     /// Reflow the text to fit within the given width.
     void reflow(Renderer& r, i32 width);
@@ -298,6 +343,15 @@ public:
 
     /// Get this as shaped text, shaping it if it is not already shaped.
     auto shaped(Renderer& r) const -> const ShapedText&;
+
+    /// Get the text’s extents.
+    auto size(Renderer& r) const -> Size { return shaped(r).size(); }
+
+    /// Set the style.
+    void style(TextStyle s) {
+        text_style = s;
+        dirty = true;
+    }
 
 private:
     void shape(Renderer& r, i32 desired_width = 0) const;

@@ -193,8 +193,8 @@ void Text::shape(Renderer& r, i32 desired_width) const {
     text = r.make_text(
         content,
         text.font_size(),
-        style,
-        align,
+        text_style,
+        text_align,
         desired_width,
         nullptr,
         &needs_multiple_lines

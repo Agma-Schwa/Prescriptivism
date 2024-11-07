@@ -30,6 +30,10 @@ auto Position::absolute(Size screen_size, Size object_size) -> xy {
     return relative(vec2(), screen_size, object_size);
 }
 
+auto Position::relative(AABB parent_box, Size object_size) -> xy {
+    return relative(parent_box.origin(), parent_box.size(), object_size);
+}
+
 auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
     static auto Clamp = [](i32 val, i32 obj_size, i32 total_size) -> i32 {
         if (val == Centered) return (total_size - obj_size) / 2;
@@ -72,13 +76,18 @@ void Button::draw(Renderer& r) {
 }
 
 void Label::draw(Renderer& r) {
-    if (need_refresh) refresh(r);
     auto& shaped = text.shaped(r);
-    r.draw_text(shaped, auto{pos}.voffset(i32(shaped.depth())).absolute(r.size(), shaped.size()));
+    auto parent_box = parent()->bounding_box();
+    auto position = auto{pos}.voffset(i32(shaped.depth())).relative( //
+        parent_box.origin(),
+        parent_box.size(),
+        shaped.size()
+    );
+
+    r.draw_text(shaped, position, colour);
 }
 
 void Label::refresh(Renderer& r) {
-    need_refresh = false;
     if (not reflow) return;
     auto sz = parent() ? parent()->bounding_box().width() : r.size().wd;
     text.reflow(r, sz);
@@ -362,64 +371,61 @@ void Throbber::draw(Renderer& r) {
 
 Card::Card(
     Element* parent,
-    Renderer& r,
     Position pos,
-    std::string_view _code,
-    std::string_view _name,
-    std::string_view _middle,
-    std::string_view _special,
+    std::string code_text,
+    std::string name_text,
+    std::string middle_text,
+    std::string special_text,
     u8 count
-) : Element(parent), pos(pos), count(count) {
-    s = Field;
-    code[OtherPlayer] = r.make_text(_code, FontSize::Text);
-    name[OtherPlayer] = r.make_text(_name, FontSize::Small);
-    middle[OtherPlayer] = r.make_text(_middle, FontSize::Medium);
-    special[OtherPlayer] = r.make_text(_special, FontSize::Small);
-    code[Field] = r.make_text(_code, FontSize::Medium);
-    name[Field] = r.make_text(_name, FontSize::Text);
-    middle[Field] = r.make_text(_middle, FontSize::Huge);
-    special[Field] = r.make_text(_special, FontSize::Text);
-    code[Large] = r.make_text(_code, FontSize::Huge);
-    name[Large] = r.make_text(_name, FontSize::Medium);
-    middle[Large] = r.make_text(_middle, FontSize::Title);
-    special[Large] = r.make_text(_special, FontSize::Medium);
-}
-
-void Card::set_scale(const Scale _s) {
-    s = _s;
+) : Element{parent},
+    pos{pos},
+    count{count},
+    code{this, std::move(code_text), Position()},
+    name{this, std::move(name_text), Position()},
+    middle{this, std::move(middle_text), Position::Center()},
+    special{this, std::move(special_text), Position()} {
+    code.colour = Colour::Black;
+    name.colour = Colour::Black;
+    middle.colour = Colour::Black;
+    special.colour = Colour::Black;
 }
 
 void Card::draw(Renderer& r) {
     auto offs = Offset[s];
     auto sz = CardSize[s];
-    auto at = pos.absolute(r.size(), sz);
+    auto at = pos.relative(parent()->bounding_box(), sz);
 
     r.draw_rect(at, sz);
-    r.draw_text(code[s], Position{offs, -offs}.relative(at, sz, code[s].size()), Colour::Black);
+    code.draw(r);
+    middle.draw(r);
+    special.draw(r);
+    name.draw(r);
 
     for (int i = 0; i < count; ++i) r.draw_rect(
         Position{-3 * offs, -(2 * offs + 2 * i * offs)}.relative(at, sz, {5 * offs, offs}),
         {5 * offs, offs},
         Colour::Black
     );
+}
 
-    r.draw_text(
-        name[s],
-        Position{offs, -2 * offs - code[s].size().ht}.relative(at, sz, name[s].size()),
-        Colour::Black
-    );
+void Card::refresh(Renderer& r) {
+    SetBoundingBox(AABB{pos.relative(parent()->bounding_box(), CardSize[s]), CardSize[s]});
 
-    r.draw_text(
-        middle[s],
-        Position::Center().relative(at, sz, middle[s].size()),
-        Colour::Black
-    );
+    // Adjust label font sizes.
+    code.font_size(CodeSizes[s]);
+    name.font_size(NameSpecialSizes[s]);
+    middle.font_size(MiddleSizes[s]);
+    special.font_size(NameSpecialSizes[s]);
 
-    r.draw_text(
-        special[s],
-        Position::HCenter(5 * offs + special[s].size().ht).relative(at, sz, special[s].size()),
-        Colour::Black
-    );
+    // Adjust label positions.
+    code.pos = Position{Offset[s], -Offset[s]};
+    special.pos = Position::HCenter(10 * Offset[s]);
+    name.pos = Position(Offset[s], -(4 * Offset[s] + code.size(r).ht));
+}
+
+void Card::set_scale(const Scale _s) {
+    s = _s;
+    needs_refresh = true;
 }
 
 // =============================================================================
@@ -481,9 +487,29 @@ void Screen::draw(Renderer& r) {
 
 void Screen::refresh(Renderer& r) {
     SetBoundingBox(AABB({0, 0}, r.size()));
-    if (prev_size == r.size()) return;
+
+    // Size hasn’t changed. Still update any elements that
+    // requested a refresh. Also ignore visibility here.
+    if (prev_size == r.size()) {
+        for (auto& e : children) {
+            if (e->needs_refresh) {
+                e->needs_refresh = false;
+                e->refresh(r);
+            }
+        }
+
+        return;
+    }
+
+    // Refresh every visible element, and every element that
+    // requested a refresh.
     prev_size = r.size();
-    for (auto& e : visible()) e->refresh(r);
+    for (auto& e : children) {
+        if (e->visible or e->needs_refresh) {
+            e->needs_refresh = false;
+            e->refresh(r);
+        }
+    }
 }
 
 void Screen::tick(InputSystem& input) {
