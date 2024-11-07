@@ -179,10 +179,49 @@ auto Font::AllocBuffer() -> hb_buffer_t* {
     return hb_bufs[hb_buffers_in_use++].get();
 }
 
-/// Shape text using this font.
-///
-/// The resulting object is position-independent and can
-/// be drawn at any coordinates.
+void Text::reflow(Renderer& r, i32 width) {
+    if (dirty or width < text.width() or needs_multiple_lines) shape(r, width);
+}
+
+auto Text::shaped(Renderer& r) const -> const ShapedText& {
+    if (dirty) shape(r, 0);
+    return text;
+}
+
+void Text::shape(Renderer& r, i32 desired_width) const {
+    dirty = false;
+    text = r.make_text(
+        content,
+        text.font_size(),
+        style,
+        align,
+        desired_width,
+        nullptr,
+        &needs_multiple_lines
+    );
+}
+
+// =============================================================================
+//  Text Shaping
+// ============================================================================
+// Shape text using this font.
+//
+// The resulting object is position-independent and can
+// be drawn at any coordinates.
+//
+// This is a complicated multi-step process that works roughly as follows:
+//
+//   1. Break the input text into lines along hard line breaks ('\n').
+//
+//   2. Shape each line to determine its width and the glyphs we need.
+//
+//   3. If we’re reflowing, split any lines that are too long into ‘sublines’,
+//      each of which may either have to be reshaped or can reference existing
+//      shaping information from step 2.
+//
+//   4. Determine if we need to add any glyphs to the font atlas and do so.
+//
+//   5. Convert the shaped physical lines into vertices and upload the vertex data.
 auto Font::shape(
     std::u32string_view text,
     TextAlign align,
@@ -587,28 +626,6 @@ auto Font::shape(
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
     return ShapedText(std::move(vao), size, style, max_x, ht, dp);
-}
-
-void Text::reflow(Renderer& r, i32 width) {
-    if (dirty or width < text.width() or needs_multiple_lines) shape(r, width);
-}
-
-auto Text::shaped(Renderer& r) const -> const ShapedText& {
-    if (dirty) shape(r, 0);
-    return text;
-}
-
-void Text::shape(Renderer& r, i32 desired_width) const {
-    dirty = false;
-    text = r.make_text(
-        content,
-        text.font_size(),
-        style,
-        align,
-        desired_width,
-        nullptr,
-        &needs_multiple_lines
-    );
 }
 
 // =============================================================================
