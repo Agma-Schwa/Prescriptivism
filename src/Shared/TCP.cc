@@ -72,7 +72,7 @@ public:
 
     auto handle() const -> Socket { return socket; }
 
-private:
+protected:
     void Close();
 };
 
@@ -91,7 +91,10 @@ auto CreateServerSocket(u16 port, u32 max_connexions) -> Result<SocketHolder>;
 // =============================================================================
 #ifdef __linux__
 void impl::SocketHolder::Close() {
-    if (socket != InvalidSocket) ::close(socket);
+    if (socket != InvalidSocket) {
+        ::close(socket);
+        socket = InvalidSocket;
+    }
 }
 
 auto MakeNonBlocking(impl::Socket sock) -> Result<> {
@@ -302,9 +305,14 @@ void TCPConnexion::Impl::Disconnect() {
     // the client hopefully gets any disconnect packets that might
     // have been queued up.
     if (not send_buffer.empty()) Send(send_buffer);
+
+    // Actually close the socket.
+    Close();
 }
 
 void TCPConnexion::Impl::Send(std::span<const std::byte> data) {
+    if (disconnected) return;
+
     // Clear out the buffer first before sending new data.
     if (not send_buffer.empty()) {
         auto sent = SendImpl(send_buffer);
