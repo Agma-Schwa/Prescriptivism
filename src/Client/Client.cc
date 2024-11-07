@@ -18,7 +18,12 @@ using namespace pr::client;
 //  Error Screen
 // =============================================================================
 ErrorScreen::ErrorScreen(Client& c) {
-    msg = &Create<Label>(FontSize::Large, TextAlign::Center, Position::Center());
+    msg = &Create<Label>(
+        FontSize::Large,
+        TextStyle::Regular,
+        TextAlign::Center,
+        Position::Center()
+    );
 
     auto& back = Create<Button>(
         c.renderer.make_text("Back", FontSize::Medium),
@@ -41,7 +46,7 @@ void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
 // =============================================================================
 MenuScreen::MenuScreen(Client& c) {
     Create<Label>(
-        c.renderer.make_text("Prescriptivism", FontSize::Title),
+        c.renderer.make_text("Prescriptivism", FontSize::Title, TextStyle::Italic),
         Position::HCenter(-50)
     );
 
@@ -62,6 +67,7 @@ MenuScreen::MenuScreen(Client& c) {
     auto& address = Create<TextEdit>(
         Position::HCenter(350),
         FontSize::Medium,
+        TextStyle::Regular,
         c.renderer.make_text("Server Address", FontSize::Medium),
         10,
         false,
@@ -72,6 +78,7 @@ MenuScreen::MenuScreen(Client& c) {
     auto& username = Create<TextEdit>(
         Position::HCenter(287),
         FontSize::Medium,
+        TextStyle::Regular,
         c.renderer.make_text("Your Name", FontSize::Medium),
         10,
         false,
@@ -82,6 +89,7 @@ MenuScreen::MenuScreen(Client& c) {
     auto& password = Create<TextEdit>(
         Position::HCenter(225),
         FontSize::Medium,
+        TextStyle::Regular,
         c.renderer.make_text("Password", FontSize::Medium),
         10,
         true,

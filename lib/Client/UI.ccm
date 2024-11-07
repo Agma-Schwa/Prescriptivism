@@ -240,14 +240,27 @@ public:
           text(std::move(text)),
           pos(pos) {}
 
-    explicit Label(Element* parent, FontSize sz, TextAlign align, Position pos, bool reflow = true)
-        : Element(parent),
-          text("", sz, align),
-          pos(pos),
-          reflow(reflow) {}
+    explicit Label(
+        Element* parent,
+        FontSize sz,
+        TextStyle style,
+        TextAlign align,
+        Position pos,
+        bool reflow = true
+    ) : Element(parent),
+        text("", sz, align, style),
+        pos(pos),
+        reflow(reflow) {}
 
-    explicit Label(Element* parent, std::string text, FontSize sz, TextAlign align, Position pos, bool reflow = true)
-        : Label(parent, sz, align, pos, reflow) {
+    explicit Label(
+        Element* parent,
+        std::string text,
+        FontSize sz,
+        TextStyle style,
+        TextAlign align,
+        Position pos,
+        bool reflow = true
+    ) : Label(parent, sz, style, align, pos, reflow) {
         update_text(std::move(text));
     }
 
@@ -317,6 +330,7 @@ class pr::client::TextEdit : public TextBox {
     std::u32string text;
     std::vector<ShapedText::Cluster> clusters;
     FontSize size;
+    TextStyle style;
     bool dirty = false;
     bool hide_text = false;
     i32 cursor = 0;
@@ -328,10 +342,11 @@ public:
         Element* parent,
         Position pos,
         FontSize size,
+        TextStyle style,
         i32 padding,
         i32 min_wd = 0,
         i32 min_ht = 0
-    ) : TextBox(parent, ShapedText(), ShapedText(), pos, padding, min_wd, min_ht), size{size} {
+    ) : TextBox(parent, ShapedText(), ShapedText(), pos, padding, min_wd, min_ht), size{size}, style{style} {
         selectable = true;
     }
 
@@ -339,6 +354,7 @@ public:
         Element* parent,
         Position pos,
         FontSize size,
+        TextStyle style,
         ShapedText placeholder,
         i32 padding,
         bool hide_text = false,
@@ -346,6 +362,7 @@ public:
         i32 min_ht = 0
     ) : TextBox(parent, ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht),
         size{size},
+        style{style},
         hide_text{hide_text} {
         selectable = true;
     }

@@ -130,9 +130,15 @@ void TextBox::refresh(Renderer& r) {
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
-        auto shaped = hide_text
-                        ? r.make_text(std::u32string(text.size(), U'•'), size, TextAlign::SingleLine, 0, &clusters)
-                        : r.make_text(text, size, TextAlign::SingleLine, 0, &clusters);
+        auto shaped = r.make_text(
+            hide_text ? std::u32string(text.size(), U'•') : text,
+            size,
+            style,
+            TextAlign::SingleLine,
+            0,
+            &clusters
+        );
+
         UpdateText(std::move(shaped));
     }
 

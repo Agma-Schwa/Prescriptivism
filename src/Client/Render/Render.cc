@@ -104,6 +104,14 @@ constexpr char DefaultFontRegular[]{
 #embed "Fonts/BoldItalic.ttf"
 };
 
+// These MUST follow the order of the enumerators in 'TextStyle'.
+constexpr std::span<const char> Fonts[]{
+    DefaultFontRegular,
+    DefaultFontBold,
+    DefaultFontItalic,
+    DefaultFontBoldItalic,
+};
+
 // =============================================================================
 //  Text and Fonts
 // =============================================================================
@@ -124,8 +132,8 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     Log("Buffer: {}", debug);
 }
 
-Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip)
-    : size{size}, skip{skip} {
+Font::Font(FT_Face ft_face, u32 max_texture_size, u32 size, TextStyle style, u32 skip)
+    : size{size}, style{style}, skip{skip} {
     finalise(ft_face);
 
     // Determine the maximum width and height amongst all glyphs.
@@ -518,7 +526,7 @@ auto Font::shape(
     VertexArrays vao{VertexLayout::PositionTexture4D};
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
-    return ShapedText(std::move(vao), size, max_x, ht, dp);
+    return ShapedText(std::move(vao), size, style, max_x, ht, dp);
 }
 
 void Text::reflow(Renderer& r, i32 width) {
@@ -535,6 +543,7 @@ void Text::shape(Renderer& r, i32 desired_width) const {
     text = r.make_text(
         content,
         text.font_size(),
+        style,
         align,
         desired_width,
         nullptr,
@@ -691,7 +700,7 @@ void Renderer::draw_text(
     text_shader.uniform("position", pos.vec());
 
     // Bind the font atlas.
-    font(+text.font_size()).use();
+    font(+text.font_size(), text.style()).use();
 
     // Dew it.
     text.vao.draw_vertices();
@@ -774,15 +783,16 @@ void Renderer::use(ShaderProgram& shader) {
 // =============================================================================
 //  Creating Objects
 // =============================================================================
-auto Renderer::font(u32 size) -> Font& {
+auto Renderer::font(u32 size, TextStyle style) -> Font& {
     // Make sure the font exists.
-    auto it = fonts_by_size.find(size);
+    auto it = font_data.fonts.find({size, style});
     Assert(
-        it != fonts_by_size.end(),
-        "Font with size {} has not been built yet. Make sure to load this "
-        "font size in the asset loader (AssetLoader::load()) if you want to "
-        "use it",
-        size
+        it != font_data.fonts.end(),
+        "Font with size {} and style {} has not been built yet. Make sure to "
+        "load this font size in the asset loader (AssetLoader::load()) if you "
+        "want to use it",
+        size,
+        +style
     );
 
     return it->second;
@@ -791,25 +801,15 @@ auto Renderer::font(u32 size) -> Font& {
 auto Renderer::frame() -> Frame { return Frame(*this); }
 
 auto Renderer::make_text(
-    std::string_view text,
-    FontSize size,
-    TextAlign align,
-    i32 desired_width,
-    std::vector<ShapedText::Cluster>* clusters,
-    bool* multiline
-) -> ShapedText {
-    return font(+size).shape(text::ToUTF32(text), align, desired_width, clusters, multiline);
-}
-
-auto Renderer::make_text(
     std::u32string_view text,
     FontSize size,
+    TextStyle style,
     TextAlign align,
     i32 desired_width,
     std::vector<ShapedText::Cluster>* clusters,
     bool* multiline
 ) -> ShapedText {
-    return font(+size).shape(text, align, desired_width, clusters, multiline);
+    return font(+size, style).shape(text, align, desired_width, clusters, multiline);
 }
 
 void Renderer::reload_shaders() {
@@ -885,20 +885,20 @@ auto AssetLoader::Load(u32 max_texture_size, std::stop_token stop) -> AssetLoade
 }
 
 void AssetLoader::load(std::stop_token stop) {
-    // Load the font face.
-    FT_Library lib;
-    FT_Face face;
-    ftcall FT_Init_FreeType(&lib);
-    ftcall FT_New_Memory_Face(
-        lib,
-        reinterpret_cast<const FT_Byte*>(DefaultFontRegular),
-        sizeof DefaultFontRegular,
-        0,
-        &face
-    );
+    using enum TextStyle;
 
-    ft = lib;
-    ft_face = face;
+    // Load the font face.
+    for (auto f : {Regular, Italic, Bold, BoldItalic}) {
+        if (stop.stop_requested()) return;
+        ftcall FT_Init_FreeType(&*font_data.ft[+f]);
+        ftcall FT_New_Memory_Face(
+            *font_data.ft[+f],
+            reinterpret_cast<const FT_Byte*>(Fonts[+f].data()),
+            Fonts[+f].size(),
+            0,
+            &*font_data.ft_face[+f]
+        );
+    }
 
     // Load each predefined font.
     for (
@@ -911,19 +911,25 @@ void AssetLoader::load(std::stop_token stop) {
             FontSize::Title,
         }
     ) {
-        if (stop.stop_requested()) return;
-        LoadFont(f);
+        for (auto s : {Regular, Italic, Bold, BoldItalic}) {
+            if (stop.stop_requested()) return;
+            LoadFont(f, s);
+        }
     }
 }
 
-void AssetLoader::LoadFont(FontSize size) {
+void AssetLoader::LoadFont(FontSize size, TextStyle style) {
     // Try to see if we’ve cached this font.
     // FIXME: Use the name of the font file here.
-    auto cache = fs::Path{"./.cache/"} / std::format("font-{}.bin", +size);
+    std::string style_text;
+    if (style & TextStyle::Bold) style_text += "-bold";
+    if (style & TextStyle::Italic) style_text += "-italic";
+    std::pair key{+size, style};
+    auto cache = fs::Path{"./.cache/"} / std::format("font{}-{}.bin", style_text, +size);
     auto TryReadCachedFont = [&] -> Result<> {
         auto data = Try(File::Read(cache));
-        fonts[+size] = Try(ser::Deserialise<Font>(std::span{data.data(), data.size()}));
-        fonts[+size].finalise(ft_face.get());
+        font_data.fonts[key] = Try(ser::Deserialise<Font>(std::span{data.data(), data.size()}));
+        font_data.fonts[key].finalise(font_data.ft_face[+style].get());
         return {};
     };
 
@@ -936,10 +942,10 @@ void AssetLoader::LoadFont(FontSize size) {
 
     // If the font can’t be found or if we failed to load it,
     // recreate if from the font face.
-    fonts[+size] = Font(ft_face.get(), max_texture_size, +size);
+    font_data.fonts[key] = Font(font_data.ft_face[+style].get(), max_texture_size, +size, style);
 
     // And cache it so we have it next time.
-    auto data = ser::Serialise(fonts[+size]);
+    auto data = ser::Serialise(font_data.fonts[key]);
     if (auto res = File::Write(cache, data); not res) Log(
         "Failed to write font file to cache: {}",
         res.error()
@@ -951,13 +957,11 @@ void AssetLoader::finalise(Renderer& r) {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     // Copy resources.
-    r.ft = std::move(ft);
-    r.ft_face = std::move(ft_face);
+    r.font_data = std::move(font_data);
 
     // Build font textures.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    r.fonts_by_size = std::move(fonts);
-    for (auto& [_, f] : r.fonts_by_size) {
+    for (auto& [_, f] : r.font_data.fonts) {
         f.atlas = Texture(
             f.raw_atlas_data.get(),
             f.atlas_columns * f.atlas_entry_width,

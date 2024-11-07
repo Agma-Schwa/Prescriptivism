@@ -31,6 +31,7 @@ class Text;
 
 enum struct FontSize : u32;
 enum struct TextAlign : u8;
+enum struct TextStyle : u8;
 enum struct Cursor : u32;
 } // namespace pr::client
 
@@ -58,10 +59,24 @@ enum struct pr::client::TextAlign : base::u8 {
     SingleLine = Left,
 };
 
+/// Font style.
+///
+/// Do NOT reorder or change the values of these enumerators.
+enum struct pr::client::TextStyle : base::u8 {
+    Regular = 0,
+    Bold = 1,
+    Italic = 2,
+    BoldItalic = Bold | Italic,
+};
+
 enum struct pr::client::Cursor : base::u32 {
     Default = SDL_SYSTEM_CURSOR_DEFAULT,
     IBeam = SDL_SYSTEM_CURSOR_TEXT,
 };
+
+export namespace pr::client {
+LIBBASE_DEFINE_FLAG_ENUM(TextStyle);
+}
 
 struct pr::client::Colour {
     PR_SERIALISE(r, g, b, a);
@@ -183,18 +198,20 @@ private:
     f32 wd;
     f32 ht;
     f32 dp;
+    TextStyle fstyle;
 
-    explicit ShapedText(VertexArrays vao, u32 fsize, f32 wd, f32 ht, f32 dp)
-        : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht), dp(dp) {}
+    explicit ShapedText(VertexArrays vao, u32 fsize, TextStyle style, f32 wd, f32 ht, f32 dp)
+        : vao(std::move(vao)), fsize(fsize), wd(wd), ht(ht), dp(dp), fstyle(style) {}
 
 public:
     /// Create an empty text object that optionally stores a font size.
-    explicit ShapedText(FontSize sz = FontSize::Text)
+    explicit ShapedText(FontSize sz = FontSize::Text, TextStyle style = TextStyle::Regular)
         : vao{VertexLayout::PositionTexture4D},
           fsize{+sz},
           wd{},
           ht{},
-          dp{} {}
+          dp{},
+          fstyle{style} {}
 
     /// Debugging function that dumps the contents of a HarfBuzz buffer;
     /// must be called after shaping.
@@ -215,6 +232,9 @@ public:
     /// Get the size of the text, including depth.
     auto size() const -> Size { return {i32(wd), i32(ht + dp)}; }
 
+    /// Get the style of the text.
+    auto style() const -> TextStyle { return fstyle; }
+
     /// Get the vertices for this text.
     auto verts() const -> const VertexArrays& { return vao; }
 
@@ -225,16 +245,33 @@ public:
 /// Text to be rendered that also stores the characters of the text.
 class pr::client::Text {
     mutable ShapedText text{FontSize::Text};
-    std::string content;
+    std::u32string content;
     TextAlign align = TextAlign::SingleLine;
+    TextStyle style = TextStyle::Regular;
     mutable bool dirty = false;
     mutable bool needs_multiple_lines = false;
 
 public:
     Text() {}
-    Text(ShapedText t, TextAlign align = TextAlign::SingleLine) : text{std::move(t)}, align{align} {}
-    Text(std::string s, FontSize sz, TextAlign align) : text{sz}, content{std::move(s)}, align{align}, dirty{true} {}
-    Text(std::u32string_view s, FontSize sz, TextAlign align) : Text{base::text::ToUTF8(s), sz, align} {}
+    Text(
+        ShapedText t,
+        TextAlign align = TextAlign::SingleLine,
+        TextStyle style = TextStyle::Regular
+    ) : text{std::move(t)}, align{align}, style{style} {}
+
+    Text(
+        std::u32string s,
+        FontSize sz,
+        TextAlign align,
+        TextStyle style = TextStyle::Regular
+    ) : text{sz}, content{std::move(s)}, align{align}, style{style}, dirty{true} {}
+
+    Text(
+        std::string_view s,
+        FontSize sz,
+        TextAlign align,
+        TextStyle style = TextStyle::Regular
+    ) : Text{base::text::ToUTF32(s), sz, align, style} {}
 
     /// Check if this text is empty.
     bool empty() const { return content.empty() and text.size() == Size{}; }
@@ -243,8 +280,8 @@ public:
     void reflow(Renderer& r, i32 width);
 
     /// Update the text.
-    void set(std::string new_text) {
-        content = std::move(new_text);
+    void set(std::string_view new_text) {
+        content = base::text::ToUTF32(new_text);
         dirty = true;
     }
 
@@ -259,11 +296,15 @@ private:
 class pr::client::Font {
 public:
     PR_SERIALISE(
-        ser::Magic{'P', 'r', u8(0), u8(0)}, // Magic number contains the version.
+        ser::Magic{'P', 'r', u8(0), u8(1)}, // Magic number contains the version.
         glyphs,
-        atlas_entry_width, atlas_entry_height,
-        atlas_columns, atlas_rows,
-        size, skip,
+        atlas_entry_width,
+        atlas_entry_height,
+        atlas_columns,
+        atlas_rows,
+        size,
+        style,
+        skip,
         ser::Blob{raw_atlas_data, usz(texture_size().area())}
     )
 
@@ -300,6 +341,9 @@ private:
     /// The font size.
     u32 size{};
 
+    /// The font style.
+    TextStyle style{};
+
     /// Interline skip.
     ///
     /// In multiline text, if the height+depth of a line is less than
@@ -312,9 +356,9 @@ private:
     /// Intermediate texture data.
     std::unique_ptr<u8[]> raw_atlas_data;
 
-    Font(FT_Face ft_face, u32 max_texture_size, u32 size, u32 skip);
-    Font(FT_Face ft_face, u32 max_texture_size, u32 size)
-        : Font(ft_face, max_texture_size, size, u32(size * 1.2)) {}
+    Font(FT_Face ft_face, u32 max_texture_size, u32 size, TextStyle style, u32 skip);
+    Font(FT_Face ft_face, u32 max_texture_size, u32 size, TextStyle style)
+        : Font(ft_face, max_texture_size, size, style, u32(size * 1.2)) {}
 
 public:
     Font() = default;
@@ -365,17 +409,32 @@ private:
 // =============================================================================
 //  Renderer
 // =============================================================================
-namespace pr {
+namespace pr::client {
 using FTLibraryHandle = Handle<FT_Library, FT_Done_FreeType>;
 using FTFaceHandle = Handle<FT_Face, FT_Done_Face>;
 using SDLWindowHandle = Handle<SDL_Window*, SDL_DestroyWindow>;
 using SDLGLContextStateHandle = Handle<SDL_GLContextState*, SDL_GL_DestroyContext>;
+using FontEntry = std::pair<u32, TextStyle>;
 }
 
+template <>
+struct std::hash<pr::client::FontEntry> {
+    auto operator()(pr::client::FontEntry f) const noexcept -> std::size_t {
+        using namespace pr;
+        return std::hash<u64>{}(u64(f.first) << 32 | u64(f.second));
+    }
+};
+
+namespace pr::client {
+struct FontData {
+    std::array<FTLibraryHandle, 4> ft{};
+    std::array<FTFaceHandle, 4> ft_face{};
+    std::unordered_map<FontEntry, Font> fonts{};
+};
+} // namespace pr::client
+
 class pr::client::AssetLoader {
-    FTLibraryHandle ft;
-    FTFaceHandle ft_face;
-    std::unordered_map<u32, Font> fonts;
+    FontData font_data;
     u32 max_texture_size;
 
     AssetLoader() = default;
@@ -391,7 +450,7 @@ public:
 
 private:
     static auto Load(u32 max_texture_size, std::stop_token stop) -> AssetLoader;
-    void LoadFont(FontSize size);
+    void LoadFont(FontSize size, TextStyle style);
     void load(std::stop_token stop);
 };
 
@@ -411,9 +470,7 @@ public:
     ShaderProgram throbber_shader;
 
 private:
-    FTLibraryHandle ft;
-    FTFaceHandle ft_face;
-    std::unordered_map<u32, Font> fonts_by_size;
+    FontData font_data;
     std::unordered_map<Cursor, SDL_Cursor*> cursor_cache;
     Cursor active_cursor = Cursor::Default;
     Cursor requested_cursor = Cursor::Default;
@@ -460,6 +517,7 @@ public:
     /// \param text The text to be shaped.
     /// \param size The font size to use.
     /// \param align The alignment of the text.
+    /// \param style The style options of the text (regular, bold, italic).
     /// \param desired_width The width to fit the text into; pass 0 to disable wrapping.
     /// \param clusters Out parameter for clusters that allow mapping shaped text to original text.
     /// \param multiline Out parameter for whether the text requires multiple lines to display.
@@ -467,16 +525,28 @@ public:
     auto make_text(
         std::string_view text,
         FontSize size,
+        TextStyle style = TextStyle::Regular,
         TextAlign align = TextAlign::Left,
         i32 desired_width = 0,
         std::vector<ShapedText::Cluster>* clusters = nullptr,
         bool* multiline = nullptr
-    ) -> ShapedText;
+    ) {
+        return make_text(
+            text::ToUTF32(text),
+            size,
+            style,
+            align,
+            desired_width,
+            clusters,
+            multiline
+        );
+    }
 
     /// As make_text(), but takes a UTF-32 string.
     auto make_text(
         std::u32string_view text,
         FontSize size,
+        TextStyle style = TextStyle::Regular,
         TextAlign align = TextAlign::Left,
         i32 desired_width = 0,
         std::vector<ShapedText::Cluster>* clusters = nullptr,
@@ -502,7 +572,7 @@ public:
 
 private:
     /// Get a font of a given size.
-    auto font(u32 size) -> Font&;
+    auto font(u32 size, TextStyle style) -> Font&;
 
     /// Start/end a frame.
     void frame_end();
