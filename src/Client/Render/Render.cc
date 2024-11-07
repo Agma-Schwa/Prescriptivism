@@ -489,11 +489,11 @@ auto Font::shape(
         // Allocate memory for the texture.
         atlas_buffer.resize(usz(atlas_width * texture_height));
 
-        // Rebuild the entire atlas. Even though the atlas *cell* dimensions
-        // never change, the *atlas dimensions* may still have changed.
-        for (auto [i, glyph_index] : glyphs_ordered | vws::enumerate) {
-            // TODO: For any glyphs that have already been loaded, we can just copy
-            //       the texture data around, starting at the last pre-existing glyph.
+        // Add new glyphs to the atlas.
+        //
+        // Old glyphs don’t need to be updated since they don’t move because we
+        // keep the atlas *width* constant.
+        for (auto [i, glyph_index] : glyphs_ordered | vws::drop(atlas_entries) | vws::enumerate) {
             // This *should* never fail because we're loading glyphs and
             // not codepoints, but prefer not to crash if it does fail.
             if (FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER) != 0) {
@@ -501,8 +501,12 @@ auto Font::shape(
                 continue;
             }
 
+            // Index should start at the first new entry.
+            i += atlas_entries;
             u32 row = u32(i) / atlas_columns;
             u32 col = u32(i) % atlas_columns;
+
+            // Copy the glyph’s bitmap data into the atlas.
             for (usz r = 0; r < face->glyph->bitmap.rows; r++) {
                 std::memcpy(
                     atlas_buffer.data() + (row * atlas_entry_height + r) * u32(atlas_width) + col * atlas_entry_width,
@@ -558,6 +562,13 @@ auto Font::shape(
             // Compute the uv coordinates of the glyph; note that the glyph
             // is likely smaller than the width of an atlas cell, so perform
             // this calculation in pixels.
+            //
+            // The atlas width is constant, so we can factor it into the U
+            // coordinate’s calculation here and now. On the other hand, the
+            // V coordinate may have to change since the atlas width may change;
+            // we deal with this by computing the actual V coordinate in the
+            // vertex shader by passing the current atlas height as a uniform,
+            // for which reason we encode absolute V coordinates here.
             f32 u0 = f32(f64(tx) / atlas_width);
             f32 u1 = f32(f64(tx + w) / atlas_width);
             f32 v0 = f32(ty);
