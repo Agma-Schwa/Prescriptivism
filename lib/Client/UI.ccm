@@ -425,8 +425,6 @@ public:
     };
 
 private:
-    using LabelGroup = std::array<Label, NumScales>;
-
     static constexpr Size CardSize[NumScales] = {Size{60, 90}, Size{120, 180}, Size{240, 360}};
     static constexpr u16 Offset[NumScales] = {1, 2, 4};
     static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge};
