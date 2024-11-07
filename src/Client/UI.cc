@@ -470,22 +470,22 @@ void InputSystem::update_selection(bool is_element_selected) {
 // =============================================================================
 void Screen::draw(Renderer& r) {
     r.set_cursor(Cursor::Default);
-    for (auto& e : children) e->draw(r);
+    for (auto& e : visible()) e->draw(r);
 }
 
 void Screen::refresh(Renderer& r) {
     SetBoundingBox(AABB({0, 0}, r.size()));
     if (prev_size == r.size()) return;
     prev_size = r.size();
-    for (auto& e : children) e->refresh(r);
+    for (auto& e : visible()) e->refresh(r);
 }
 
 void Screen::tick(InputSystem& input) {
     // Deselect the currently selected element if there was a click.
-    if (input.mouse.left) selected = nullptr;
+    if (input.mouse.left) selected_element = nullptr;
 
     // Tick each child.
-    for (auto& e : children) {
+    for (auto& e : visible()) {
         // First, reset all of the child’s properties so we can
         // recompute them.
         e->reset_properties();
@@ -496,20 +496,20 @@ void Screen::tick(InputSystem& input) {
         // If, additionally, we had a click, select the element and fire the
         // event handler.
         if (e->hovered and input.mouse.left) {
-            if (e->selectable) selected = e.get();
+            if (e->selectable) selected_element = e.get();
             e->event_click(input);
         }
     }
 
     // Mark the selected element as selected once more.
-    if (selected) {
-        selected->selected = true;
-        selected->event_input(input);
+    if (selected_element) {
+        selected_element->selected = true;
+        selected_element->event_input(input);
     }
 
     // In any case, tell the input system whether we have a
     // selected element.
-    input.update_selection(selected != nullptr);
+    input.update_selection(selected_element != nullptr);
 }
 
 // =============================================================================
