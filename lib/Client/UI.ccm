@@ -166,8 +166,11 @@ public:
     /// Position of the widget.
     Position pos;
 
-    Widget(Element* parent, Position pos = {}) : parent_element(parent), pos(pos) {}
+protected:
+    explicit Widget(Element* parent, Position pos = {})
+        : parent_element(parent), pos(pos) {}
 
+public:
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
 
