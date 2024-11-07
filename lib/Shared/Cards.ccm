@@ -1,0 +1,72 @@
+export module pr.cards;
+import pr.utils;
+
+export namespace pr {
+enum struct CardType : u16 {
+    // Consonants
+    // TODO what about voicing
+    // clang-format off
+    C_p, C_b,
+    C_t, C_d,
+    C_tʃ, C_dʒ,
+    C_k, C_g,
+    C_f, C_v,
+    C_s, C_z,
+    C_ʃ, C_ʒ,
+    C_h,
+    C_w,
+    C_r,
+    C_j,
+    C_ʟ,
+    C_m,
+    C_n,
+    C_ɲ,
+    C_ŋ,
+
+    V_i, V_y,
+    V_ɨ,
+    V_u, V_ʊ,
+    V_e, V_ɛ,
+    V_ə, V_ɐ, // V_ɐ is referred to as ʌ in the docs, but also as a central vowel, which is wrong
+    V_o, V_ɔ,
+    V_æ,
+    V_a,
+    V_ɑ,
+
+    P_SpellingReform,
+    P_Descriptivism,
+    P_Nope,
+    P_Babel,
+    P_Superstratum,
+    P_Substratum,
+    P_Whorf,
+    P_Academia,
+    P_Heffer,
+    P_GVS,
+    P_Darija,
+    P_Brasil,
+    P_Gvprtskvni,
+    P_Reconstruction,
+    P_LinguaFranca,
+    P_Chomsky,
+    P_Pinker,
+    P_Campbell,
+    P_Schleicher,
+    P_Schleyer,
+    P_Grimm,
+    P_Vajda,
+    P_Zamnenhoff,
+    P_Owl,
+    P_Revival,
+    P_Rosetta,
+    P_Urheimat,
+    P_ProtoWorld,
+    P_Vernacular,
+    P_Epenthesis,
+    P_Elision,
+    P_Assimilation,
+    P_Dissimilation,
+    P_Regression,
+    // clang-format on
+};
+}

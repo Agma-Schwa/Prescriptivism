@@ -12,6 +12,7 @@ import pr.tcp;
 import base;
 import pr.utils;
 import pr.packets;
+import pr.cards;
 
 export namespace pr::server {
 class Server;
@@ -21,6 +22,14 @@ class Player;
 namespace pr::server {
 using DisconnectReason = packets::sc::Disconnect::Reason;
 }
+
+class Card {
+    LIBBASE_MOVE_ONLY(Card);
+    pr::CardType card_type;
+public:
+    Card(pr::CardType t): card_type(t) {}
+    [[nodiscard]] auto type() const -> pr::CardType {return card_type;}
+};
 
 class pr::server::Player {
     LIBBASE_IMMOVABLE(Player);
@@ -32,6 +41,9 @@ public:
 
     /// The player's name.
     std::string name;
+
+    /// The player’s hand
+    std::vector<Card> hand;
 
     /// Create a new player.
     Player(net::TCPConnexion client_connexion, std::string name) : client_connexion(std::move(client_connexion)), name(std::move(name)) {}
@@ -69,6 +81,10 @@ class pr::server::Server : net::TCPServerCallbacks {
 
     /// The password of the server
     std::string password;
+
+    std::vector<Card> deck;
+    std::vector<Card> discard{};
+
 
 public:
     /// Create and start the server.
