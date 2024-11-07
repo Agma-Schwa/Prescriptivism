@@ -1,11 +1,11 @@
 module;
+#include <algorithm>
 #include <base/Macros.hh>
+#include <chrono>
 #include <memory>
 #include <pr/Packets.hh>
-#include <vector>
-#include <chrono>
 #include <random>
-#include <algorithm>
+#include <vector>
 export module pr.server;
 import pr.tcp;
 
@@ -61,9 +61,6 @@ class pr::server::Server : net::TCPServerCallbacks {
     /// The current player
     usz current_player = 0;
 
-    /// The game is running
-    bool running = false;
-
     /// The random number generator
     std::mt19937 rng{std::random_device{}()};
 
@@ -72,8 +69,6 @@ class pr::server::Server : net::TCPServerCallbacks {
 
     /// The password of the server
     std::string password;
-
-
 
 public:
     /// Create and start the server.
@@ -97,7 +92,9 @@ private:
     void NextPlayer();
 
     auto player() -> Player& { return *players[current_player]; }
-    bool all_players_connected() { return rgs::all_of(players, [](const auto& p) { return p->connected(); });}
+    bool all_players_connected() {
+        return rgs::all_of(players, [](const auto& p) { return p->connected(); });
+    }
 
     bool accept(net::TCPConnexion& connexion) override;
     void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;
