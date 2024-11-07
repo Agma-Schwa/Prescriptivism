@@ -565,10 +565,11 @@ auto Font::shape(
             //
             // The atlas width is constant, so we can factor it into the U
             // coordinate’s calculation here and now. On the other hand, the
-            // V coordinate may have to change since the atlas width may change;
-            // we deal with this by computing the actual V coordinate in the
-            // vertex shader by passing the current atlas height as a uniform,
-            // for which reason we encode absolute V coordinates here.
+            // V coordinate may have to change since the atlas *height* may
+            // change; we deal with this by computing the actual V coordinate
+            // in the vertex shader by passing the current atlas height as
+            // a uniform, for which reason we encode absolute V coordinates
+            // here.
             f32 u0 = f32(f64(tx) / atlas_width);
             f32 u1 = f32(f64(tx + w) / atlas_width);
             f32 v0 = f32(ty);
