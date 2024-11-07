@@ -551,6 +551,7 @@ public:
     void draw_line(xy start, xy end, Colour c = Colour::White);
 
     /// Draw a rectangle at a position in world coordinates.
+    void draw_rect(AABB box, Colour c = Colour::White) { draw_rect(box.origin(), box.size(), c); }
     void draw_rect(xy pos, Size size, Colour c = Colour::White);
 
     /// Draw text at a position in world coordinates.

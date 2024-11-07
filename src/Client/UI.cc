@@ -70,8 +70,7 @@ auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
 //  Elements
 // =============================================================================
 void Button::draw(Renderer& r) {
-    auto bg = pos.absolute(r.size(), sz);
-    r.draw_rect(bg, sz, hovered ? HoverButtonColour : DefaultButtonColour);
+    r.draw_rect(rbox(), hovered ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
 
@@ -100,9 +99,8 @@ TextBox::TextBox(
     i32 padding,
     i32 min_wd,
     i32 min_ht
-) : Element{parent},
+) : Widget{parent, pos},
     placeholder{std::move(placeholder)},
-    pos{pos},
     padding{padding},
     min_wd{min_wd},
     min_ht{min_ht} {
@@ -111,18 +109,19 @@ TextBox::TextBox(
 
 void TextBox::UpdateText(ShapedText new_text) {
     label = std::move(new_text);
-    sz.wd = std::max(min_wd, i32(label.width())) + 2 * padding;
-    sz.ht = std::max(min_ht, i32(label.height() + label.depth())) + 2 * padding;
+    UpdateBoundingBox(Size{
+        std::max(min_wd, i32(label.width())) + 2 * padding,
+        std::max(min_ht, i32(label.height() + label.depth())) + 2 * padding,
+    });
 }
 
-auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
-    auto bg = pos.absolute(r.size(), sz);
-    return Position::Center().voffset(i32(text.depth())).relative(bg, sz, text.size());
+auto TextBox::TextPos(const ShapedText& text) -> xy {
+    return Position::Center().voffset(i32(text.depth())).relative(rbox(), text.size());
 }
 
 void TextBox::draw(Renderer& r) {
     auto& text = label.empty() ? placeholder : label;
-    auto pos = TextPos(r, text);
+    auto pos = TextPos(text);
     r.draw_text(text, pos, label.empty() ? Colour::Grey : Colour::White);
     if (cursor_offs != -1) r.draw_line(
         xy(i32(pos.x) + cursor_offs, pos.y - i32(label.depth())),
@@ -131,8 +130,8 @@ void TextBox::draw(Renderer& r) {
     );
 }
 
-void TextBox::refresh(Renderer& r) {
-    SetBoundingBox(AABB(pos.absolute(r.size(), sz), sz));
+void TextBox::refresh(Renderer&) {
+    UpdateBoundingBox(rpos());
 }
 
 void TextEdit::draw(Renderer& r) {
@@ -229,8 +228,7 @@ void TextEdit::draw(Renderer& r) {
 
     if (hovered) r.set_cursor(Cursor::IBeam);
 
-    auto bg = pos.absolute(r.size(), sz);
-    r.draw_rect(bg, sz, selected ? HoverButtonColour : DefaultButtonColour);
+    r.draw_rect(rbox(), selected ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
 
@@ -241,7 +239,7 @@ void TextEdit::event_click(InputSystem& input) {
     // we stop and go back to the one before it.
     no_blink_ticks = 20;
     i32 mx = input.mouse.pos.x;
-    i32 x0 = TextPos(input.renderer, label).x;
+    i32 x0 = TextPos(label).x;
     i32 x1 = x0 + i32(label.width());
     if (mx < x0) cursor = 0;
     else if (mx > x1) cursor = i32(text.size());
@@ -339,9 +337,7 @@ void TextEdit::event_input(InputSystem& input) {
 
 
 Throbber::Throbber(Element* parent, Position pos)
-    : Element(parent),
-      vao(VertexLayout::Position2D),
-      pos(pos) {
+    : Widget(parent, pos), vao(VertexLayout::Position2D) {
     vec2 verts[]{
         {-R, -R},
         {-R, R},
@@ -349,14 +345,15 @@ Throbber::Throbber(Element* parent, Position pos)
         {R, R}
     };
     vao.add_buffer(verts, gl::GL_TRIANGLE_STRIP);
+    UpdateBoundingBox(Size{i32(R), i32(R)});
 }
 
 void Throbber::draw(Renderer& r) {
     static constexpr f32 Rate = 3; // Smaller means faster.
 
+    // Uses absolute position because it may not have a parent.
     auto at = pos.absolute(r.size(), {i32(R), i32(R)});
     auto rads = f32(glm::radians(fmod(360 * Rate - SDL_GetTicks(), 360 * Rate) / Rate));
-
     auto xfrm = glm::identity<mat4>();
     xfrm = translate(xfrm, vec3(R, R, 0));
     xfrm = rotate(xfrm, rads, vec3(0, 0, 1));
@@ -377,8 +374,7 @@ Card::Card(
     std::string middle_text,
     std::string special_text,
     u8 count
-) : Element{parent},
-    pos{pos},
+) : Widget{parent, pos},
     count{count},
     code{this, std::move(code_text), Position()},
     name{this, std::move(name_text), Position()},

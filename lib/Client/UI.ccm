@@ -23,6 +23,7 @@ class InputSystem;
 class Label;
 class Throbber;
 class Card;
+class Widget;
 
 enum class Anchor : u8;
 } // namespace pr::client
@@ -131,6 +132,28 @@ public:
 /// The root of the UI element hierarchy.
 class pr::client::Element {
     AABB box;
+
+protected:
+    Element() = default;
+    void SetBoundingBox(AABB aabb) { box = aabb; }
+    void UpdateBoundingBox(xy origin) { box = {origin, box.size()}; }
+    void UpdateBoundingBox(Size size) { box = {box.origin(), size}; }
+
+public:
+    virtual ~Element() = default;
+
+    /// Get the bounding box of this element.
+    auto bounding_box() const -> AABB { return box; }
+
+    /// Draw this element.
+    virtual void draw(Renderer& r) = 0;
+
+    /// Recompute bounding box etc.
+    virtual void refresh(Renderer&) {}
+};
+
+/// Element that is not a screen.
+class pr::client::Widget : public Element {
     Element* parent_element = nullptr;
 
 public:
@@ -140,15 +163,10 @@ public:
     bool visible       : 1 = true;  ///< Element is rendered, ticked, and interactable.
     bool needs_refresh : 1 = false; ///< Element requested a refresh.
 
-protected:
-    explicit Element(Element* parent) : parent_element(parent) {}
-    void SetBoundingBox(AABB aabb) { box = aabb; }
+    /// Position of the widget.
+    Position pos;
 
-public:
-    virtual ~Element() = default;
-
-    /// Get the bounding box of this element.
-    auto bounding_box() const -> AABB { return box; }
+    Widget(Element* parent, Position pos = {}) : parent_element(parent), pos(pos) {}
 
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
@@ -156,19 +174,21 @@ public:
     /// Event handler for when a selected element is given text input.
     virtual void event_input(InputSystem&) {}
 
-    /// Draw this element.
-    virtual void draw(Renderer& r) = 0;
-
     /// Get the parent of this element.
     auto parent() -> Element* { return parent_element; }
-
-    /// Recompute bounding box etc.
-    virtual void refresh(Renderer&) {}
 
     /// Reset properties at the start of a tick.
     void reset_properties() {
         hovered = false;
         selected = false;
+    }
+
+    /// Calculate bounding box relative to the parent.
+    auto rbox() -> AABB { return {rpos(), bounding_box().size()}; }
+
+    /// Calculate position relative to the parent using our size.
+    auto rpos() -> xy {
+        return pos.relative(parent()->bounding_box(), bounding_box().size());
     }
 };
 
@@ -179,20 +199,20 @@ class pr::client::Screen : public Element {
     LIBBASE_IMMOVABLE(Screen);
 
     /// List of children.
-    std::vector<std::unique_ptr<Element>> children;
+    std::vector<std::unique_ptr<Widget>> children;
 
     /// The selected element.
-    Element* selected_element = nullptr;
+    Widget* selected_element = nullptr;
 
     /// Previous size so we don’t refresh every frame.
     Size prev_size = {};
 
 protected:
-    Screen() : Element(nullptr) {}
+    Screen() = default;
 
 public:
     /// Create an element with the screen as its parent.
-    template <std::derived_from<Element> El, typename... Args>
+    template <std::derived_from<Widget> El, typename... Args>
     auto Create(Args&&... args) -> El& {
         auto el = std::make_unique<El>(this, std::forward<Args>(args)...);
         auto& ref = *el;
@@ -229,19 +249,16 @@ public:
 };
 
 /// Label that supports reflowing text automatically.
-class pr::client::Label : public Element {
+class pr::client::Label : public Widget {
     Text text;
     bool reflow = false;
 
 public:
-    Position pos{};
     Colour colour = Colour::White;
 
-    explicit Label(Element* parent, Position pos) : Element(parent), pos(pos) {}
+    explicit Label(Element* parent, Position pos) : Widget(parent, pos) {}
     explicit Label(Element* parent, ShapedText text, Position pos)
-        : Element(parent),
-          text(std::move(text)),
-          pos(pos) {}
+        : Widget(parent, pos), text(std::move(text)) {}
 
     explicit Label(
         Element* parent,
@@ -250,10 +267,9 @@ public:
         TextAlign align,
         Position pos,
         bool reflow = true
-    ) : Element(parent),
+    ) : Widget(parent, pos),
         text("", sz, align, style),
-        reflow(reflow),
-        pos(pos) {}
+        reflow(reflow) {}
 
     explicit Label(
         Element* parent,
@@ -284,12 +300,10 @@ public:
     }
 };
 
-class pr::client::TextBox : public Element {
+class pr::client::TextBox : public Widget {
 protected:
     ShapedText label;
     ShapedText placeholder;
-    Position pos{};
-    Size sz{};
     i32 padding{};
     i32 min_wd{};
     i32 min_ht{};
@@ -306,7 +320,7 @@ protected:
     );
 
     void UpdateText(ShapedText new_text);
-    auto TextPos(Renderer& r, const ShapedText& text) -> xy;
+    auto TextPos(const ShapedText& text) -> xy;
 
 public:
     void draw(Renderer& r) override;
@@ -387,12 +401,10 @@ public:
     }
 };
 
-class pr::client::Throbber : public Element {
+class pr::client::Throbber : public Widget {
     static constexpr f32 R = 20; // Radius of the throbber.
 
     VertexArrays vao;
-    Position pos;
-    bool show = true;
 
 public:
     Throbber(Element* parent, Position pos);
@@ -400,7 +412,7 @@ public:
     void draw(Renderer& r) override;
 };
 
-class pr::client::Card : public Element {
+class pr::client::Card : public Widget {
 public:
     enum Scale : u8 {
         OtherPlayer,
@@ -418,7 +430,6 @@ private:
     static constexpr FontSize NameSpecialSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
-    Position pos;
     Scale s = Field;
     u8 count;
     bool scale_changed = true; // Set initially so we recalculate everything.
