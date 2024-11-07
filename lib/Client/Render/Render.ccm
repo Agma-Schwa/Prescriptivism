@@ -306,21 +306,6 @@ private:
 /// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
 class pr::client::Font {
 public:
-    PR_SERIALISE(
-        ser::Magic{'P', 'r', u8(0), u8(2)}, // Magic number contains the version.
-                                            //        glyphs, // TODO: Serialise
-        glyphs_ordered,
-        atlas_buffer,
-        atlas_entry_width,
-        atlas_entry_height,
-        atlas_width,
-        atlas_rows,
-        atlas_entries,
-        size,
-        style,
-        skip
-    );
-
     friend AssetLoader;
 
 private:

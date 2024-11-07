@@ -993,40 +993,6 @@ void AssetLoader::load(std::stop_token stop) {
     }
 }
 
-/*void AssetLoader::LoadFont(FontSize size, TextStyle style) {
-    // Try to see if we’ve cached this font.
-    // FIXME: Use the name of the font file here.
-    std::string style_text;
-    if (style & TextStyle::Bold) style_text += "-bold";
-    if (style & TextStyle::Italic) style_text += "-italic";
-    std::pair key{+size, style};
-    auto cache = fs::Path{"./.cache/"} / std::format("font{}-{}.bin", style_text, +size);
-    auto TryReadCachedFont = [&] -> Result<> {
-        auto data = Try(File::Read(cache));
-        font_data.fonts[key] = Try(ser::Deserialise<Font>(std::span{data.data(), data.size()}));
-        font_data.fonts[key].finalise(font_data.ft_face[+style].get());
-        return {};
-    };
-
-    // Load the font from the cache if it exists.
-    if (File::Exists(cache)) {
-        auto res = TryReadCachedFont();
-        if (res) return;
-        Log("Failed to read cached font file: {}", res.error());
-    }
-
-    // If the font can’t be found or if we failed to load it,
-    // recreate if from the font face.
-    font_data.fonts[key] = Font(font_data.ft_face[+style].get(), max_texture_size, +size, style);
-
-    // And cache it so we have it next time.
-    auto data = ser::Serialise(font_data.fonts[key]);
-    if (auto res = File::Write(cache, data); not res) Log(
-        "Failed to write font file to cache: {}",
-        res.error()
-    );
-}*/
-
 /// Finish loading assets.
 void AssetLoader::finalise(Renderer& r) {
     // Move resources.
@@ -1034,17 +1000,6 @@ void AssetLoader::finalise(Renderer& r) {
 
     // Build font textures.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    for (auto& [_, f] : r.font_data.fonts) {
+    for (auto& [_, f] : r.font_data.fonts)
         f.atlas_width = Texture::MaxSize();
-        /*f.atlas = Texture(
-            f.raw_atlas_data.get(),
-            f.atlas_columns * f.atlas_entry_width,
-            f.atlas_rows * f.atlas_entry_height,
-            GL_RED,
-            GL_UNSIGNED_BYTE
-        );
-
-        // Free the raw font data since we don’t need it anymore.
-        f.raw_atlas_data.reset();*/
-    }
 }
