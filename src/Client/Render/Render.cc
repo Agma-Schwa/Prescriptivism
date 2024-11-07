@@ -304,20 +304,20 @@ auto Font::shape(
         // so this is used so we can get fractional values out of it.
         hb_font_set_scale(font, size * Scale, size * Scale);
 
-        // Enable the following OpenType features: 'liga'.
+        // Enable an OpenType feature.
+        auto Feature = [](auto tag) {
+            return hb_feature_t{
+                .tag = tag,
+                .value = 1,
+                .start = HB_FEATURE_GLOBAL_START,
+                .end = HB_FEATURE_GLOBAL_END,
+            };
+        };
+
+        // OpenType feature list.
         std::array features{
-            hb_feature_t{
-                .tag = HB_TAG('l', 'i', 'g', 'a'),
-                .value = 1,
-                .start = HB_FEATURE_GLOBAL_START,
-                .end = HB_FEATURE_GLOBAL_END,
-            },
-            hb_feature_t{
-                .tag = HB_TAG('s', 's', '1', '3'),
-                .value = 1,
-                .start = HB_FEATURE_GLOBAL_START,
-                .end = HB_FEATURE_GLOBAL_END,
-            }
+            Feature(HB_TAG('l', 'i', 'g', 'a')),
+            Feature(HB_TAG('s', 's', '1', '3')),
         };
 
         // Shape the text.
