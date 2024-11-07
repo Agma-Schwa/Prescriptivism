@@ -138,7 +138,6 @@ public:
     bool selectable    : 1 = false; ///< Element can be selected.
     bool selected      : 1 = false; ///< Element is selected.
     bool visible       : 1 = true;  ///< Element is rendered, ticked, and interactable.
-    bool auto_refresh  : 1 = true;  ///< Element refreshes automatically when the screen is resized.
     bool needs_refresh : 1 = false; ///< Element requested a refresh.
 
 protected:
@@ -422,6 +421,7 @@ private:
     Position pos;
     Scale s = Field;
     u8 count;
+    bool scale_changed = true; // Set initially so we recalculate everything.
     Label code;
     Label name;
     Label middle;

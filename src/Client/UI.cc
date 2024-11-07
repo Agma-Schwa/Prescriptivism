@@ -89,8 +89,7 @@ void Label::draw(Renderer& r) {
 
 void Label::refresh(Renderer& r) {
     if (not reflow) return;
-    auto sz = parent() ? parent()->bounding_box().width() : r.size().wd;
-    text.reflow(r, sz);
+    text.reflow(r, parent()->bounding_box().width());
 }
 
 TextBox::TextBox(
@@ -385,7 +384,6 @@ Card::Card(
     name{this, std::move(name_text), Position()},
     middle{this, std::move(middle_text), Position::Center()},
     special{this, std::move(special_text), Position()} {
-    auto_refresh = false;
     code.colour = Colour::Black;
     name.colour = Colour::Black;
     middle.colour = Colour::Black;
@@ -412,6 +410,8 @@ void Card::draw(Renderer& r) {
 
 void Card::refresh(Renderer& r) {
     SetBoundingBox(AABB{pos.relative(parent()->bounding_box(), CardSize[s]), CardSize[s]});
+    if (not scale_changed) return;
+    scale_changed = false;
 
     // Adjust label font sizes.
     code.font_size(CodeSizes[s]);
@@ -427,6 +427,7 @@ void Card::refresh(Renderer& r) {
 
 void Card::set_scale(const Scale _s) {
     s = _s;
+    scale_changed = true;
     needs_refresh = true;
 }
 
@@ -507,7 +508,7 @@ void Screen::refresh(Renderer& r) {
     // requested a refresh.
     prev_size = r.size();
     for (auto& e : children) {
-        if ((e->visible and e->auto_refresh) or e->needs_refresh) {
+        if (e->visible or e->needs_refresh) {
             e->needs_refresh = false;
             e->refresh(r);
         }
