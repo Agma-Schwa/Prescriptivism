@@ -82,7 +82,7 @@ struct AcceptedConnexion {
 };
 
 auto AcceptConnexion(Socket sock, bool& done) -> std::optional<AcceptedConnexion>;
-auto ConnectToServer(std::string_view remote_address, u16 port) -> Result<SocketHolder>;
+auto ConnectToServer(const std::string& remote_address, u16 port) -> Result<SocketHolder>;
 auto CreateServerSocket(u16 port, u32 max_connexions) -> Result<SocketHolder>;
 } // namespace pr::net::impl
 
@@ -165,7 +165,7 @@ auto impl::AcceptConnexion(Socket sock, bool& done) -> std::optional<AcceptedCon
     return AcceptedConnexion{std::move(new_sock), ip_str};
 }
 
-auto impl::ConnectToServer(std::string_view remote_address, u16 port) -> Result<SocketHolder> {
+auto impl::ConnectToServer(const std::string& remote_address, u16 port) -> Result<SocketHolder> {
     auto sock = Try(CreateSocket());
     auto Failed = [&](std::string_view msg = std::strerror(errno)) {
         return Error(
@@ -440,12 +440,12 @@ TCPConnexion::TCPConnexion() = default;
 TCPConnexion::~TCPConnexion() = default;
 LIBBASE_DEFINE_HIDDEN_IMPL(TCPServer);
 auto TCPConnexion::Connect(
-    std::string_view remote_ip,
+    std::string remote_ip,
     u16 port
 ) -> Result<TCPConnexion> {
     TCPConnexion conn;
     auto sock = Try(impl::ConnectToServer(remote_ip, port));
-    conn.impl = std::make_unique<Impl>(std::move(sock), std::string{remote_ip});
+    conn.impl = std::make_unique<Impl>(std::move(sock), std::move(remote_ip));
     return conn;
 }
 

@@ -131,7 +131,10 @@ public:
     ~TCPConnexion();
 
     /// Connect to a server.
-    static auto Connect(std::string_view remote_address, u16 port) -> Result<TCPConnexion>;
+    ///
+    /// This takes a string because some platforms require
+    /// null-termination of the address.
+    static auto Connect(std::string remote_address, u16 port) -> Result<TCPConnexion>;
 
     /// Get the ip address of the remote peer.
     auto address() const -> std::string_view;

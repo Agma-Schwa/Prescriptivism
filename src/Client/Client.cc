@@ -129,7 +129,23 @@ auto ConnexionScreen::connexion_thread_main(
     std::string address,
     std::stop_token st
 ) -> Result<net::TCPConnexion> {
-    auto sock = net::TCPConnexion::Connect(address, net::DefaultPort);
+    // The user may have specified a port; if so, parse it; note
+    // that the IPv6 format may contain both colons, so only parse
+    // a port in that case if the last one is preceded by a closing
+    // square bracket.
+    stream s{address};
+    u16 port = net::DefaultPort;
+    if (s.contains(':') and (s.count(':') == 1 or s.drop_back_until(':').ends_with(']'))) {
+        // Just display the port string if it is invalid; the user
+        // can figure out why.
+        auto port_str = s.take_back_until(':');
+        auto parsed_port = Parse<u16>(port_str);
+        if (not parsed_port) return Error("Invalid port '{}'", port_str);
+        s.drop_back();
+        port = parsed_port.value();
+    }
+
+    auto sock = net::TCPConnexion::Connect(std::string{s.text()}, port);
     if (st.stop_requested()) return Error("Stop requested");
     return sock;
 }
