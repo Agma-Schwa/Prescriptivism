@@ -138,6 +138,7 @@ public:
     bool selectable    : 1 = false; ///< Element can be selected.
     bool selected      : 1 = false; ///< Element is selected.
     bool visible       : 1 = true;  ///< Element is rendered, ticked, and interactable.
+    bool auto_refresh  : 1 = true;  ///< Element refreshes automatically when the screen is resized.
     bool needs_refresh : 1 = false; ///< Element requested a refresh.
 
 protected:
@@ -355,18 +356,6 @@ public:
         Position pos,
         FontSize size,
         TextStyle style,
-        i32 padding,
-        i32 min_wd = 0,
-        i32 min_ht = 0
-    ) : TextBox(parent, ShapedText(), ShapedText(), pos, padding, min_wd, min_ht), size{size}, style{style} {
-        selectable = true;
-    }
-
-    TextEdit(
-        Element* parent,
-        Position pos,
-        FontSize size,
-        TextStyle style,
         ShapedText placeholder,
         i32 padding,
         bool hide_text = false,
@@ -379,11 +368,21 @@ public:
         selectable = true;
     }
 
+    TextEdit(
+        Element* parent,
+        Position pos,
+        FontSize size,
+        TextStyle style,
+        i32 padding,
+        i32 min_wd = 0,
+        i32 min_ht = 0
+    ) : TextEdit(parent, pos, size, style, ShapedText(), padding, false, min_wd, min_ht) {}
+
     void draw(Renderer& r) override;
     void event_click(InputSystem& input) override;
     void event_input(InputSystem& input) override;
     auto value() -> std::string { return text::ToUTF8(text); }
-    auto value(std::u32string new_text) -> void {
+    void value(std::u32string new_text) {
         text = std::move(new_text);
         dirty = true;
     }
@@ -449,7 +448,13 @@ struct std::formatter<pr::client::Position> : std::formatter<std::string> {
     template <typename FormatContext>
     auto format(pr::client::Position pos, FormatContext& ctx) const {
         return std::formatter<std::string>::format(
-            std::format("Position(base={}, xadjust={}, yadjust={}, anchor={})", pos.base, pos.xadjust, pos.yadjust, std::to_underlying(pos.anchor)),
+            std::format(
+                "Position(base={}, xadjust={}, yadjust={}, anchor={})",
+                pos.base,
+                pos.xadjust,
+                pos.yadjust,
+                std::to_underlying(pos.anchor)
+            ),
             ctx
         );
     }

@@ -338,6 +338,7 @@ void TextEdit::event_input(InputSystem& input) {
     }
 }
 
+
 Throbber::Throbber(Element* parent, Position pos)
     : Element(parent),
       vao(VertexLayout::Position2D),
@@ -384,6 +385,7 @@ Card::Card(
     name{this, std::move(name_text), Position()},
     middle{this, std::move(middle_text), Position::Center()},
     special{this, std::move(special_text), Position()} {
+    auto_refresh = false;
     code.colour = Colour::Black;
     name.colour = Colour::Black;
     middle.colour = Colour::Black;
@@ -505,7 +507,7 @@ void Screen::refresh(Renderer& r) {
     // requested a refresh.
     prev_size = r.size();
     for (auto& e : children) {
-        if (e->visible or e->needs_refresh) {
+        if ((e->visible and e->auto_refresh) or e->needs_refresh) {
             e->needs_refresh = false;
             e->refresh(r);
         }
