@@ -36,6 +36,9 @@ add_library(options INTERFACE)
 ## Flags for Clang and GCC.
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(options INTERFACE
+        -fms-extensions
+        -fdeclspec
+
         ## Warnings.
         -Wall -Wextra     # Enable ‘all’ warnings.
         -Wundef           # Invalid #undef or undefined macro in #if.
