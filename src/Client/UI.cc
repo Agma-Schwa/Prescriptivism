@@ -7,6 +7,7 @@ module;
 #include <SDL3/SDL.h>
 #include <string_view>
 #include <utility>
+#include <numeric>
 module pr.client.ui;
 
 import base.text;
@@ -437,6 +438,7 @@ void Card::set_id(CardId ct) {
     _id = ct;
     auto& data = CardDatabase[+ct];
     if (data.type == CardType::SoundCard) {
+        count = std::saturate_cast<u8>(data.count_in_deck);
         code.update_text(std::format( //
             "{}{}{}{}",
             data.is_consonant() ? 'P' : 'F',
