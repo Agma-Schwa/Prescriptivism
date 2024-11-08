@@ -426,9 +426,7 @@ private:
     /// The atlas texture.
     Texture atlas;
 
-    Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip);
-    Font(FT_Face ft_face, u32 size, TextStyle style)
-        : Font(ft_face, size, style, u32(size * 1.2)) {}
+    Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip = 0);
 
 public:
     Font() = default;

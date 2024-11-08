@@ -118,17 +118,6 @@ constexpr std::span<const char> Fonts[]{
     DefaultFontBoldItalic,
 };
 
-// Currently hard-coded because they’re expensive to calculate; eventually,
-// we should calculate these when the fonts are loaded and cache them.
-const std::unordered_map<u32, FontDimensions> FontDimensionData{
-    {6, {4'082, 15, 11}},
-    {12, {4'082, 29, 22}},
-    {24, {4'082, 57, 44}},
-    {36, {4'082, 85, 66}},
-    {48, {4'082, 113, 88}},
-    {96, {4'082, 224, 176}},
-};
-
 // =============================================================================
 //  Text and Fonts
 // =============================================================================
@@ -150,7 +139,10 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
 }
 
 Font::Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip)
-    : face{ft_face}, size{size}, style{style}, skip{skip} {
+    : face{ft_face},
+      size{size},
+      style{style},
+      skip{skip != 0 ? skip : u32(ft_face->height / f32(ft_face->units_per_EM) * size)} {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, size);
 
@@ -161,12 +153,17 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip)
     hb_ft_font_set_funcs(hb_font.get());
 
     // Determine the maximum width and height amongst all glyphs; we
-    // need to do this now to ensure that the atlas dimensions don’t
-    // change when we add glyphs; otherwise, we’d be invalidating the
-    // vertex data for already shaped text.
-    auto& dims = FontDimensionData.at(size);
-    atlas_entry_width = dims.max_width;
-    atlas_entry_height = dims.max_height;
+    // need to do this now to ensure that the dimensions of a cell
+    // don’t change when we add glyphs; otherwise, we’d be invalidating
+    // the uv coordinates of already shaped text.
+    //
+    // Note: we use the advance width for x and the bounding box for y
+    // because that seems to more closely match the data we got from
+    // iterating over every glyph in the font and computing the maximum
+    // metrics.
+    f32 em = f32(ft_face->units_per_EM);
+    atlas_entry_width = u32(std::ceil(ft_face->max_advance_width / em * size));
+    atlas_entry_height = u32(std::ceil(size * (ft_face->bbox.yMax - ft_face->bbox.yMin) / em));
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
