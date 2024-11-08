@@ -428,6 +428,7 @@ private:
     static constexpr FontSize NameSpecialSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
+    CardId card_id = CardId::$$Count;
     Scale s = Field;
     u8 count{};
     bool scale_changed = true; // Set initially so we recalculate everything.
@@ -443,6 +444,8 @@ public:
     void refresh(Renderer&) override;
     void set_from_type(CardId ct);
     void set_scale(Scale _s);
+
+    [[nodiscard]] auto id() const -> CardId {return card_id;}
 };
 
 template <>

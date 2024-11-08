@@ -3,9 +3,9 @@ module;
 #include <base/Macros.hh>
 #include <chrono>
 #include <functional>
+#include <ranges>
 #include <SDL3/SDL.h>
 #include <thread>
-#include <ranges>
 module pr.client;
 
 import pr.utils;
@@ -14,6 +14,9 @@ import pr.packets;
 
 using namespace pr;
 using namespace pr::client;
+
+namespace sc = packets::sc;
+namespace cs = packets::cs;
 
 // =============================================================================
 //  Error Screen
@@ -197,6 +200,20 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
     // Create empty cards; we’ll set them up and position them later.
     for (usz i = 0; i < constants::StartingWordSize; i++)
         cards[i] = &Create<Card>(Position());
+    auto& submit = Create<Button>(
+        c.renderer.make_text("Submit", FontSize::Medium),
+        Position::HCenter(10)
+    );
+
+    submit.on_click = [&] {
+        SendWord();
+    };
+}
+
+void WordChoiceScreen::SendWord() {
+    cs::WordChoice::Array a;
+    for (auto [i, c] : cards | vws::enumerate) a[i] = c->id();
+    client.server_connexion.send(cs::WordChoice{a});
 }
 
 void WordChoiceScreen::enter(const std::array<CardId, constants::StartingWordSize>& word) {
@@ -249,8 +266,6 @@ void GameScreen::tick(InputSystem& input) {
 // =============================================================================
 //  Game Screen - Packet Handlers
 // =============================================================================
-namespace sc = packets::sc;
-namespace cs = packets::cs;
 
 void Client::handle(sc::Disconnect packet) {
     server_connexion.disconnect();
@@ -274,6 +289,10 @@ void Client::handle(sc::HeartbeatRequest req) {
 
 void Client::handle(sc::WordChoice wc) {
     word_choice_screen.enter(wc.word);
+}
+
+void Client::handle(sc::Draw dr) {
+    Log("Recieved card: {}", stream(CardDatabase[+dr.card].name).replace("\n", " "));
 }
 
 void Client::handle(sc::StartTurn) {

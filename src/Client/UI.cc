@@ -416,7 +416,7 @@ void Card::refresh(Renderer& r) {
 }
 
 void Card::set_from_type(CardId ct) {
-
+    card_id = ct;
 }
 
 void Card::set_scale(const Scale _s) {

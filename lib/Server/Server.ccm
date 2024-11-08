@@ -30,7 +30,7 @@ class pr::server::Card {
 
 public:
     Card(CardId t) : card_type(t) {}
-    [[nodiscard]] auto type() const -> CardId { return card_type; }
+    [[nodiscard]] auto id() const -> CardId { return card_type; }
 };
 
 class pr::server::Player {
@@ -112,6 +112,8 @@ private:
 
     void SetUpGame();
     void NextPlayer();
+
+    void Draw(Player& p, usz count = 1);
 
     auto player() -> Player& { return *players[current_player]; }
     bool all_players_connected() {

@@ -88,6 +88,10 @@ void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
     client.disconnect();
 }
 
+void Server::handle(net::TCPConnexion& client, sc::WordChoice) {
+    Log("Client gave back word");
+}
+
 void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
     Log("Received heartbeat response from client {}", res.seq_no);
 }
@@ -138,61 +142,19 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
 // =============================================================================
 void Server::SetUpGame() {
     // Consonants.
-    for (u8 i = 0; i < 2; ++i) {
-        deck.emplace_back(CardId::C_b);
-        deck.emplace_back(CardId::C_d);
-        deck.emplace_back(CardId::C_dʒ);
-        deck.emplace_back(CardId::C_g);
-        deck.emplace_back(CardId::C_v);
-        deck.emplace_back(CardId::C_z);
-        deck.emplace_back(CardId::C_ʒ);
-    }
+    auto AddCards = [&](std::span<const CardData> s) {
+        for (auto& c : s) {
+            for (u8 i = 0; i < c.count_in_deck; ++i) {
+                deck.emplace_back(c.id);
+            }
+        }
+    };
 
-    for (u8 i = 0; i < 4; ++i) {
-        deck.emplace_back(CardId::C_p);
-        deck.emplace_back(CardId::C_t);
-        deck.emplace_back(CardId::C_tʃ);
-        deck.emplace_back(CardId::C_k);
-        deck.emplace_back(CardId::C_f);
-        deck.emplace_back(CardId::C_s);
-        deck.emplace_back(CardId::C_ʃ);
-        deck.emplace_back(CardId::C_h);
-        deck.emplace_back(CardId::C_w);
-        deck.emplace_back(CardId::C_r);
-        deck.emplace_back(CardId::C_j);
-        deck.emplace_back(CardId::C_ʟ);
-        deck.emplace_back(CardId::C_m);
-        deck.emplace_back(CardId::C_n);
-        deck.emplace_back(CardId::C_ɲ);
-        deck.emplace_back(CardId::C_ŋ);
-    }
-
+    AddCards(CardDatabaseConsonants);
     auto num_consonants = deck.size();
 
     // Vowels.
-    for (u8 i = 0; i < 3; ++i) {
-        deck.emplace_back(CardId::V_y);
-        deck.emplace_back(CardId::V_ʊ);
-        deck.emplace_back(CardId::V_ɛ);
-        deck.emplace_back(CardId::V_ɜ);
-        deck.emplace_back(CardId::V_ɔ);
-    }
-
-    for (u8 i = 0; i < 5; ++i) {
-        deck.emplace_back(CardId::V_ɨ);
-        deck.emplace_back(CardId::V_æ);
-        deck.emplace_back(CardId::V_ɑ);
-    }
-
-    for (u8 i = 0; i < 7; ++i) {
-        deck.emplace_back(CardId::V_i);
-        deck.emplace_back(CardId::V_u);
-        deck.emplace_back(CardId::V_e);
-        deck.emplace_back(CardId::V_ə);
-        deck.emplace_back(CardId::V_o);
-        deck.emplace_back(CardId::V_a);
-    }
-
+    AddCards(CardDatabaseVowels);
     // Draw the cards for reach player’s word.
     rgs::shuffle(deck.begin(), deck.begin() + num_consonants, rng);
     rgs::shuffle(deck.begin() + num_consonants, deck.end(), rng);
@@ -201,12 +163,12 @@ void Server::SetUpGame() {
         for (u8 i = 0; i < 3; ++i) {
             // Add vowel.
             p->word.push_back(std::move(deck.back()));
-            cards[i] = p->word.back().type();
+            cards[i] = p->word.back().id();
             deck.pop_back();
 
             // Add consonant.
             p->word.push_back(std::move(deck.front()));
-            cards[i + 3] = p->word.back().type();
+            cards[i + 3] = p->word.back().id();
             deck.erase(deck.begin());
         }
 
@@ -215,58 +177,13 @@ void Server::SetUpGame() {
     }
 
     // Special cards.
-    deck.emplace_back(CardId::P_Babel);
-    deck.emplace_back(CardId::P_Superstratum);
-    deck.emplace_back(CardId::P_Substratum);
-    deck.emplace_back(CardId::P_Whorf);
-    deck.emplace_back(CardId::P_REA);
-    deck.emplace_back(CardId::P_Heffer);
-    deck.emplace_back(CardId::P_GVS);
-    deck.emplace_back(CardId::P_Darija);
-    deck.emplace_back(CardId::P_Brasil);
-    deck.emplace_back(CardId::P_Gvprtskvni);
-    deck.emplace_back(CardId::P_Reconstruction);
-    deck.emplace_back(CardId::P_Chomsky);
-    deck.emplace_back(CardId::P_Pinker);
-    deck.emplace_back(CardId::P_Campbell);
-    deck.emplace_back(CardId::P_Schleicher);
-    deck.emplace_back(CardId::P_Schleyer);
-    deck.emplace_back(CardId::P_Grimm);
-    deck.emplace_back(CardId::P_Vajda);
-    deck.emplace_back(CardId::P_Zamnenhoff);
-    deck.emplace_back(CardId::P_Owl);
-    deck.emplace_back(CardId::P_Revival);
-    deck.emplace_back(CardId::P_Rosetta);
-    deck.emplace_back(CardId::P_Urheimat);
-    deck.emplace_back(CardId::P_ProtoWorld);
-    deck.emplace_back(CardId::P_Vernacular);
-    deck.emplace_back(CardId::P_Assimilation);
-    deck.emplace_back(CardId::P_Dissimilation);
-    deck.emplace_back(CardId::P_Regression);
-    deck.emplace_back(CardId::P_Descriptivism);
-    deck.emplace_back(CardId::P_Elision);
-    deck.emplace_back(CardId::P_Elision);
-
-    for (u8 i = 0; i < 3; ++i) {
-        deck.emplace_back(CardId::P_Nope);
-        deck.emplace_back(CardId::P_LinguaFranca);
-        deck.emplace_back(CardId::P_Epenthesis);
-        deck.emplace_back(CardId::P_Descriptivism);
-        deck.emplace_back(CardId::P_Elision);
-    }
-
-    for (u8 i = 0; i < 10; ++i) deck.emplace_back(CardId::P_SpellingReform);
+    AddCards(CardDatabasePowers);
 
     // Draw each player’s hand.
     rgs::shuffle(deck, rng);
     for (auto& p : players) {
-        for (u8 i = 0; i < 7; ++i) {
-            p->hand.push_back(std::move(deck.back()));
-            deck.pop_back();
-        }
+        Draw(*p, 7);
     }
-
-    // TODO Let the players make their words
     rgs::shuffle(players, rng);
     player().client_connexion.send(sc::StartTurn());
 }
@@ -276,6 +193,16 @@ void Server::NextPlayer() {
     // TODO fill back player deck to 7 cards
     current_player = (current_player + 1) % players.size();
     player().client_connexion.send(sc::StartTurn{});
+}
+
+void Server::Draw(Player& p, usz count) {
+    for (usz i = 0; i < count; ++i) {
+        if (deck.empty()) return;
+        p.hand.push_back(std::move(deck.back()));
+        deck.pop_back();
+        p.client_connexion.send(sc::Draw{p.hand.back().id()});
+    }
+
 }
 
 // =============================================================================
