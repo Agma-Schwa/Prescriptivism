@@ -3,9 +3,9 @@ module;
 #include <base/Macros.hh>
 #include <chrono>
 #include <functional>
+#include <ranges>
 #include <SDL3/SDL.h>
 #include <thread>
-#include <ranges>
 module pr.client;
 
 import pr.utils;
@@ -205,19 +205,16 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
         Position::HCenter(10)
     );
 
-    submit.on_click = [&]{
+    submit.on_click = [&] {
         SendWord();
     };
 }
 
 void WordChoiceScreen::SendWord() {
     cs::WordChoice::Array a;
-    for (usz i = 0; i < constants::StartingWordSize; ++i) {
-        a[i] = cards[i]->id();
-    }
+    for (auto [i, c] : cards | vws::enumerate) a[i] = c->id();
     client.server_connexion.send(cs::WordChoice{a});
 }
-
 
 void WordChoiceScreen::enter(const std::array<CardId, constants::StartingWordSize>& word) {
     for (auto [i, ct] : word | vws::enumerate) cards[usz(i)]->set_from_type(ct);
@@ -269,7 +266,6 @@ void GameScreen::tick(InputSystem& input) {
 // =============================================================================
 //  Game Screen - Packet Handlers
 // =============================================================================
-
 
 void Client::handle(sc::Disconnect packet) {
     server_connexion.disconnect();
