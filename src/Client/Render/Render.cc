@@ -636,11 +636,6 @@ auto Font::shape(
         ybase -= skip_amount;
     }
 
-    // Clamp max height and depth to the font’s strut. This is so
-    // lines and cursors don’t weirdly grow larger as you type.
-    ht = std::max(ht, strut_asc);
-    dp = std::max(dp, strut_desc);
-
     // And upload the vertices.
     VertexArrays vao{VertexLayout::PositionTexture4D};
     auto& vbo = vao.add_buffer();
@@ -895,6 +890,10 @@ auto Renderer::font(u32 size, TextStyle style) -> Font& {
     );
 
     return it->second;
+}
+
+auto Renderer::font_for_text(const ShapedText& r) -> Font& {
+    return font(+r.font_size(), r.style());
 }
 
 auto Renderer::frame() -> Frame { return Frame(*this); }

@@ -89,8 +89,7 @@ void Label::draw(Renderer& r) {
     auto& shaped = text.shaped(r);
     auto parent_box = parent()->bounding_box();
     auto position = auto{pos}.voffset(i32(shaped.depth())).relative( //
-        parent_box.origin(),
-        parent_box.size(),
+        parent_box,
         shaped.size()
     );
 
@@ -120,10 +119,7 @@ TextBox::TextBox(
 
 void TextBox::UpdateText(ShapedText new_text) {
     label = std::move(new_text);
-    UpdateBoundingBox(Size{
-        std::max(min_wd, i32(label.width())) + 2 * padding,
-        std::max(min_ht, i32(label.height() + label.depth())) + 2 * padding,
-    });
+    needs_refresh = true;
 }
 
 auto TextBox::TextPos(const ShapedText& text) -> xy {
@@ -134,15 +130,24 @@ void TextBox::draw(Renderer& r) {
     auto& text = label.empty() ? placeholder : label;
     auto pos = TextPos(text);
     r.draw_text(text, pos, label.empty() ? Colour::Grey : Colour::White);
-    if (cursor_offs != -1) r.draw_line(
-        xy(i32(pos.x) + cursor_offs, pos.y - i32(label.depth())),
-        xy(i32(pos.x) + cursor_offs, pos.y + i32(label.height())),
-        Colour::White
-    );
+    if (cursor_offs != -1) {
+        auto [asc, desc] = r.font_for_text(label).strut_split();
+        r.draw_line(
+            xy(i32(pos.x) + cursor_offs, pos.y - i32(desc)),
+            xy(i32(pos.x) + cursor_offs, pos.y + i32(asc)),
+            Colour::White
+        );
+    }
 }
 
-void TextBox::refresh(Renderer&) {
-    UpdateBoundingBox(rpos());
+void TextBox::refresh(Renderer& r) {
+    auto strut = r.font_for_text(label).strut();
+    Size sz{
+        std::max(min_wd, i32(label.width())) + 2 * padding,
+        std::max({min_ht, i32(label.height() + label.depth()), strut}) + 2 * padding,
+    };
+
+    SetBoundingBox(rpos(), sz);
 }
 
 void TextEdit::draw(Renderer& r) {

@@ -456,6 +456,10 @@ public:
     /// Activate the font for rendering.
     void use() const { atlas.bind(); }
 
+    /// Get the font’s strut height.
+    auto strut() const -> i32 { return strut_asc + strut_desc; }
+    auto strut_split() const -> std::pair<i32, i32> { return {strut_asc, strut_desc}; }
+
 private:
     auto AllocBuffer() -> hb_buffer_t*;
 };
@@ -561,6 +565,9 @@ public:
 
     /// Draw a texture at a position in world coordinates.
     void draw_texture(const DrawableTexture& tex, xy pos);
+
+    /// Get the font used to shape a text element.
+    auto font_for_text(const ShapedText& r) -> Font&;
 
     /// Start a new frame.
     auto frame() -> Frame;

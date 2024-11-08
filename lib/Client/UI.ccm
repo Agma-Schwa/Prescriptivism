@@ -139,6 +139,7 @@ class pr::client::Element {
 protected:
     Element() = default;
     void SetBoundingBox(AABB aabb) { box = aabb; }
+    void SetBoundingBox(xy origin, Size size) { box = {origin, size}; }
     void UpdateBoundingBox(xy origin) { box = {origin, box.size()}; }
     void UpdateBoundingBox(Size size) { box = {box.origin(), size}; }
 
