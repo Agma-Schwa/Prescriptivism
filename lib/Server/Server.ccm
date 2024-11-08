@@ -26,11 +26,11 @@ using DisconnectReason = packets::sc::Disconnect::Reason;
 
 class pr::server::Card {
     LIBBASE_MOVE_ONLY(Card);
-    CardType card_type;
+    CardId card_type;
 
 public:
-    Card(CardType t) : card_type(t) {}
-    [[nodiscard]] auto type() const -> CardType { return card_type; }
+    Card(CardId t) : card_type(t) {}
+    [[nodiscard]] auto type() const -> CardId { return card_type; }
 };
 
 class pr::server::Player {

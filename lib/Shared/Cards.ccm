@@ -1,8 +1,13 @@
+module;
+#include <array>
+#include <string_view>
+#include <ranges>
+#include <vector>
 export module pr.cards;
 import pr.utils;
 
 export namespace pr {
-enum struct CardType : u16 {
+enum struct CardId : u16 {
     // Consonants
     // TODO what about voicing
     // clang-format off
@@ -68,5 +73,99 @@ enum struct CardType : u16 {
     P_Dissimilation,
     P_Regression,
     // clang-format on
+
+    $$Count
 };
+
+enum struct CardType : u8 {
+    SoundCard,
+    PowerCard,
+};
+
+struct CardData {
+    /// The ID of this card.
+    CardId id;
+
+    /// The type of this card.
+    CardType type;
+
+    /// How many of this card there are in the deck at the start
+    /// of the game.
+    usz count_in_deck;
+
+    /// The place and manner, if this is a sound card.
+    u8 place{}, manner{};
+
+    /// The name of this card.
+    std::string_view name;
+
+    /// The text to display at the center of the card; this is only
+    /// relevant for sound cards.
+    std::string_view center;
+
+    /// Set of special changes for this sound card.
+    std::vector<CardId> converts_to;
+
+    /// Create a sound card.
+    static constexpr auto Sound(
+        CardId id,
+        usz count,
+        u8 place,
+        u8 manner,
+        std::string_view name,
+        std::string_view center,
+        std::vector<CardId> converts_to = {}
+    ) -> CardData {
+        return {id, CardType::SoundCard, count, place, manner, name, center, std::move(converts_to)};
+    }
+};
+
+namespace impl {
+using enum CardId;
+using enum CardType;
+const std::array<CardData, +$$Count> CardDatabase { // clang-format off
+    // CONSONANTS - M4        Id    Count  P  M  Name                                    Center   Conversions
+    [+C_p]  = CardData::Sound(C_p,  4,     4, 4, "Voiceless\nbilabial\nstop",            "p",     {C_m}),
+    [+C_p]  = CardData::Sound(C_b,  2,     4, 4, "Voiced\nbilabial\nstop",               "b",     {C_m}),
+    [+C_t]  = CardData::Sound(C_t,  4,     3, 4, "Voiceless\nalveolar\nstop",            "t",     {C_n}),
+    [+C_d]  = CardData::Sound(C_d,  2,     3, 4, "Voiced\nalveolar\nstop",               "d",     {C_n}),
+    [+C_tʃ] = CardData::Sound(C_tʃ, 4,     2, 4, "Voiceless\npost-alveolar\naffricate",  "tʃ",    {C_ɲ}),
+    [+C_dʒ] = CardData::Sound(C_dʒ, 2,     2, 4, "Voiced\npost-alveolar\naffricate",     "dʒ",    {C_ɲ}),
+    [+C_k]  = CardData::Sound(C_k,  4,     1, 4, "Voiceless\nvelar\nstop",               "k",     {C_ŋ}),
+    [+C_g]  = CardData::Sound(C_g,  2,     1, 4, "Voiced\nvelar\nstop",                  "g",     {C_ŋ}),
+
+    // CONSONANTS - M3        Id    Count  P  M  Name                                    Center   Bottom
+    [+C_f]  = CardData::Sound(C_f,  4,     4, 3, "Voiceless\nlabial\nfricative",         "f",     {C_h}),
+    [+C_v]  = CardData::Sound(C_v,  2,     4, 3, "Voiced\nlabial\nfricative",            "v",     ""),
+    [+C_s]  = CardData::Sound(C_s,  4,     3, 3, "Voiceless\nalveolar\nfricative",       "s",     ""),
+    [+C_z]  = CardData::Sound(C_z,  2,     3, 3, "Voiced\nalveolar\nfricative",          "z",     ""),
+    [+C_ʃ]  = CardData::Sound(C_ʃ,  4,     2, 3, "Voiceless\npost-alveolar\nfricative",  "ʃ",     ""),
+    [+C_ʒ]  = CardData::Sound(C_ʒ,  2,     2, 3, "Voiced\npost-alveolar\nfricative",     "ʒ",     ""),
+    [+C_h]  = CardData::Sound(C_h,  2,     1, 3, "Voiceless\nglottal\nfricative",        "ʒ",     {C_f}),
+
+
+
+
+}; // clang-format on
+
+// Integrity check.
+static_assert([] {
+    for (auto [i, c] : CardDatabase | vws::enumerate) {
+        // Every card must have a type equal to its index.
+        if (CardType(i) != c.type) return false;
+
+        // Every card must occur at least once in the deck.
+        if (c.count_in_deck < 1) return false;
+
+        // Sound cards must have place and manner set.
+        if (c.type == SoundCard and (c.place == 0 or c.manner == 0)) return false;
+
+        // Card name may not be empty (but other fields can be).
+        if (c.name.empty()) return false;
+    }
+    return true;
+}(), "Card database integrity check");
+}
+
+using impl::CardDatabase;
 }

@@ -9,6 +9,7 @@ module;
 export module pr.client.ui;
 
 import base.text;
+import pr.cards;
 import pr.utils;
 import pr.client.render;
 import pr.client.render.gl;
@@ -419,15 +420,16 @@ public:
         NumScales
     };
 
-private:
     static constexpr Size CardSize[NumScales] = {Size{60, 90}, Size{120, 180}, Size{240, 360}};
+
+private:
     static constexpr u16 Offset[NumScales] = {1, 2, 4};
     static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge};
     static constexpr FontSize NameSpecialSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
     Scale s = Field;
-    u8 count;
+    u8 count{};
     bool scale_changed = true; // Set initially so we recalculate everything.
     Label code;
     Label name;
@@ -435,18 +437,11 @@ private:
     Label special;
 
 public:
-    Card(
-        Element* parent,
-        Position pos,
-        std::string code,
-        std::string name,
-        std::string middle,
-        std::string special,
-        u8 count
-    );
+    Card(Element* parent, Position pos);
 
     void draw(Renderer& r) override;
     void refresh(Renderer&) override;
+    void set_from_type(CardId ct);
     void set_scale(Scale _s);
 };
 

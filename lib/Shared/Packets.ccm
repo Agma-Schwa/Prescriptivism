@@ -7,6 +7,7 @@ module;
 export module pr.packets;
 
 import pr.serialisation;
+import pr.constants;
 import pr.cards;
 import pr.utils;
 import pr.tcp;
@@ -114,12 +115,12 @@ DefinePacket(HeartbeatRequest) {
 };
 
 DefinePacket(WordChoice) {
-    Ctor(WordChoice)(CardType c1, CardType c2, CardType c3, CardType c4, CardType c5, CardType c6)
-        : word{c1, c2, c3, c4, c5, c6} {}
+    using Array = std::array<CardId, constants::StartingWordSize>;
 
+    Ctor(WordChoice)(Array word) : word{word} {}
     Serialisable(word);
 
-    std::array<CardType, 6> word;
+    Array word;
 };
 
 DefinePacket(StartTurn) {

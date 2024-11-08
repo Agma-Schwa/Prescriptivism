@@ -368,18 +368,13 @@ void Throbber::draw(Renderer& r) {
 
 Card::Card(
     Element* parent,
-    Position pos,
-    std::string code_text,
-    std::string name_text,
-    std::string middle_text,
-    std::string special_text,
-    u8 count
+    Position pos
 ) : Widget{parent, pos},
     count{count},
-    code{this, std::move(code_text), Position()},
-    name{this, std::move(name_text), Position()},
-    middle{this, std::move(middle_text), Position::Center()},
-    special{this, std::move(special_text), Position()} {
+    code{this, Position()},
+    name{this, Position()},
+    middle{this, Position::Center()},
+    special{this, Position()} {
     code.colour = Colour::Black;
     name.colour = Colour::Black;
     middle.colour = Colour::Black;
@@ -419,6 +414,10 @@ void Card::refresh(Renderer& r) {
     code.pos = Position{Offset[s], -Offset[s]};
     special.pos = Position::HCenter(10 * Offset[s]);
     name.pos = Position(Offset[s], -(4 * Offset[s] + code.size(r).ht));
+}
+
+void Card::set_from_type(CardId ct) {
+
 }
 
 void Card::set_scale(const Scale _s) {

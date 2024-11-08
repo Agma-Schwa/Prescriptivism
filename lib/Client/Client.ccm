@@ -8,7 +8,9 @@ module;
 export module pr.client;
 
 import pr.utils;
+import pr.cards;
 import pr.packets;
+import pr.constants;
 import pr.client.ui;
 import pr.client.render;
 import pr.client.render.gl;
@@ -27,6 +29,9 @@ class WordChoiceScreen;
 class GameScreen;
 }
 
+// =============================================================================
+//  General Screens
+// =============================================================================
 /// Main menu of the game.
 class pr::client::MenuScreen : public Screen {
 public:
@@ -48,6 +53,9 @@ public:
     void enter(Client& c, std::string t, Screen& return_to);
 };
 
+// =============================================================================
+//  Connexion Phase Screens
+// =============================================================================
 /// Screen that is displayed while we connect to a server.
 ///
 /// This screen has all the connexion logic.
@@ -79,6 +87,21 @@ public:
     WaitingScreen(Client& c);
 };
 
+class pr::client::WordChoiceScreen : public Screen {
+    Client& client;
+    std::array<Card*, constants::StartingWordSize> cards;
+
+public:
+    WordChoiceScreen(Client& c);
+
+    // This takes an array instead of a span to force a specific word size.
+    void enter(const std::array<CardId, constants::StartingWordSize>& word);
+    void refresh(Renderer&) override;
+};
+
+// =============================================================================
+//  In-game Screens
+// =============================================================================
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
     Client& client;
@@ -89,6 +112,10 @@ public:
 
 };
 
+
+// =============================================================================
+//  Client
+// =============================================================================
 class pr::client::Client {
     LIBBASE_IMMOVABLE(Client);
 
@@ -104,6 +131,7 @@ public:
     ConnexionScreen connexion_screen{*this};
     ErrorScreen error_screen{*this};
     WaitingScreen waiting_screen{*this};
+    WordChoiceScreen word_choice_screen{*this};
     GameScreen game_screen{*this};
 
     /// Connexion to the game server.

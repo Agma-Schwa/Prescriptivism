@@ -5,6 +5,7 @@ module;
 #include <functional>
 #include <SDL3/SDL.h>
 #include <thread>
+#include <ranges>
 module pr.client;
 
 import pr.utils;
@@ -91,7 +92,7 @@ MenuScreen::MenuScreen(Client& c) {
 }
 
 // =============================================================================
-//  Connexion Screen
+//  Connexion Phase Screens
 // =============================================================================
 ConnexionScreen::ConnexionScreen(Client& c) : client{c} {
     Create<Label>(
@@ -192,6 +193,17 @@ WaitingScreen::WaitingScreen(Client& c) {
     );
 }
 
+WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
+    // Create empty cards; we’ll set them up and position them later.
+    for (usz i = 0; i < constants::StartingWordSize; i++)
+        cards[i] = &Create<Card>(Position());
+}
+
+void WordChoiceScreen::enter(const std::array<CardId, constants::StartingWordSize>& word) {
+    for (auto [i, ct] : word | vws::enumerate) cards[usz(i)]->set_from_type(ct);
+    client.enter_screen(*this);
+}
+
 // =============================================================================
 //  Game Screen
 // =============================================================================
@@ -261,7 +273,7 @@ void Client::handle(sc::HeartbeatRequest req) {
 }
 
 void Client::handle(sc::WordChoice wc) {
-    for (auto w : wc.word) Log("Card: {}", +w);
+    word_choice_screen.enter(wc.word);
 }
 
 void Client::handle(sc::StartTurn) {
