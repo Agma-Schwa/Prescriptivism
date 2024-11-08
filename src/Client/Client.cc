@@ -19,17 +19,15 @@ using namespace pr::client;
 // =============================================================================
 ErrorScreen::ErrorScreen(Client& c) {
     msg = &Create<Label>(
+        Position::Center(),
         FontSize::Large,
         TextStyle::Regular,
-        TextAlign::Center,
-        Position::Center()
+        TextAlign::Center
     );
 
     auto& back = Create<Button>(
         c.renderer.make_text("Back", FontSize::Medium),
-        Position::HCenter(150),
-        3,
-        125
+        Position::HCenter(150)
     );
 
     back.on_click = [&] { c.enter_screen(*return_screen); };
@@ -52,50 +50,30 @@ MenuScreen::MenuScreen(Client& c) {
 
     auto& quit = Create<Button>(
         c.renderer.make_text("Quit", FontSize::Medium),
-        Position::HCenter(75),
-        3,
-        125
+        Position::HCenter(75)
     );
 
     auto& connect = Create<Button>(
         c.renderer.make_text("Connect", FontSize::Medium),
-        Position::HCenter(150),
-        3,
-        125
+        Position::HCenter(150)
     );
 
     auto& address = Create<TextEdit>(
         Position::HCenter(350),
-        FontSize::Medium,
-        TextStyle::Regular,
-        c.renderer.make_text("Server Address", FontSize::Medium),
-        3,
-        false,
-        250,
-        25
+        c.renderer.make_text("Server Address", FontSize::Medium)
     );
 
     auto& username = Create<TextEdit>(
         Position::HCenter(287),
-        FontSize::Medium,
-        TextStyle::Regular,
-        c.renderer.make_text("Your Name", FontSize::Medium),
-        3,
-        false,
-        250,
-        25
+        c.renderer.make_text("Your Name", FontSize::Medium)
     );
 
     auto& password = Create<TextEdit>(
         Position::HCenter(225),
-        FontSize::Medium,
-        TextStyle::Regular,
-        c.renderer.make_text("Password", FontSize::Medium),
-        3,
-        true,
-        250,
-        25
+        c.renderer.make_text("Password", FontSize::Medium)
     );
+
+    password.set_hide_text(true);
 
     // FIXME: Testing only. Remove these later.
     address.value(U"localhost");
@@ -123,9 +101,7 @@ ConnexionScreen::ConnexionScreen(Client& c) : client{c} {
 
     auto& abort = Create<Button>(
         c.renderer.make_text("Abort", FontSize::Medium),
-        Position::HCenter(150),
-        3,
-        125
+        Position::HCenter(150)
     );
 
     Create<Throbber>(Position::Center());
@@ -222,23 +198,17 @@ GameScreen::GameScreen(Client& c) : client(c) {
 
     auto& small = Create<Button>(
         c.renderer.make_text("Small", FontSize::Medium),
-        Position{30, 30},
-        10,
-        125
+        Position{30, 30}
     );
 
     auto& medium = Create<Button>(
         c.renderer.make_text("Medium", FontSize::Medium),
-        Position::HCenter(30),
-        10,
-        125
+        Position::HCenter(30)
     );
 
     auto& large = Create<Button>(
         c.renderer.make_text("Large", FontSize::Medium),
-        Position{-30, 30},
-        10,
-        125
+        Position{-30, 30}
     );
 
     small.on_click = [&] { card.set_scale(Card::OtherPlayer); };

@@ -265,10 +265,10 @@ public:
 
     explicit Label(
         Element* parent,
+        Position pos,
         FontSize sz,
         TextStyle style,
         TextAlign align,
-        Position pos,
         bool reflow = true
     ) : Widget(parent, pos),
         text("", sz, align, style),
@@ -282,7 +282,7 @@ public:
         TextStyle style = TextStyle::Regular,
         TextAlign align = TextAlign::SingleLine,
         bool reflow = true
-    ) : Label(parent, sz, style, align, pos, reflow) {
+    ) : Label(parent, pos, sz, style, align, reflow) {
         update_text(std::move(text));
     }
 
@@ -338,8 +338,8 @@ public:
         Element* parent,
         ShapedText label,
         Position pos,
-        i32 padding,
-        i32 min_wd = 0,
+        i32 padding = 3,
+        i32 min_wd = 125,
         i32 min_ht = 0
     ) : TextBox(parent, std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {}
 
@@ -370,12 +370,12 @@ public:
     TextEdit(
         Element* parent,
         Position pos,
-        FontSize size,
-        TextStyle style,
         ShapedText placeholder,
-        i32 padding,
+        FontSize size = FontSize::Medium,
+        TextStyle style = TextStyle::Regular,
+        i32 padding = 3,
         bool hide_text = false,
-        i32 min_wd = 0,
+        i32 min_wd = 250,
         i32 min_ht = 0
     ) : TextBox(parent, ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht),
         size{size},
@@ -384,19 +384,14 @@ public:
         selectable = true;
     }
 
-    TextEdit(
-        Element* parent,
-        Position pos,
-        FontSize size,
-        TextStyle style,
-        i32 padding,
-        i32 min_wd = 0,
-        i32 min_ht = 0
-    ) : TextEdit(parent, pos, size, style, ShapedText(), padding, false, min_wd, min_ht) {}
-
     void draw(Renderer& r) override;
     void event_click(InputSystem& input) override;
     void event_input(InputSystem& input) override;
+    void set_hide_text(bool hide) {
+        hide_text = hide;
+        dirty = true;
+    }
+
     auto value() -> std::string { return text::ToUTF8(text); }
     void value(std::u32string new_text) {
         text = std::move(new_text);
