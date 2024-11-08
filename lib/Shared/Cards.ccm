@@ -209,7 +209,7 @@ const std::array<CardData, +$$Count> CardDatabase { // clang-format off
     [+V_y]  = CardData::Sound(V_y, 3,    3, 3, "Close\nFront\nRounded\nVowel",           "y",   {}),
     [+V_ɨ]  = CardData::Sound(V_ɨ, 5,    3, 2, "Close\nCentral\nUnrounded\nVowel",       "ɨ",   {}),
     [+V_u]  = CardData::Sound(V_u, 7,    3, 1, "Close\nBack\nRounded\nVowel",            "u",   {{C_w, C_w}}),
-    [+V_ʊ]  = CardData::Sound(V_u, 3,    3, 1, "Near-Close\nNear-Back\nRounded\nVowel",  "ʊ",   {}),
+    [+V_ʊ]  = CardData::Sound(V_ʊ, 3,    3, 1, "Near-Close\nNear-Back\nRounded\nVowel",  "ʊ",   {}),
 
     // VOWELS - O2            Id   Count O  A  Name                                      Center Conversions
     [+V_e]  = CardData::Sound(V_e, 7,    2, 3, "Close-Mid\nFront\nUnrounded\nVowel",     "e",   {}),
