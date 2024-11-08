@@ -131,6 +131,18 @@ struct CardData {
     ) {
         return CardData{id, CardType::PowerCard, count, 0, 0, name, "", {}};
     }
+
+    /// Check if this is a consonant.
+    constexpr bool is_consonant() const { return id <= CardId::C_ŋ; }
+
+    /// Check if this is a power card.
+    constexpr bool is_power() const { return type == CardType::PowerCard; }
+
+    /// Check if this is a sound card.
+    constexpr bool is_sound() const { return type == CardType::SoundCard; }
+
+    /// Check if this is a vowel.
+    constexpr bool is_vowel() const { return id >= CardId::V_i and id <= CardId::V_ɑ; }
 };
 }
 
