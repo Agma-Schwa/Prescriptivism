@@ -28,7 +28,7 @@ ErrorScreen::ErrorScreen(Client& c) {
     auto& back = Create<Button>(
         c.renderer.make_text("Back", FontSize::Medium),
         Position::HCenter(150),
-        10,
+        3,
         125
     );
 
@@ -53,14 +53,14 @@ MenuScreen::MenuScreen(Client& c) {
     auto& quit = Create<Button>(
         c.renderer.make_text("Quit", FontSize::Medium),
         Position::HCenter(75),
-        10,
+        3,
         125
     );
 
     auto& connect = Create<Button>(
         c.renderer.make_text("Connect", FontSize::Medium),
         Position::HCenter(150),
-        10,
+        3,
         125
     );
 
@@ -69,7 +69,7 @@ MenuScreen::MenuScreen(Client& c) {
         FontSize::Medium,
         TextStyle::Regular,
         c.renderer.make_text("Server Address", FontSize::Medium),
-        10,
+        3,
         false,
         250,
         25
@@ -80,7 +80,7 @@ MenuScreen::MenuScreen(Client& c) {
         FontSize::Medium,
         TextStyle::Regular,
         c.renderer.make_text("Your Name", FontSize::Medium),
-        10,
+        3,
         false,
         250,
         25
@@ -91,7 +91,7 @@ MenuScreen::MenuScreen(Client& c) {
         FontSize::Medium,
         TextStyle::Regular,
         c.renderer.make_text("Password", FontSize::Medium),
-        10,
+        3,
         true,
         250,
         25
@@ -124,7 +124,7 @@ ConnexionScreen::ConnexionScreen(Client& c) : client{c} {
     auto& abort = Create<Button>(
         c.renderer.make_text("Abort", FontSize::Medium),
         Position::HCenter(150),
-        10,
+        3,
         125
     );
 
