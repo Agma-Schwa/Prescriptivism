@@ -32,7 +32,7 @@ enum struct CardId : u16 {
     V_ɨ,
     V_u, V_ʊ,
     V_e, V_ɛ,
-    V_ə, V_ɐ, // V_ɐ is referred to as ʌ in the docs, but also as a central vowel, which is wrong
+    V_ə, V_ɜ, // V_ɜ is referred to as ʌ in the docs, but also as a central vowel, which is wrong
     V_o, V_ɔ,
     V_æ,
     V_a,
@@ -204,8 +204,25 @@ const std::array<CardData, +$$Count> CardDatabase { // clang-format off
     [+P_Dissimilation]  = CardData::Power(P_Dissimilation,  1,     "Dissimilation"),
     [+P_Regression]     = CardData::Power(P_Regression,     1,     "Regression"),
 
+    // VOWELS - O3            Id   Count O  A  Name                                      Center Conversions
+    [+V_i]  = CardData::Sound(V_i, 7,    3, 3, "Close\nFront\nUnrounded\nVowel",         "i",   {{C_j, C_j}}),
+    [+V_y]  = CardData::Sound(V_y, 3,    3, 3, "Close\nFront\nRounded\nVowel",           "y",   {}),
+    [+V_ɨ]  = CardData::Sound(V_ɨ, 5,    3, 2, "Close\nCentral\nUnrounded\nVowel",       "ɨ",   {}),
+    [+V_u]  = CardData::Sound(V_u, 7,    3, 1, "Close\nBack\nRounded\nVowel",            "u",   {{C_w, C_w}}),
+    [+V_ʊ]  = CardData::Sound(V_ʊ, 3,    3, 1, "Near-Close\nNear-Back\nRounded\nVowel",  "ʊ",   {}),
 
+    // VOWELS - O2            Id   Count O  A  Name                                      Center Conversions
+    [+V_e]  = CardData::Sound(V_e, 7,    2, 3, "Close-Mid\nFront\nUnrounded\nVowel",     "e",   {}),
+    [+V_ɛ]  = CardData::Sound(V_ɛ, 3,    2, 3, "Open-Mid\nFront\nUnrounded\nVowel",      "ɛ",   {}),
+    [+V_ə]  = CardData::Sound(V_ə, 7,    2, 2, "Mid\nCentral\nVowel",                    "ə",   {}),
+    [+V_ɜ]  = CardData::Sound(V_ɜ, 3,    2, 2, "Open-Mid\nCentral\nUnrounded\nVowel",    "ɜ",   {}),
+    [+V_o]  = CardData::Sound(V_o, 7,    2, 1, "Close-Mid\nBack\nRounded\nVowel",        "o",   {}),
+    [+V_ɔ]  = CardData::Sound(V_ɔ, 7,    2, 1, "Open-Mid\nBack\nRounded\nVowel",         "ɔ",   {}),
 
+    // VOWELS - O1            Id   Count O  A  Name                                      Center Conversions
+    [+V_æ] = CardData::Sound(V_æ, 5,     1, 3, "Near-Open\nNear-Front\nUnrounded\nVowel", "æ",  {}),
+    [+V_a] = CardData::Sound(V_a, 7,     1, 2, "Open\nCentral\nUnrounded\nVowel",         "a",  {}),
+    [+V_ɑ] = CardData::Sound(V_ɑ, 5,     1, 1, "Open\nBack\nUnrounded\nVowel",            "ɑ",  {}),
 }; // clang-format on
 
 /*// Integrity check.

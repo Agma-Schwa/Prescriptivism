@@ -174,7 +174,7 @@ void Server::SetUpGame() {
         deck.emplace_back(CardId::V_y);
         deck.emplace_back(CardId::V_ʊ);
         deck.emplace_back(CardId::V_ɛ);
-        deck.emplace_back(CardId::V_ɐ);
+        deck.emplace_back(CardId::V_ɜ);
         deck.emplace_back(CardId::V_ɔ);
     }
 
