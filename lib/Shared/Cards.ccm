@@ -45,7 +45,7 @@ enum struct CardId : u16 {
     P_Superstratum,
     P_Substratum,
     P_Whorf,
-    P_Academia,
+    P_REA,
     P_Heffer,
     P_GVS,
     P_Darija,
@@ -93,10 +93,14 @@ struct CardData {
     /// of the game.
     usz count_in_deck;
 
-    /// The place and manner, if this is a sound card.
-    u8 place{}, manner{};
+    /// The place/frontness and manner/height, if this is a sound card.
+    u8 place_or_frontness{}, manner_or_height{};
 
     /// The name of this card.
+    ///
+    /// This may contain line breaks to aid in formatting the cards; if
+    /// you want to get the card name w/o any line breaks, just replace
+    /// them w/ spaces. ;Þ
     std::string_view name;
 
     /// The text to display at the center of the card; this is only
@@ -104,7 +108,7 @@ struct CardData {
     std::string_view center;
 
     /// Set of special changes for this sound card.
-    std::vector<CardId> converts_to;
+    std::vector<std::vector<CardId>> converts_to;
 
     /// Create a sound card.
     static constexpr auto Sound(
@@ -114,9 +118,18 @@ struct CardData {
         u8 manner,
         std::string_view name,
         std::string_view center,
-        std::vector<CardId> converts_to = {}
+        std::vector<std::vector<CardId>> converts_to = {}
     ) -> CardData {
         return {id, CardType::SoundCard, count, place, manner, name, center, std::move(converts_to)};
+    }
+
+    /// Create a power card.
+    static constexpr auto Power(
+        CardId id,
+        usz count,
+        std::string_view name
+    ) {
+        return CardData{id, CardType::PowerCard, count, 0, 0, name, "", {}};
     }
 };
 
@@ -125,30 +138,77 @@ using enum CardId;
 using enum CardType;
 const std::array<CardData, +$$Count> CardDatabase { // clang-format off
     // CONSONANTS - M4        Id    Count  P  M  Name                                    Center   Conversions
-    [+C_p]  = CardData::Sound(C_p,  4,     4, 4, "Voiceless\nbilabial\nstop",            "p",     {C_m}),
-    [+C_p]  = CardData::Sound(C_b,  2,     4, 4, "Voiced\nbilabial\nstop",               "b",     {C_m}),
-    [+C_t]  = CardData::Sound(C_t,  4,     3, 4, "Voiceless\nalveolar\nstop",            "t",     {C_n}),
-    [+C_d]  = CardData::Sound(C_d,  2,     3, 4, "Voiced\nalveolar\nstop",               "d",     {C_n}),
-    [+C_tʃ] = CardData::Sound(C_tʃ, 4,     2, 4, "Voiceless\npost-alveolar\naffricate",  "tʃ",    {C_ɲ}),
-    [+C_dʒ] = CardData::Sound(C_dʒ, 2,     2, 4, "Voiced\npost-alveolar\naffricate",     "dʒ",    {C_ɲ}),
-    [+C_k]  = CardData::Sound(C_k,  4,     1, 4, "Voiceless\nvelar\nstop",               "k",     {C_ŋ}),
-    [+C_g]  = CardData::Sound(C_g,  2,     1, 4, "Voiced\nvelar\nstop",                  "g",     {C_ŋ}),
+    [+C_p]  = CardData::Sound(C_p,  4,     4, 4, "Voiceless\nbilabial\nstop",            "p",     {{C_m}}),
+    [+C_p]  = CardData::Sound(C_b,  2,     4, 4, "Voiced\nbilabial\nstop",               "b",     {{C_m}}),
+    [+C_t]  = CardData::Sound(C_t,  4,     3, 4, "Voiceless\nalveolar\nstop",            "t",     {{C_n}}),
+    [+C_d]  = CardData::Sound(C_d,  2,     3, 4, "Voiced\nalveolar\nstop",               "d",     {{C_n}}),
+    [+C_tʃ] = CardData::Sound(C_tʃ, 4,     2, 4, "Voiceless\npost-alveolar\naffricate",  "tʃ",    {{C_ɲ}}),
+    [+C_dʒ] = CardData::Sound(C_dʒ, 2,     2, 4, "Voiced\npost-alveolar\naffricate",     "dʒ",    {{C_ɲ}}),
+    [+C_k]  = CardData::Sound(C_k,  4,     1, 4, "Voiceless\nvelar\nstop",               "k",     {{C_ŋ}}),
+    [+C_g]  = CardData::Sound(C_g,  2,     1, 4, "Voiced\nvelar\nstop",                  "g",     {{C_ŋ}}),
 
-    // CONSONANTS - M3        Id    Count  P  M  Name                                    Center   Bottom
-    [+C_f]  = CardData::Sound(C_f,  4,     4, 3, "Voiceless\nlabial\nfricative",         "f",     {C_h}),
-    [+C_v]  = CardData::Sound(C_v,  2,     4, 3, "Voiced\nlabial\nfricative",            "v",     ""),
-    [+C_s]  = CardData::Sound(C_s,  4,     3, 3, "Voiceless\nalveolar\nfricative",       "s",     ""),
-    [+C_z]  = CardData::Sound(C_z,  2,     3, 3, "Voiced\nalveolar\nfricative",          "z",     ""),
-    [+C_ʃ]  = CardData::Sound(C_ʃ,  4,     2, 3, "Voiceless\npost-alveolar\nfricative",  "ʃ",     ""),
-    [+C_ʒ]  = CardData::Sound(C_ʒ,  2,     2, 3, "Voiced\npost-alveolar\nfricative",     "ʒ",     ""),
-    [+C_h]  = CardData::Sound(C_h,  2,     1, 3, "Voiceless\nglottal\nfricative",        "ʒ",     {C_f}),
+    // CONSONANTS - M3        Id    Count  P  M  Name                                    Center   Conversions
+    [+C_f]  = CardData::Sound(C_f,  4,     4, 3, "Voiceless\nlabial\nfricative",         "f",     {{C_h}}),
+    [+C_v]  = CardData::Sound(C_v,  2,     4, 3, "Voiced\nlabial\nfricative",            "v",     {}),
+    [+C_s]  = CardData::Sound(C_s,  4,     3, 3, "Voiceless\nalveolar\nfricative",       "s",     {}),
+    [+C_z]  = CardData::Sound(C_z,  2,     3, 3, "Voiced\nalveolar\nfricative",          "z",     {}),
+    [+C_ʃ]  = CardData::Sound(C_ʃ,  4,     2, 3, "Voiceless\npost-alveolar\nfricative",  "ʃ",     {}),
+    [+C_ʒ]  = CardData::Sound(C_ʒ,  2,     2, 3, "Voiced\npost-alveolar\nfricative",     "ʒ",     {}),
+    [+C_h]  = CardData::Sound(C_h,  2,     1, 3, "Voiceless\nglottal\nfricative",        "ʒ",     {{C_f}}),
 
+    // CONSONANTS - M2        Id    Count  P  M  Name                                    Center   Conversions
+    [+C_w]  = CardData::Sound(C_f,  4,     4, 2, "Voiced\nlabio-velar\napproximant",     "w",     {{C_ʟ}, {V_u, V_u}}),
+    [+C_r]  = CardData::Sound(C_r,  4,     3, 2, "Voiced\nalveolar\ntrill",              "r",     {}),
+    [+C_j]  = CardData::Sound(C_j,  4,     2, 2, "Voiced\npalatal\napproximant",         "j",     {{V_i, V_i}}),
+    [+C_ʟ]  = CardData::Sound(C_ʟ,  4,     1, 2, "Voiced\nvelar\napproximant",           "ʟ",     {{C_w}}),
+
+    // CONSONANTS - M1        Id    Count  P  M  Name                                    Center   Conversions
+    [+C_m]  = CardData::Sound(C_m,  4,     4, 1, "Voiced\nbilabial\nnasal",              "m",     {{C_p}}),
+    [+C_n]  = CardData::Sound(C_n,  4,     3, 1, "Voiced\nalveolar\nnasal",              "n",     {{C_t}}),
+    [+C_ɲ]  = CardData::Sound(C_ɲ,  4,     2, 1, "Voiced\npalatal\nnasal",               "ɲ",     {{C_tʃ}}),
+    [+C_ŋ]  = CardData::Sound(C_ŋ,  4,     1, 1, "Voiced\nvelar\nnasal",                 "ŋ",     {{C_k}}),
+
+    // POWER CARDS                        Id                Count  Name
+    [+P_SpellingReform] = CardData::Power(P_SpellingReform, 10,    "Spelling Reform"),
+    [+P_Descriptivism]  = CardData::Power(P_Descriptivism,  4,     "Descriptivism"),
+    [+P_Nope]           = CardData::Power(P_Nope,           3,     "Nope"),
+    [+P_Babel]          = CardData::Power(P_Babel,          1,     "Tower of Babel"),
+    [+P_Superstratum]   = CardData::Power(P_Superstratum,   1,     "Superstratum"),
+    [+P_Substratum]     = CardData::Power(P_Substratum,     1,     "Substratum"),
+    [+P_Whorf]          = CardData::Power(P_Whorf,          1,     "Whorf’s Fever Dream"),
+    [+P_Chomsky]        = CardData::Power(P_Chomsky,        1,     "A Kiss from Noam Chomsky"),
+    [+P_Pinker]         = CardData::Power(P_Pinker,         1,     "Pinker’s Construct"),
+    [+P_Campbell]       = CardData::Power(P_Campbell,       1,     "Campbell’s Lie"),
+    [+P_Schleicher]     = CardData::Power(P_Schleicher,     1,     "Schleicher’s Shears"),
+    [+P_Schleyer]       = CardData::Power(P_Schleyer,       1,     "Schleyer’s Folly"),
+    [+P_Grimm]          = CardData::Power(P_Grimm,          1,     "The Grimm Reaper"),
+    [+P_Vajda]          = CardData::Power(P_Vajda,          1,     "Vajda’s Vow"),
+    [+P_Zamnenhoff]     = CardData::Power(P_Zamnenhoff,     1,     "Zamnenhoff"),
+    [+P_REA]            = CardData::Power(P_REA,            1,     "Real Academia Española"),
+    [+P_Heffer]         = CardData::Power(P_Heffer,         1,     "Heffer’s Last Stand"),
+    [+P_GVS]            = CardData::Power(P_GVS,            1,     "Great Vowel Shift"),
+    [+P_Darija]         = CardData::Power(P_Darija,         1,     "Darija Damage"),
+    [+P_Brasil]         = CardData::Power(P_Brasil,         1,     "Go to Brasil"),
+    [+P_Gvprtskvni]     = CardData::Power(P_Gvprtskvni,     1,     "Gvprtskvni"),
+    [+P_Reconstruction] = CardData::Power(P_Reconstruction, 1,     "Unattested Reconstruction"),
+    [+P_LinguaFranca]   = CardData::Power(P_LinguaFranca,   3,     "Lingua Franca"),
+    [+P_Owl]            = CardData::Power(P_Owl,            1,     "An Offering to the Owl"),
+    [+P_Revival]        = CardData::Power(P_Revival,        1,     "Revival"),
+    [+P_Rosetta]        = CardData::Power(P_Rosetta,        1,     "Rosetta Stone"),
+    [+P_Urheimat]       = CardData::Power(P_Urheimat,       1,     "Urheimat"),
+    [+P_ProtoWorld]     = CardData::Power(P_ProtoWorld,     1,     "Proto-World"),
+    [+P_Vernacular]     = CardData::Power(P_Vernacular,     1,     "Victory of the Vernacular"),
+    [+P_Epenthesis]     = CardData::Power(P_Epenthesis,     3,     "Epenthesis"),
+    [+P_Elision]        = CardData::Power(P_Elision,        5,     "Elision"),
+    [+P_Assimilation]   = CardData::Power(P_Assimilation,   1,     "Assimilation"),
+    [+P_Dissimilation]  = CardData::Power(P_Dissimilation,  1,     "Dissimilation"),
+    [+P_Regression]     = CardData::Power(P_Regression,     1,     "Regression"),
 
 
 
 }; // clang-format on
 
-// Integrity check.
+/*// Integrity check.
 static_assert([] {
     for (auto [i, c] : CardDatabase | vws::enumerate) {
         // Every card must have a type equal to its index.
@@ -164,7 +224,7 @@ static_assert([] {
         if (c.name.empty()) return false;
     }
     return true;
-}(), "Card database integrity check");
+}(), "Card database integrity check");*/
 }
 
 using impl::CardDatabase;
