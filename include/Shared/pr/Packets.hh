@@ -2,13 +2,14 @@
 #define PRESCRIPTIVISM_PACKETS_HH
 
 #define COMMON_PACKETS(X) \
-    X(Disconnect)
+    X(Disconnect)\
+    X(WordChoice)
 
 #define SC_PACKETS(X) \
     X(HeartbeatRequest) \
     X(StartTurn) \
     X(EndTurn) \
-    X(WordChoice)
+    X(Draw)
 
 #define CS_PACKETS(X) \
     X(HeartbeatResponse) \

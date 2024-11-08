@@ -91,6 +91,8 @@ class pr::client::WordChoiceScreen : public Screen {
     Client& client;
     std::array<Card*, constants::StartingWordSize> cards;
 
+    void SendWord();
+
 public:
     WordChoiceScreen(Client& c);
 

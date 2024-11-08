@@ -97,6 +97,15 @@ DefinePacket(Disconnect) {
 
     Reason reason = Reason::Unspecified;
 };
+
+DefinePacket(WordChoice) {
+    using Array = std::array<CardId, constants::StartingWordSize>;
+
+    Ctor(WordChoice)(Array word) : word{word} {}
+    Serialisable(word);
+
+    Array word;
+};
 } // namespace pr::packets::common
 // =============================================================================
 //  Server -> Client
@@ -114,21 +123,19 @@ DefinePacket(HeartbeatRequest) {
     u32 seq_no;
 };
 
-DefinePacket(WordChoice) {
-    using Array = std::array<CardId, constants::StartingWordSize>;
-
-    Ctor(WordChoice)(Array word) : word{word} {}
-    Serialisable(word);
-
-    Array word;
-};
-
 DefinePacket(StartTurn) {
     Serialisable();
 };
 
 DefinePacket(EndTurn) {
     Serialisable();
+};
+
+DefinePacket(Draw) {
+    Ctor(Draw)(CardId card) : card(card) {}
+    Serialisable(card);
+
+    CardId card;
 };
 } // namespace pr::packets::sc
 
