@@ -370,6 +370,7 @@ Card::Card(
     Element* parent,
     Position pos
 ) : Widget{parent, pos},
+    _id{CardId::$$Count},
     code{this, Position()},
     name{this, Position()},
     middle{this, Position::Center()},
@@ -415,8 +416,8 @@ void Card::refresh(Renderer& r) {
     name.pos = Position(Offset[s], -(4 * Offset[s] + code.size(r).ht));
 }
 
-void Card::set_from_type(CardId ct) {
-    card_id = ct;
+void Card::set_id(CardId ct) {
+    _id = ct;
 }
 
 void Card::set_scale(const Scale _s) {

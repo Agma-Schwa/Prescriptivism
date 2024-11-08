@@ -212,12 +212,12 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 
 void WordChoiceScreen::SendWord() {
     cs::WordChoice::Array a;
-    for (auto [i, c] : cards | vws::enumerate) a[i] = c->id();
+    for (auto [i, c] : cards | vws::enumerate) a[i] = c->id;
     client.server_connexion.send(cs::WordChoice{a});
 }
 
 void WordChoiceScreen::enter(const std::array<CardId, constants::StartingWordSize>& word) {
-    for (auto [i, ct] : word | vws::enumerate) cards[usz(i)]->set_from_type(ct);
+    for (auto [i, ct] : word | vws::enumerate) cards[usz(i)]->id = ct;
     client.enter_screen(*this);
 }
 
