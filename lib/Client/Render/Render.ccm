@@ -423,10 +423,13 @@ private:
     /// this value it will be padded to this height.
     u32 skip{};
 
+    /// Maximum ascender and descender.
+    f32 strut_asc{}, strut_desc{};
+
     /// The atlas texture.
     Texture atlas;
 
-    Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip = 0);
+    Font(FT_Face ft_face, u32 size, TextStyle style);
 
 public:
     Font() = default;

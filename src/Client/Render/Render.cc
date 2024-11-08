@@ -138,19 +138,20 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     Log("Buffer: {}", debug);
 }
 
-Font::Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip)
+Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     : face{ft_face},
       size{size},
-      style{style},
-      skip{skip != 0 ? skip : u32(ft_face->height / f32(ft_face->units_per_EM) * size)} {
+      style{style}  {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, size);
+    f32 em = f32(ft_face->units_per_EM);
 
-    // Create a HarfBuzz font for it.
-    auto f = hb_ft_font_create(ft_face, nullptr);
-    Assert(f, "Failed to create HarfBuzz font");
-    hb_font = f;
-    hb_ft_font_set_funcs(hb_font.get());
+    // Compute the font’s strut.
+    strut_asc = size * ft_face->ascender / em;
+    strut_desc = size * -ft_face->descender / em;
+
+    // Compute the interline skip.
+    skip = u32(ft_face->height / f32(ft_face->units_per_EM) * size);
 
     // Determine the maximum width and height amongst all glyphs; we
     // need to do this now to ensure that the dimensions of a cell
@@ -161,9 +162,14 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style, u32 skip)
     // because that seems to more closely match the data we got from
     // iterating over every glyph in the font and computing the maximum
     // metrics.
-    f32 em = f32(ft_face->units_per_EM);
     atlas_entry_width = u32(std::ceil(ft_face->max_advance_width / em * size));
     atlas_entry_height = u32(std::ceil(size * (ft_face->bbox.yMax - ft_face->bbox.yMin) / em));
+
+    // Create a HarfBuzz font for it.
+    auto f = hb_ft_font_create(ft_face, nullptr);
+    Assert(f, "Failed to create HarfBuzz font");
+    hb_font = f;
+    hb_ft_font_set_funcs(hb_font.get());
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
@@ -629,6 +635,11 @@ auto Font::shape(
         last_line_skip = skip_amount - line_ht + line_dp;
         ybase -= skip_amount;
     }
+
+    // Clamp max height and depth to the font’s strut. This is so
+    // lines and cursors don’t weirdly grow larger as you type.
+    ht = std::max(ht, strut_asc);
+    dp = std::max(dp, strut_desc);
 
     // And upload the vertices.
     VertexArrays vao{VertexLayout::PositionTexture4D};
