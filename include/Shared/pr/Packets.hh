@@ -7,7 +7,8 @@
 #define SC_PACKETS(X) \
     X(HeartbeatRequest) \
     X(StartTurn) \
-    X(EndTurn)
+    X(EndTurn) \
+    X(WordChoice)
 
 #define CS_PACKETS(X) \
     X(HeartbeatResponse) \

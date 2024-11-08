@@ -7,6 +7,7 @@ module;
 export module pr.packets;
 
 import pr.serialisation;
+import pr.cards;
 import pr.utils;
 import pr.tcp;
 
@@ -110,6 +111,15 @@ DefinePacket(HeartbeatRequest) {
     /// Sequence number of the heartbeat packet; used to see if the
     /// client is actually responding to the right packet.
     u32 seq_no;
+};
+
+DefinePacket(WordChoice) {
+    Ctor(WordChoice)(CardType c1, CardType c2, CardType c3, CardType c4, CardType c5, CardType c6)
+        : word{c1, c2, c3, c4, c5, c6} {}
+
+    Serialisable(word);
+
+    std::array<CardType, 6> word;
 };
 
 DefinePacket(StartTurn) {

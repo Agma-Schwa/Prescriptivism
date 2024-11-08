@@ -201,6 +201,16 @@ void Server::SetUpGame() {
             p->word.push_back(std::move(deck.front()));
             deck.erase(deck.begin());
         }
+
+        // Send the player their word.
+        p->client_connexion.send(sc::WordChoice{
+            p->word[0].type(),
+            p->word[1].type(),
+            p->word[2].type(),
+            p->word[3].type(),
+            p->word[4].type(),
+            p->word[5].type(),
+        });
     }
 
     // Special cards.

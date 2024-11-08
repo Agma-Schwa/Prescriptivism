@@ -143,6 +143,12 @@ public:
         return *this;
     }
 
+    template <typename T, usz n>
+    auto operator>>(std::array<T, n>& a) -> Reader& {
+        for (auto& elem : a) *this >> elem;
+        return *this;
+    }
+
     template <typename T>
     auto operator>>(std::vector<T>& s) -> Reader& {
         auto sz = read<usz>();
@@ -242,6 +248,11 @@ public:
     void write(const std::vector<T>& v) {
         write(v.size());
         for (const auto& elem : v) write(elem);
+    }
+
+    template <typename T, usz n>
+    void write(const std::array<T, n>& a) {
+        for (const auto& elem : a) write(elem);
     }
 
 private:

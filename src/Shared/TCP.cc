@@ -262,7 +262,6 @@ auto impl::CreateServerSocket(u16 port, u32 max_connexions) -> Result<SocketHold
 //  Impl
 // =============================================================================
 struct TCPConnexion::Impl : impl::SocketHolder {
-    bool disconnected = false;
     std::string ip_address;
     std::vector<std::byte> receive_buffer;
     std::vector<std::byte> send_buffer;
@@ -298,9 +297,6 @@ struct TCPServer::Impl : impl::SocketHolder {
 //  Impl - Connexion
 // =============================================================================
 void TCPConnexion::Impl::Disconnect() {
-    if (disconnected) return;
-    disconnected = true;
-
     // Try to flush the send buffer before closing the connexion so
     // the client hopefully gets any disconnect packets that might
     // have been queued up.
@@ -311,8 +307,6 @@ void TCPConnexion::Impl::Disconnect() {
 }
 
 void TCPConnexion::Impl::Send(std::span<const std::byte> data) {
-    if (disconnected) return;
-
     // Clear out the buffer first before sending new data.
     if (not send_buffer.empty()) {
         auto sent = SendImpl(send_buffer);
@@ -337,7 +331,6 @@ void TCPConnexion::Impl::Receive(std::function<void(ReceiveBuffer&)> callback) {
     // to the caller immediately even if it is not empty, since data left
     // in the receive buffer indicates an incomplete packet.
     constexpr usz ReceivePerTick = 65'536;
-    if (disconnected) return;
 
     // Allocate more space in the buffer.
     auto old_sz = receive_buffer.size();
@@ -410,7 +403,7 @@ void TCPServer::Impl::SetCallbacks(TCPServerCallbacks& callbacks) {
 void TCPServer::Impl::UpdateConnexions() {
     // Delete stale connexions.
     std::erase_if(all_connexions, [](const TCPConnexion& conn) {
-        return conn.impl->disconnected;
+        return conn.disconnected();
     });
 
     // Accept incoming ones.
@@ -456,11 +449,23 @@ auto TCPServer::Create(u16 port, u32 max_connexions) -> Result<TCPServer> {
     return server;
 }
 
-auto TCPConnexion::address() const -> std::string_view { return impl->ip_address; }
-void TCPConnexion::disconnect() { impl->Disconnect(); }
-bool TCPConnexion::disconnected() const { return impl->disconnected; }
-void TCPConnexion::receive(std::function<void(ReceiveBuffer&)> callback) { return impl->Receive(callback); }
-void TCPConnexion::send(std::span<const std::byte> data) { return impl->Send(data); }
+auto TCPConnexion::address() const -> std::string_view {
+    if (not impl) return "";
+    return impl->ip_address;
+}
+
+void TCPConnexion::disconnect() {
+    if (impl) impl->Disconnect();
+    impl = {};
+}
+
+void TCPConnexion::receive(std::function<void(ReceiveBuffer&)> callback) {
+    if (impl) return impl->Receive(callback);
+}
+
+void TCPConnexion::send(std::span<const std::byte> data) {
+    if (impl) return impl->Send(data);
+}
 
 auto TCPServer::connexions() -> std::span<TCPConnexion> { return impl->all_connexions; }
 auto TCPServer::port() const -> u16 { return impl->port; }

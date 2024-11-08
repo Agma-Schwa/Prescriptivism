@@ -164,8 +164,9 @@ void ConnexionScreen::tick(InputSystem& input) {
             }
 
             // We do! Tell the server who we are and switch to game screen.
-            conn.value().send(packets::cs::Login(std::move(username), std::move(password)));
-            client.game_screen.enter(std::move(conn.value()));
+            client.server_connexion = std::move(conn.value());
+            client.server_connexion.send(packets::cs::Login(std::move(username), std::move(password)));
+            client.enter_screen(client.waiting_screen);
             return;
         }
 
@@ -181,6 +182,14 @@ void ConnexionScreen::tick(InputSystem& input) {
 
 void ConnexionScreen::set_address(std::string addr) {
     address = std::move(addr);
+}
+
+WaitingScreen::WaitingScreen(Client& c) {
+    Create<Throbber>(Position::Center());
+    Create<Label>(
+        c.renderer.make_text("Waiting for players...", FontSize::Medium),
+        Position::Center().voffset(100)
+    );
 }
 
 // =============================================================================
@@ -216,39 +225,13 @@ GameScreen::GameScreen(Client& c) : client(c) {
     large.on_click = [&] { card.set_scale(Card::Large); };
 }
 
-void GameScreen::enter(net::TCPConnexion conn) {
-    server_connexion = std::move(conn);
-    client.enter_screen(*this);
-}
-
 void GameScreen::tick(InputSystem& input) {
-    // Server has gone away.
-    if (server_connexion->disconnected()) {
-        server_connexion.reset();
+    if (client.server_connexion.disconnected()) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
         return;
     }
 
-    // Receive data from the server.
-    tick_networking();
     Screen::tick(input);
-}
-
-void GameScreen::tick_networking() {
-    server_connexion->receive([&](net::ReceiveBuffer& buf) {
-        while (not server_connexion->disconnected() and not buf.empty()) {
-            auto res = packets::HandleClientSidePacket(*this, buf);
-
-            // If there was an error, close the connexion.
-            if (not res) {
-                server_connexion->disconnect();
-                client.show_error(res.error(), client.menu_screen);
-            }
-
-            // And stop if the packet was incomplete.
-            if (not res.value()) break;
-        }
-    });
 }
 
 // =============================================================================
@@ -257,8 +240,8 @@ void GameScreen::tick_networking() {
 namespace sc = packets::sc;
 namespace cs = packets::cs;
 
-void GameScreen::handle(sc::Disconnect packet) {
-    server_connexion->disconnect();
+void Client::handle(sc::Disconnect packet) {
+    server_connexion.disconnect();
     auto reason = [&] -> std::string_view {
         switch (packet.reason) {
             using Reason = sc::Disconnect::Reason;
@@ -270,19 +253,41 @@ void GameScreen::handle(sc::Disconnect packet) {
             default: return "Disconnected: <<<Invalid>>>";
         }
     }();
-    client.show_error(std::string{reason}, client.menu_screen);
+    show_error(std::string{reason}, menu_screen);
 }
 
-void GameScreen::handle(sc::HeartbeatRequest req) {
-    server_connexion->send(cs::HeartbeatResponse{req.seq_no});
+void Client::handle(sc::HeartbeatRequest req) {
+    server_connexion.send(cs::HeartbeatResponse{req.seq_no});
 }
 
-void GameScreen::handle(sc::StartTurn) {
+void Client::handle(sc::WordChoice wc) {
+    for (auto w : wc.word) Log("Card: {}", +w);
+}
+
+void Client::handle(sc::StartTurn) {
     Log("TODO: Handle StartTurn");
 }
 
-void GameScreen::handle(sc::EndTurn) {
+void Client::handle(sc::EndTurn) {
     Log("TODO: Handle EndTurn");
+}
+
+void Client::TickNetworking() {
+    if (server_connexion.disconnected()) return;
+    server_connexion.receive([&](net::ReceiveBuffer& buf) {
+        while (not server_connexion.disconnected() and not buf.empty()) {
+            auto res = packets::HandleClientSidePacket(*this, buf);
+
+            // If there was an error, close the connexion.
+            if (not res) {
+                server_connexion.disconnect();
+                show_error(res.error(), menu_screen);
+            }
+
+            // And stop if the packet was incomplete.
+            if (not res.value()) break;
+        }
+    });
 }
 
 // =============================================================================
@@ -336,7 +341,7 @@ void Client::Run() {
 
     // Run the actual game.
     Client c{std::move(r)};
-    c.run();
+    c.RunGame();
 }
 
 void Client::enter_screen(Screen& s) {
@@ -345,7 +350,11 @@ void Client::enter_screen(Screen& s) {
     s.on_entered();
 }
 
-void Client::frame() {
+void Client::Tick() {
+    // Handle networking.
+    TickNetworking();
+
+    // Start a new frame.
     Renderer::Frame _ = renderer.frame();
 
     // Refresh screen info.
@@ -358,8 +367,8 @@ void Client::frame() {
     current_screen->draw(renderer);
 }
 
-void Client::run() {
-    input_system.game_loop([&] { frame(); });
+void Client::RunGame() {
+    input_system.game_loop([&] { Tick(); });
 }
 
 void Client::show_error(std::string error, Screen& return_to) {

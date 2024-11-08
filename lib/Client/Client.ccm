@@ -22,6 +22,8 @@ namespace pr::client {
 class MenuScreen;
 class ErrorScreen;
 class ConnexionScreen;
+class WaitingScreen;
+class WordChoiceScreen;
 class GameScreen;
 }
 
@@ -72,21 +74,19 @@ private:
     auto connexion_thread_main(std::string address, std::stop_token st) -> Result<net::TCPConnexion>;
 };
 
+class pr::client::WaitingScreen : public Screen {
+public:
+    WaitingScreen(Client& c);
+};
+
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
     Client& client;
-    LateInit<net::TCPConnexion> server_connexion;
 
 public:
     explicit GameScreen(Client& c);
-    void enter(net::TCPConnexion conn);
     void tick(InputSystem& input) override;
-    void tick_networking();
 
-#define X(name) void handle(packets::sc::name);
-    COMMON_PACKETS(X)
-    SC_PACKETS(X)
-#undef X
 };
 
 class pr::client::Client {
@@ -103,13 +103,14 @@ public:
     MenuScreen menu_screen{*this};
     ConnexionScreen connexion_screen{*this};
     ErrorScreen error_screen{*this};
+    WaitingScreen waiting_screen{*this};
     GameScreen game_screen{*this};
+
+    /// Connexion to the game server.
+    net::TCPConnexion server_connexion;
 
 private:
     Screen* current_screen = nullptr;
-
-    /// TCP Connexion to the server.
-    std::optional<net::TCPConnexion> server_connexion;
 
     explicit Client(Renderer r);
 
@@ -123,7 +124,13 @@ public:
     /// Show an error to the user.
     void show_error(std::string error, Screen& return_to);
 
+#define X(name) void handle(packets::sc::name);
+    COMMON_PACKETS(X)
+    SC_PACKETS(X)
+#undef X
+
 private:
-    void frame();
-    void run();
+    void Tick();
+    void RunGame();
+    void TickNetworking();
 };
