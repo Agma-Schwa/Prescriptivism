@@ -291,7 +291,7 @@ public:
     }
 
     void draw(Renderer& r) override;
-    void font_size(FontSize new_size) { text.font_size(new_size); }
+    void font_size(FontSize new_size) { text.font_size = new_size; }
     void refresh(Renderer& r) override;
 
     void should_reflow(bool should_reflow = true) {

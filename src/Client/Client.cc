@@ -201,7 +201,7 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
     cards->autoscale = true;
 
     // Create dummy cards; we’ll initialise and position them later.
-    for (usz i = 0; i < constants::StartingWordSize; i++) cards->add(CardId::C_p);
+    for (usz i = 0; i < constants::StartingWordSize; i++) cards->add(CardId::C_ʃ);
 
     auto& submit = Create<Button>(
         c.renderer.make_text("Submit", FontSize::Medium),
@@ -304,7 +304,7 @@ void Client::TickNetworking() {
 //  API
 // =============================================================================
 Client::Client(Renderer r) : renderer(std::move(r)) {
-    enter_screen(menu_screen);
+    enter_screen(word_choice_screen);
 }
 
 void Client::Run() {

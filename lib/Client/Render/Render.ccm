@@ -227,88 +227,74 @@ public:
 
 private:
     VertexArrays vao;
-    u32 fsize;
-    f32 wd;
-    f32 ht;
-    f32 dp;
-    TextStyle fstyle;
+    TrivialReadonly(FontSize, font_size);
+    TrivialReadonly(f32, width);
+    TrivialReadonly(f32, height);
+    TrivialReadonly(f32, depth);
+    TrivialReadonly(TextStyle, style);
 
     explicit ShapedText(
         VertexArrays vao,
-        u32 fsize,
+        FontSize fsize,
         TextStyle style,
         f32 wd,
         f32 ht,
         f32 dp
     ) : vao(std::move(vao)),
-        fsize(fsize),
-        wd(wd),
-        ht(ht),
-        dp(dp),
-        fstyle(style) {}
+        _font_size(fsize),
+        _width(wd),
+        _height(ht),
+        _depth(dp),
+        _style(style) {}
 
 public:
     /// Create an empty text object that optionally stores a font size.
     explicit ShapedText(FontSize sz = FontSize::Text, TextStyle style = TextStyle::Regular)
         : vao{VertexLayout::PositionTexture4D},
-          fsize{+sz},
-          wd{},
-          ht{},
-          dp{},
-          fstyle{style} {}
+          _font_size{sz},
+          _width{},
+          _height{},
+          _depth{},
+          _style{style} {}
 
     /// Debugging function that dumps the contents of a HarfBuzz buffer;
     /// must be called after shaping.
     static auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf);
 
-    /// Get the depth of the text.
-    auto depth() const -> f32 { return dp; }
-
     /// Check if this text is empty.
     auto empty() const -> bool { return vao.empty(); }
 
-    /// Get the font size.
-    auto font_size() const -> FontSize { return FontSize(fsize); }
-
-    /// Get the height of the text.
-    auto height() const -> f32 { return ht; }
-
     /// Get the size of the text, including depth.
-    auto size() const -> Size { return {i32(wd), i32(ht + dp)}; }
-
-    /// Get the style of the text.
-    auto style() const -> TextStyle { return fstyle; }
+    auto size() const -> Size { return {i32(width), i32(height + depth)}; }
 
     /// Get the vertices for this text.
     auto verts() const -> const VertexArrays& { return vao; }
-
-    /// Get the width of the text.
-    auto width() const -> f32 { return wd; }
 };
 
 /// Text to be rendered that also stores the characters of the text.
 class pr::client::Text {
     mutable ShapedText text{FontSize::Text};
     std::u32string content;
-    TextAlign text_align = TextAlign::SingleLine;
-    TextStyle text_style = TextStyle::Regular;
+    TrivialProperty(TextAlign, align);
+    TrivialProperty(TextStyle, style);
+    Property(FontSize, font_size);
     mutable bool dirty = false;
     mutable bool needs_multiple_lines = false;
 
 public:
-    Text() {}
+    Text(): _align(TextAlign::SingleLine), _style(TextStyle::Regular) {}
     Text(
         ShapedText t,
         TextAlign align = TextAlign::SingleLine,
         TextStyle style = TextStyle::Regular
-    ) : text{std::move(t)}, text_align{align}, text_style{style} {}
+    ) : text{std::move(t)}, _align{align}, _style{style} {}
 
     Text(
         std::u32string s,
         FontSize sz,
         TextAlign align,
         TextStyle style = TextStyle::Regular
-    ) : text{sz}, content{std::move(s)}, text_align{align}, text_style{style}, dirty{true} {}
+    ) : text{sz}, content{std::move(s)}, _align{align}, _style{style}, dirty{true} {}
 
     Text(
         std::string_view s,
@@ -317,20 +303,8 @@ public:
         TextStyle style = TextStyle::Regular
     ) : Text{base::text::ToUTF32(s), sz, align, style} {}
 
-    /// Set the alignment.
-    void align(TextAlign a) {
-        text_align = a;
-        dirty = true;
-    }
-
     /// Check if this text is empty.
     bool empty() const { return content.empty() and text.size() == Size{}; }
-
-    /// Set the font size.
-    void font_size(FontSize sz) {
-        text = ShapedText(sz);
-        dirty = true;
-    }
 
     /// Reflow the text to fit within the given width.
     void reflow(Renderer& r, i32 width);
@@ -346,12 +320,6 @@ public:
 
     /// Get the text’s extents.
     auto size(Renderer& r) const -> Size { return shaped(r).size(); }
-
-    /// Set the style.
-    void style(TextStyle s) {
-        text_style = s;
-        dirty = true;
-    }
 
 private:
     void shape(Renderer& r, i32 desired_width = 0) const;
@@ -457,7 +425,7 @@ public:
     void use() const { atlas.bind(); }
 
     /// Get the font’s strut height.
-    auto strut() const -> i32 { return strut_asc + strut_desc; }
+    auto strut() const -> i32 { return i32(strut_asc + strut_desc); }
     auto strut_split() const -> std::pair<i32, i32> { return {strut_asc, strut_desc}; }
 
 private:

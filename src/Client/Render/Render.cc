@@ -141,7 +141,7 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
 Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     : face{ft_face},
       size{size},
-      style{style}  {
+      style{style} {
     // Set the font size.
     FT_Set_Pixel_Sizes(ft_face, 0, size);
     f32 em = f32(ft_face->units_per_EM);
@@ -182,8 +182,27 @@ auto Font::AllocBuffer() -> hb_buffer_t* {
     return hb_bufs[hb_buffers_in_use++].get();
 }
 
+FontSize Text::get_font_size() const {
+    return text.font_size;
+}
+
 void Text::reflow(Renderer& r, i32 width) {
-    if (dirty or width < text.width() or needs_multiple_lines) shape(r, width);
+    if (dirty or width < text.width or needs_multiple_lines) shape(r, width);
+}
+
+void Text::set_align(TextAlign a) {
+    _align = a;
+    dirty = true;
+}
+
+void Text::set_font_size(FontSize new_value) {
+    text = ShapedText(new_value);
+    dirty = true;
+}
+
+void Text::set_style(TextStyle s) {
+    _style = s;
+    dirty = true;
 }
 
 auto Text::shaped(Renderer& r) const -> const ShapedText& {
@@ -195,9 +214,9 @@ void Text::shape(Renderer& r, i32 desired_width) const {
     dirty = false;
     text = r.make_text(
         content,
-        text.font_size(),
-        text_style,
-        text_align,
+        text.font_size,
+        style,
+        align,
         desired_width,
         nullptr,
         &needs_multiple_lines
@@ -640,7 +659,7 @@ auto Font::shape(
     VertexArrays vao{VertexLayout::PositionTexture4D};
     auto& vbo = vao.add_buffer();
     vbo.copy_data(verts);
-    return ShapedText(std::move(vao), size, style, max_x, ht, dp);
+    return ShapedText(std::move(vao), FontSize(size), style, max_x, ht, dp);
 }
 
 // =============================================================================
@@ -785,7 +804,7 @@ void Renderer::draw_text(
     Colour colour
 ) {
     if (text.empty()) return;
-    auto& f = font(+text.font_size(), text.style());
+    auto& f = font(+text.font_size, text.style);
 
     // Initialise the text shader.
     use(text_shader);
@@ -893,7 +912,7 @@ auto Renderer::font(u32 size, TextStyle style) -> Font& {
 }
 
 auto Renderer::font_for_text(const ShapedText& r) -> Font& {
-    return font(+r.font_size(), r.style());
+    return font(+r.font_size, r.style);
 }
 
 auto Renderer::frame() -> Frame { return Frame(*this); }

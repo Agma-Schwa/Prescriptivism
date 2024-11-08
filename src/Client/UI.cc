@@ -89,7 +89,7 @@ void Button::draw(Renderer& r) {
 void Label::draw(Renderer& r) {
     auto& shaped = text.shaped(r);
     auto parent_box = parent()->bounding_box();
-    auto position = auto{pos}.voffset(i32(shaped.depth())).relative( //
+    auto position = auto{pos}.voffset(i32(shaped.depth)).relative( //
         parent_box,
         shaped.size()
     );
@@ -124,7 +124,7 @@ void TextBox::UpdateText(ShapedText new_text) {
 }
 
 auto TextBox::TextPos(const ShapedText& text) -> xy {
-    return Position::Center().voffset(i32(text.depth())).relative(rbox(), text.size());
+    return Position::Center().voffset(i32(text.depth)).relative(rbox(), text.size());
 }
 
 void TextBox::draw(Renderer& r) {
@@ -144,8 +144,8 @@ void TextBox::draw(Renderer& r) {
 void TextBox::refresh(Renderer& r) {
     auto strut = r.font_for_text(label).strut();
     Size sz{
-        std::max(min_wd, i32(label.width())) + 2 * padding,
-        std::max({min_ht, i32(label.height() + label.depth()), strut}) + 2 * padding,
+        std::max(min_wd, i32(label.width)) + 2 * padding,
+        std::max({min_ht, i32(label.height + label.depth), strut}) + 2 * padding,
     };
 
     SetBoundingBox(rpos(), sz);
@@ -193,7 +193,7 @@ void TextEdit::draw(Renderer& r) {
         cursor_offs = [&] -> i32 {
             // Cursor is at the start/end of the text.
             if (cursor == 0) return 0;
-            if (cursor == i32(text.size())) return i32(label.width());
+            if (cursor == i32(text.size())) return i32(label.width);
 
             // Find the smallest cluster with an index greater than or equal
             // to the cursor position. We interpolate the cursor’s position
@@ -233,7 +233,7 @@ void TextEdit::draw(Renderer& r) {
 
             // Interpolate between the last cluster and the end of the text.
             else {
-                x2 = i32(label.width());
+                x2 = i32(label.width);
                 i2 = i32(text.size());
             }
 
@@ -257,7 +257,7 @@ void TextEdit::event_click(InputSystem& input) {
     no_blink_ticks = 20;
     i32 mx = input.mouse.pos.x;
     i32 x0 = TextPos(label).x;
-    i32 x1 = x0 + i32(label.width());
+    i32 x1 = x0 + i32(label.width);
     if (mx < x0) cursor = 0;
     else if (mx > x1) cursor = i32(text.size());
     else if (clusters.size() < 2) cursor = 0;
