@@ -2,6 +2,6 @@ export module pr.constants;
 import pr.utils;
 
 export namespace pr::constants {
-static constexpr usz StartingWordSize = 6;
-static constexpr usz PlayersPerGame = 2;
+constexpr usz StartingWordSize = 6;
+constexpr usz PlayersPerGame = 2;
 }

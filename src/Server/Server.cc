@@ -219,7 +219,7 @@ void Server::SetUpGame() {
     deck.emplace_back(CardId::P_Superstratum);
     deck.emplace_back(CardId::P_Substratum);
     deck.emplace_back(CardId::P_Whorf);
-    deck.emplace_back(CardId::P_Academia);
+    deck.emplace_back(CardId::P_REA);
     deck.emplace_back(CardId::P_Heffer);
     deck.emplace_back(CardId::P_GVS);
     deck.emplace_back(CardId::P_Darija);

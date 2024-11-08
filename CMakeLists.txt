@@ -48,6 +48,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clan
         -Wno-unused-function
         -Wno-unused-local-typedefs
         -Wno-implicit-int-float-conversion
+        -Wno-c99-designator
 
         ## NULL Errors.
         -Werror=nonnull # Passing NULL to nonnull parameter.

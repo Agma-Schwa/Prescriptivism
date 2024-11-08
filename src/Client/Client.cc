@@ -208,7 +208,7 @@ void WordChoiceScreen::enter(const std::array<CardId, constants::StartingWordSiz
 //  Game Screen
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
-    auto& card = Create<Card>(
+    /*auto& card = Create<Card>(
         Position::Center(),
         "P3M5",
         "Voiced\nvelar\nstop",
@@ -234,7 +234,7 @@ GameScreen::GameScreen(Client& c) : client(c) {
 
     small.on_click = [&] { card.set_scale(Card::OtherPlayer); };
     medium.on_click = [&] { card.set_scale(Card::Field); };
-    large.on_click = [&] { card.set_scale(Card::Large); };
+    large.on_click = [&] { card.set_scale(Card::Large); };*/
 }
 
 void GameScreen::tick(InputSystem& input) {

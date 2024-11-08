@@ -370,7 +370,6 @@ Card::Card(
     Element* parent,
     Position pos
 ) : Widget{parent, pos},
-    count{count},
     code{this, Position()},
     name{this, Position()},
     middle{this, Position::Center()},

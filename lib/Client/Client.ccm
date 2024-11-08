@@ -96,7 +96,6 @@ public:
 
     // This takes an array instead of a span to force a specific word size.
     void enter(const std::array<CardId, constants::StartingWordSize>& word);
-    void refresh(Renderer&) override;
 };
 
 // =============================================================================
