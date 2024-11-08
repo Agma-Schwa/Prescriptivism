@@ -17,6 +17,17 @@ import pr.client.render.gl;
 using namespace pr;
 using namespace pr::client;
 
+// Define a setter that updates the property value if it is
+// different, and, if so, also tells the element to refresh
+// itself on the next frame.
+#define TRIVIAL_CACHING_SETTER(class, type, property, ...) \
+    void class ::set_##property(type new_value) {          \
+        if (_##property == new_value) return;              \
+        _##property = new_value;                           \
+        needs_refresh = true;                              \
+        __VA_ARGS__;                                       \
+    }
+
 // =============================================================================
 //  Constants
 // =============================================================================
@@ -335,7 +346,6 @@ void TextEdit::event_input(InputSystem& input) {
     }
 }
 
-
 Throbber::Throbber(Element* parent, Position pos)
     : Widget(parent, pos), vao(VertexLayout::Position2D) {
     vec2 verts[]{
@@ -371,6 +381,7 @@ Card::Card(
     Position pos
 ) : Widget{parent, pos},
     _id{CardId::$$Count},
+    _scale{Field},
     code{this, Position()},
     name{this, Position()},
     middle{this, Position::Center()},
@@ -382,8 +393,8 @@ Card::Card(
 }
 
 void Card::draw(Renderer& r) {
-    auto offs = Offset[s];
-    auto sz = CardSize[s];
+    auto offs = Offset[scale];
+    auto sz = CardSize[scale];
     auto at = pos.relative(parent()->bounding_box(), sz);
 
     r.draw_rect(at, sz);
@@ -400,31 +411,94 @@ void Card::draw(Renderer& r) {
 }
 
 void Card::refresh(Renderer& r) {
-    SetBoundingBox(AABB{pos.relative(parent()->bounding_box(), CardSize[s]), CardSize[s]});
+    SetBoundingBox(AABB{pos.relative(parent()->bounding_box(), CardSize[scale]), CardSize[scale]});
     if (not scale_changed) return;
     scale_changed = false;
 
     // Adjust label font sizes.
-    code.font_size(CodeSizes[s]);
-    name.font_size(NameSpecialSizes[s]);
-    middle.font_size(MiddleSizes[s]);
-    special.font_size(NameSpecialSizes[s]);
+    code.font_size(CodeSizes[scale]);
+    name.font_size(NameSpecialSizes[scale]);
+    middle.font_size(MiddleSizes[scale]);
+    special.font_size(NameSpecialSizes[scale]);
 
     // Adjust label positions.
-    code.pos = Position{Offset[s], -Offset[s]};
-    special.pos = Position::HCenter(10 * Offset[s]);
-    name.pos = Position(Offset[s], -(4 * Offset[s] + code.size(r).ht));
+    code.pos = Position{Offset[scale], -Offset[scale]};
+    special.pos = Position::HCenter(10 * Offset[scale]);
+    name.pos = Position(Offset[scale], -(4 * Offset[scale] + code.size(r).ht));
 }
 
 void Card::set_id(CardId ct) {
+    if (ct == CardId::$$Count) return;
     _id = ct;
+    auto& data = CardDatabase[+ct];
+    if (data.type == CardType::SoundCard) {
+        code.update_text(std::format( //
+            "{}{}{}{}",
+            data.is_consonant() ? 'P' : 'F',
+            data.place_or_frontness,
+            data.is_consonant() ? 'M' : 'H',
+            data.manner_or_height
+        ));
+
+        name.update_text(std::string{data.name});
+        middle.update_text(std::string{data.center});
+        special.update_text( // clang-format off
+            utils::join(data.converts_to | vws::transform([](auto& vec) {
+                return std::format("→ {}", utils::join(vec | vws::transform([](CardId id) {
+                    return CardDatabase[+id].center;
+                }), ", "));
+            }), "\n")
+        ); // clang-format on
+        needs_refresh = true;
+    } else {
+        Log("TODO: Power cards");
+    }
 }
 
-void Card::set_scale(const Scale _s) {
-    s = _s;
-    scale_changed = true;
+TRIVIAL_CACHING_SETTER(Card, Scale, scale, scale_changed = true)
+
+void CardGroup::draw(Renderer& r) {
+    for (auto& card : cards) card->draw(r);
+}
+
+void CardGroup::refresh(Renderer& r) {
+    if (cards.empty()) return;
+
+    // If we’re allowed to scale up, determine the maximum scale that works.
+    Scale s;
+    i32 width = max_width != 0 ? max_width : bounding_box().size().wd;
+    if (autoscale) {
+        s = Scale(Scale::NumScales - 1);
+        while (s != scale) {
+            auto wd = i32(cards.size() * Card::CardSize[s].wd + (cards.size() - 1) * CardGaps[s]);
+            if (wd < width) break;
+            s = Scale(s - 1);
+        }
+    } else {
+        s = scale;
+    }
+
+    i32 x = 0;
+    for (auto& c : cards) {
+        c->scale = s;
+        c->pos = Position::VCenter(x);
+        x += Card::CardSize[s].wd + CardGaps[s];
+    }
+
+    auto sz = Size{x - CardGaps[s], Card::CardSize[s].ht};
+    SetBoundingBox(AABB{pos.relative(parent()->bounding_box(), sz), sz});
+    for (auto& c : cards) c->refresh(r);
+}
+
+void CardGroup::add(CardId c) {
+    _cards.push_back(std::make_unique<Card>(this, Position()));
+    cards.back()->id = c;
     needs_refresh = true;
 }
+
+TRIVIAL_CACHING_SETTER(CardGroup, bool, autoscale);
+TRIVIAL_CACHING_SETTER(CardGroup, i32, max_width);
+TRIVIAL_CACHING_SETTER(CardGroup, Scale, scale);
 
 // =============================================================================
 //  Input Handler.

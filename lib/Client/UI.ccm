@@ -1,4 +1,5 @@
 module;
+#include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <functional>
 #include <limits>
@@ -25,6 +26,7 @@ class Label;
 class Throbber;
 class Card;
 class Widget;
+class CardGroup;
 
 enum class Anchor : u8;
 } // namespace pr::client
@@ -429,7 +431,7 @@ private:
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
     TrivialProperty(CardId, id);
-    Scale s = Field;
+    TrivialProperty(Scale, scale);
     u8 count{};
     bool scale_changed = true; // Set initially so we recalculate everything.
     Label code;
@@ -442,8 +444,40 @@ public:
 
     void draw(Renderer& r) override;
     void refresh(Renderer&) override;
-    void set_scale(Scale _s);
+};
 
+class pr::client::CardGroup : public Widget {
+    using Scale = Card::Scale;
+    using Cards = std::vector<std::unique_ptr<Card>>;
+
+    /// The scale that is set for all cards in the group.
+    TrivialProperty(Scale, scale);
+
+    /// The cards in the group.
+    TrivialReadonly(Cards, cards, const Cards&);
+
+    /// The maximum width of the entire group. Ignored if 0.
+    TrivialProperty(i32, max_width);
+
+    /// Whether the group should scale to the next available
+    /// card size if possible.
+    TrivialProperty(bool, autoscale);
+
+    static constexpr i32 CardGaps[Scale::NumScales] { 5, 10, 20 };
+
+public:
+    CardGroup(Element* parent, Position pos) : CardGroup(parent, pos, {}) {}
+    CardGroup(Element* parent, Position pos, std::vector<CardId> cards)
+        : Widget(parent, pos),
+          _scale{Scale::Field},
+          _max_width{0},
+          _autoscale{false} {
+        for (auto c : cards) add(c);
+    }
+
+    void add(CardId c);
+    void draw(Renderer& r) override;
+    void refresh(Renderer&) override;
 };
 
 template <>

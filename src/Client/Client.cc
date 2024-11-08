@@ -197,61 +197,41 @@ WaitingScreen::WaitingScreen(Client& c) {
 }
 
 WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
-    // Create empty cards; we’ll set them up and position them later.
-    for (usz i = 0; i < constants::StartingWordSize; i++)
-        cards[i] = &Create<Card>(Position());
+    cards = &Create<CardGroup>(Position::Center().anchor_to(Anchor::Center));
+    cards->autoscale = true;
+
+    // Create dummy cards; we’ll initialise and position them later.
+    for (usz i = 0; i < constants::StartingWordSize; i++) cards->add(CardId::C_p);
+
     auto& submit = Create<Button>(
         c.renderer.make_text("Submit", FontSize::Medium),
-        Position::HCenter(10)
+        Position::HCenter(75)
     );
 
-    submit.on_click = [&] {
-        SendWord();
-    };
+    submit.on_click = [&] { SendWord(); };
 }
 
 void WordChoiceScreen::SendWord() {
     cs::WordChoice::Array a;
-    for (auto [i, c] : cards | vws::enumerate) a[i] = c->id;
+    for (auto [i, c] : cards->cards | vws::enumerate) a[i] = c->id;
     client.server_connexion.send(cs::WordChoice{a});
 }
 
 void WordChoiceScreen::enter(const std::array<CardId, constants::StartingWordSize>& word) {
-    for (auto [i, ct] : word | vws::enumerate) cards[usz(i)]->id = ct;
+    for (auto [i, ct] : word | vws::enumerate) cards->cards[usz(i)]->id = ct;
     client.enter_screen(*this);
+}
+
+void WordChoiceScreen::refresh(Renderer& r) {
+    cards->max_width = r.size().wd;
+    Screen::refresh(r);
 }
 
 // =============================================================================
 //  Game Screen
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
-    /*auto& card = Create<Card>(
-        Position::Center(),
-        "P3M5",
-        "Voiced\nvelar\nstop",
-        "g",
-        "→ ɣ\n→ w",
-        10
-    );
 
-    auto& small = Create<Button>(
-        c.renderer.make_text("Small", FontSize::Medium),
-        Position{30, 30}
-    );
-
-    auto& medium = Create<Button>(
-        c.renderer.make_text("Medium", FontSize::Medium),
-        Position::HCenter(30)
-    );
-
-    auto& large = Create<Button>(
-        c.renderer.make_text("Large", FontSize::Medium),
-        Position{-30, 30}
-    );
-
-    small.on_click = [&] { card.set_scale(Card::OtherPlayer); };
-    medium.on_click = [&] { card.set_scale(Card::Field); };
-    large.on_click = [&] { card.set_scale(Card::Large); };*/
 }
 
 void GameScreen::tick(InputSystem& input) {
@@ -266,7 +246,6 @@ void GameScreen::tick(InputSystem& input) {
 // =============================================================================
 //  Game Screen - Packet Handlers
 // =============================================================================
-
 void Client::handle(sc::Disconnect packet) {
     server_connexion.disconnect();
     auto reason = [&] -> std::string_view {
