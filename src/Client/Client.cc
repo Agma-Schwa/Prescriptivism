@@ -9,9 +9,11 @@ module;
 #include <thread>
 module pr.client;
 
-import pr.utils;
 import base.text;
+
+import pr.utils;
 import pr.packets;
+import pr.validation;
 
 using namespace pr;
 using namespace pr::client;
@@ -220,10 +222,16 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 void WordChoiceScreen::SendWord() {
     constants::Word a;
     for (auto [i, c] : cards->cards | vws::enumerate) a[i] = c->id;
+    if (not validation::ValidateInitialWord(a, original_word)) {
+        client.show_error("Error: Word is invalid!", *this);
+        return;
+    }
+
     client.server_connexion.send(cs::WordChoice{a});
 }
 
-void WordChoiceScreen::enter(const std::array<CardId, constants::StartingWordSize>& word) {
+void WordChoiceScreen::enter(const constants::Word& word) {
+    original_word = word;
     for (auto [i, ct] : word | vws::enumerate) cards->cards[usz(i)]->id = ct;
     client.enter_screen(*this);
 }
