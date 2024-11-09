@@ -134,7 +134,7 @@ public:
 
 /// The root of the UI element hierarchy.
 class pr::client::Element {
-    TrivialReadonly(AABB, bounding_box);
+    Readonly(AABB, bounding_box);
 
 protected:
     Element() = default;
@@ -155,7 +155,7 @@ public:
 
 /// Element that is not a screen.
 class pr::client::Widget : public Element {
-    TrivialReadonly(Element*, parent);
+    Readonly(Element*, parent);
 
 public:
     bool hovered       : 1 = false; ///< Element is being hovered.
@@ -425,8 +425,8 @@ private:
     static constexpr FontSize NameSpecialSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
-    TrivialProperty(CardId, id);
-    TrivialProperty(Scale, scale);
+    Property(CardId, id);
+    Property(Scale, scale);
     u8 count{};
     bool scale_changed = true; // Set initially so we recalculate everything.
     Label code;
@@ -446,14 +446,14 @@ class pr::client::CardGroup : public Widget {
     using Cards = std::vector<std::unique_ptr<Card>>;
 
     /// The scale that is set for all cards in the group.
-    TrivialProperty(Scale, scale);
+    Property(Scale, scale);
 
     /// The maximum width of the entire group. Ignored if 0.
-    TrivialProperty(i32, max_width);
+    Property(i32, max_width);
 
     /// Whether the group should scale to the next available
     /// card size if possible.
-    TrivialProperty(bool, autoscale);
+    Property(bool, autoscale);
 
 
 public:

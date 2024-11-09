@@ -27,7 +27,7 @@ using DisconnectReason = packets::sc::Disconnect::Reason;
 
 class pr::server::Card {
     LIBBASE_MOVE_ONLY(Card);
-    TrivialReadonly(CardId, id);
+    Readonly(CardId, id);
 
 public:
     Card(CardId t) : _id(t) {}

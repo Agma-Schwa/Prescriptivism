@@ -301,8 +301,8 @@ class client::Texture : Descriptor<glDeleteTextures> {
     GLenum unit{};
     GLenum format{};
     GLenum type{};
-    TrivialReadonly(u32, width);
-    TrivialReadonly(u32, height);
+    Readonly(u32, width);
+    Readonly(u32, height);
 
 public:
     Texture() = default;

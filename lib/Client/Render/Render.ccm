@@ -227,11 +227,11 @@ public:
 
 private:
     VertexArrays vao;
-    TrivialReadonly(FontSize, font_size);
-    TrivialReadonly(f32, width);
-    TrivialReadonly(f32, height);
-    TrivialReadonly(f32, depth);
-    TrivialReadonly(TextStyle, style);
+    Readonly(FontSize, font_size);
+    Readonly(f32, width);
+    Readonly(f32, height);
+    Readonly(f32, depth);
+    Readonly(TextStyle, style);
 
     explicit ShapedText(
         VertexArrays vao,
@@ -275,9 +275,9 @@ public:
 class pr::client::Text {
     mutable ShapedText text{FontSize::Text};
     std::u32string content;
-    TrivialProperty(TextAlign, align);
-    TrivialProperty(TextStyle, style);
-    Property(FontSize, font_size);
+    Property(TextAlign, align);
+    Property(TextStyle, style);
+    ComputedProperty(FontSize, font_size);
     mutable bool dirty = false;
     mutable bool needs_multiple_lines = false;
 
