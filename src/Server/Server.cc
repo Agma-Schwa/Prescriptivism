@@ -108,13 +108,14 @@ void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
     Log("Client gave back word");
     // Starting the game if all words have been recieved
     if (rgs::any_of(players, [](auto& x){return not x->submitted_word;})) return;
-    std::array<constants::Word, constants::PlayersPerGame> words;
-    for (auto [i, p] : players | vws::enumerate)
-        for(auto [j, c] : p->word | vws::enumerate)
-            words[i][j] = c.id();
+    std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
     for (auto [i, p] : players | vws::enumerate) {
-        p->client_connexion.send(sc::StartGame{words, u8(i)});
+        player_infos[i].name = p->name;
+        for(auto [j, c] : p->word | vws::enumerate)
+            player_infos[i].word[j] = c.id();
     }
+    for (auto [i, p] : players | vws::enumerate)
+        p->client_connexion.send(sc::StartGame{player_infos, u8(i)});
 }
 
 void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {

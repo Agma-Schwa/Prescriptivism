@@ -138,10 +138,16 @@ DefinePacket(Draw) {
 };
 
 DefinePacket(StartGame) {
-    Ctor(StartGame)(std::array<constants::Word, constants::PlayersPerGame> words, u8 player) : words(words), player(player) {}
+    struct PlayerInfo {
+        PR_SERIALISE(word, name);
+        constants::Word word;
+        std::string name;
+    };
+
+    Ctor(StartGame)(std::array<PlayerInfo, constants::PlayersPerGame> words, u8 player) : words(words), player(player) {}
     Serialisable(words, player);
 
-    std::array<constants::Word, constants::PlayersPerGame> words;
+    std::array<PlayerInfo, constants::PlayersPerGame> words;
     u8 player;
 };
 
