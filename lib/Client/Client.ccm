@@ -90,6 +90,7 @@ public:
 class pr::client::WordChoiceScreen : public Screen {
     Client& client;
     CardGroup* cards;
+    std::optional<u32> selected;
 
     void SendWord();
 
@@ -99,6 +100,7 @@ public:
     // This takes an array instead of a span to force a specific word size.
     void enter(const std::array<CardId, constants::StartingWordSize>& word);
     void refresh(Renderer&) override;
+    void tick(InputSystem& input) override;
 };
 
 // =============================================================================

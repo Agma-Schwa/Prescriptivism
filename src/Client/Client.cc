@@ -1,4 +1,5 @@
 module;
+#include <algorithm>
 #include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <chrono>
@@ -201,11 +202,16 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
     cards->autoscale = true;
 
     // Create dummy cards; we’ll initialise and position them later.
-    for (usz i = 0; i < constants::StartingWordSize; i++) cards->add(CardId::C_ʃ);
+    for (usz i = 0; i < constants::StartingWordSize; i++) cards->add(CardId(i));
 
     auto& submit = Create<Button>(
         c.renderer.make_text("Submit", FontSize::Medium),
         Position::HCenter(75)
+    );
+
+    Create<Label>(
+        c.renderer.make_text("Click on a card to select it, then click on a different card to swap them.", FontSize::Medium),
+        Position::HCenter(-150)
     );
 
     submit.on_click = [&] { SendWord(); };
@@ -227,11 +233,39 @@ void WordChoiceScreen::refresh(Renderer& r) {
     Screen::refresh(r);
 }
 
+void WordChoiceScreen::tick(InputSystem& input) {
+    defer { Screen::tick(input); };
+
+    // Implement card swapping.
+    if (input.mouse.left and cards->bounding_box.contains(input.mouse.pos)) {
+        auto it = rgs::find_if(
+            cards->cards,
+            [&](auto& c) { return c->bounding_box.contains(input.mouse.pos); }
+        );
+
+        // We didn’t click on any card.
+        if (it == cards->cards.end()) return;
+
+        // If no card is selected, select it.
+        u32 idx = u32(it - cards->cards.begin());
+        if (not selected) selected = idx;
+
+        // If the selected card was clicked, deselect it.
+        else if (selected.value() == idx) selected = std::nullopt;
+
+        // Otherwise, swap the two and deselect.
+        else {
+            std::iter_swap(cards->cards.begin() + selected.value(), it);
+            cards->needs_refresh = true;
+            selected = std::nullopt;
+        }
+    }
+}
+
 // =============================================================================
 //  Game Screen
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
-
 }
 
 void GameScreen::tick(InputSystem& input) {

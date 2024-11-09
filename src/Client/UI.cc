@@ -88,7 +88,7 @@ void Button::draw(Renderer& r) {
 
 void Label::draw(Renderer& r) {
     auto& shaped = text.shaped(r);
-    auto parent_box = parent()->bounding_box();
+    auto parent_box = parent->bounding_box;
     auto position = auto{pos}.voffset(i32(shaped.depth)).relative( //
         parent_box,
         shaped.size()
@@ -99,7 +99,7 @@ void Label::draw(Renderer& r) {
 
 void Label::refresh(Renderer& r) {
     if (not reflow) return;
-    text.reflow(r, parent()->bounding_box().width());
+    text.reflow(r, parent->bounding_box.width());
 }
 
 TextBox::TextBox(
@@ -401,7 +401,7 @@ Card::Card(
 void Card::draw(Renderer& r) {
     auto offs = Offset[scale];
     auto sz = CardSize[scale];
-    auto at = pos.relative(parent()->bounding_box(), sz);
+    auto at = pos.relative(parent->bounding_box, sz);
 
     r.draw_rect(at, sz);
     code.draw(r);
@@ -417,7 +417,7 @@ void Card::draw(Renderer& r) {
 }
 
 void Card::refresh(Renderer& r) {
-    SetBoundingBox(AABB{pos.relative(parent()->bounding_box(), CardSize[scale]), CardSize[scale]});
+    SetBoundingBox(AABB{pos.relative(parent->bounding_box, CardSize[scale]), CardSize[scale]});
     if (not scale_changed) return;
     scale_changed = false;
 
@@ -473,7 +473,7 @@ void CardGroup::refresh(Renderer& r) {
 
     // If we’re allowed to scale up, determine the maximum scale that works.
     Scale s;
-    i32 width = max_width != 0 ? max_width : bounding_box().size().wd;
+    i32 width = max_width != 0 ? max_width : bounding_box.size().wd;
     if (autoscale) {
         s = Scale(Scale::NumScales - 1);
         while (s != scale) {
@@ -493,12 +493,12 @@ void CardGroup::refresh(Renderer& r) {
     }
 
     auto sz = Size{x - CardGaps[s], Card::CardSize[s].ht};
-    SetBoundingBox(AABB{pos.relative(parent()->bounding_box(), sz), sz});
+    SetBoundingBox(AABB{pos.relative(parent->bounding_box, sz), sz});
     for (auto& c : cards) c->refresh(r);
 }
 
 void CardGroup::add(CardId c) {
-    _cards.push_back(std::make_unique<Card>(this, Position()));
+    cards.push_back(std::make_unique<Card>(this, Position()));
     cards.back()->id = c;
     needs_refresh = true;
 }
@@ -602,7 +602,7 @@ void Screen::tick(InputSystem& input) {
         e->reset_properties();
 
         // If the cursor is within the element’s bounds, mark it as hovered.
-        e->hovered = e->bounding_box().contains(input.mouse.pos);
+        e->hovered = e->bounding_box.contains(input.mouse.pos);
 
         // If, additionally, we had a click, select the element and fire the
         // event handler.

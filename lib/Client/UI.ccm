@@ -134,20 +134,17 @@ public:
 
 /// The root of the UI element hierarchy.
 class pr::client::Element {
-    AABB box;
+    TrivialReadonly(AABB, bounding_box);
 
 protected:
     Element() = default;
-    void SetBoundingBox(AABB aabb) { box = aabb; }
-    void SetBoundingBox(xy origin, Size size) { box = {origin, size}; }
-    void UpdateBoundingBox(xy origin) { box = {origin, box.size()}; }
-    void UpdateBoundingBox(Size size) { box = {box.origin(), size}; }
+    void SetBoundingBox(AABB aabb) { _bounding_box = aabb; }
+    void SetBoundingBox(xy origin, Size size) { _bounding_box = {origin, size}; }
+    void UpdateBoundingBox(xy origin) { _bounding_box = {origin, _bounding_box.size()}; }
+    void UpdateBoundingBox(Size size) { _bounding_box = {_bounding_box.origin(), size}; }
 
 public:
     virtual ~Element() = default;
-
-    /// Get the bounding box of this element.
-    auto bounding_box() const -> AABB { return box; }
 
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
@@ -158,7 +155,7 @@ public:
 
 /// Element that is not a screen.
 class pr::client::Widget : public Element {
-    Element* parent_element = nullptr;
+    TrivialReadonly(Element*, parent);
 
 public:
     bool hovered       : 1 = false; ///< Element is being hovered.
@@ -172,7 +169,7 @@ public:
 
 protected:
     explicit Widget(Element* parent, Position pos = {})
-        : parent_element(parent), pos(pos) {}
+        : _parent(parent), pos(pos) {}
 
 public:
     /// Event handler for when the mouse is clicked on this element.
@@ -181,9 +178,6 @@ public:
     /// Event handler for when a selected element is given text input.
     virtual void event_input(InputSystem&) {}
 
-    /// Get the parent of this element.
-    auto parent() -> Element* { return parent_element; }
-
     /// Reset properties at the start of a tick.
     void reset_properties() {
         hovered = false;
@@ -191,11 +185,11 @@ public:
     }
 
     /// Calculate bounding box relative to the parent.
-    auto rbox() -> AABB { return {rpos(), bounding_box().size()}; }
+    auto rbox() -> AABB { return {rpos(), bounding_box.size()}; }
 
     /// Calculate position relative to the parent using our size.
     auto rpos() -> xy {
-        return pos.relative(parent()->bounding_box(), bounding_box().size());
+        return pos.relative(parent->bounding_box, bounding_box.size());
     }
 };
 
@@ -454,9 +448,6 @@ class pr::client::CardGroup : public Widget {
     /// The scale that is set for all cards in the group.
     TrivialProperty(Scale, scale);
 
-    /// The cards in the group.
-    TrivialReadonly(Cards, cards, const Cards&);
-
     /// The maximum width of the entire group. Ignored if 0.
     TrivialProperty(i32, max_width);
 
@@ -467,6 +458,9 @@ class pr::client::CardGroup : public Widget {
     static constexpr i32 CardGaps[Scale::NumScales] { 5, 10, 20 };
 
 public:
+    /// The cards in the group.
+    Cards cards;
+
     CardGroup(Element* parent, Position pos) : CardGroup(parent, pos, {}) {}
     CardGroup(Element* parent, Position pos, std::vector<CardId> cards)
         : Widget(parent, pos),
