@@ -226,8 +226,8 @@ void WordChoiceScreen::SendWord() {
 
     // Validate the word; if it is valid, submit it.
     if (validation::ValidateInitialWord(a, original_word) == Valid) {
-        // TODO: Switch screen to a ‘waiting for players to submit word’ screen.
         client.server_connexion.send(cs::WordChoice{a});
+        client.enter_screen(client.waiting_screen);
         return;
     }
 
