@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.28)
 project(Prescriptivism VERSION 0.1.0 LANGUAGES CXX C)
 
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(FATAL_ERROR "Prescriptivism must be built with Clang 19 or later. Other compilers are not supported.")
+endif()
+
 ## ============================================================================
 ##  Global CMake Variables.
 ## ============================================================================
@@ -11,138 +15,72 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 ##  Global compiler options.
 ## ============================================================================
 ## Turn on diagnostics colours.
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(-fdiagnostics-color=always)
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_compile_options(-fcolor-diagnostics)
-endif()
+add_compile_options(-fcolor-diagnostics)
 
 ## Use mold as the default linker, if it exists.
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    find_program(MOLD_LINKER "mold")
-    if (MOLD_LINKER)
-        if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-            add_compile_options(-fuse-ld=mold)
-        endif()
-        add_link_options(-fuse-ld=mold)
-    endif()
+find_program(MOLD_LINKER "mold")
+if (MOLD_LINKER)
+    add_link_options(-fuse-ld=mold)
 endif()
 
 ## ============================================================================
 ##  Compiler options.
 ## ============================================================================
 add_library(options INTERFACE)
+target_compile_options(options INTERFACE
+    -fms-extensions
+    -fdeclspec
 
-## Flags for Clang and GCC.
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(options INTERFACE
-        -fms-extensions
-        -fdeclspec
+    ## Warnings.
+    -Wall -Wextra     # Enable ‘all’ warnings.
+    -Wundef           # Invalid #undef or undefined macro in #if.
+    -Wcast-align      # Casting that changes alignment.
+    -Wconversion      # Implicit conversions.
+    -Wformat=2        # Stricter format checking.
 
-        ## Warnings.
-        -Wall -Wextra     # Enable ‘all’ warnings.
-        -Wundef           # Invalid #undef or undefined macro in #if.
-        -Wcast-align      # Casting that changes alignment.
-        -Wconversion      # Implicit conversions.
-        -Wformat=2        # Stricter format checking.
+    ## Disabled warnings.
+    -Wno-sign-conversion
+    -Wno-unused-function
+    -Wno-unused-local-typedefs
+    -Wno-implicit-int-float-conversion
+    -Wno-c99-designator
 
-        ## Disabled warnings.
-        -Wno-sign-conversion
-        -Wno-unused-function
-        -Wno-unused-local-typedefs
-        -Wno-implicit-int-float-conversion
-        -Wno-c99-designator
+    ## NULL Errors.
+    -Werror=nonnull # Passing NULL to nonnull parameter.
 
-        ## NULL Errors.
-        -Werror=nonnull # Passing NULL to nonnull parameter.
+    ## Memory Errors.
+    -Werror=address              # Suspicious use of addresses.
+    -Werror=init-self            # Initialization of a variable with itself.
+    -Werror=uninitialized
+    -Werror=return-stack-address
+    -Werror=dangling
 
-        ## Memory Errors.
-        -Werror=address              # Suspicious use of addresses.
-        -Werror=init-self            # Initialization of a variable with itself.
-        -Werror=uninitialized
+    ## Return type.
+    -Werror=return-type
+    -Wmissing-noreturn
 
-        ## Return type.
-        -Werror=return-type
-        -Wmissing-noreturn
+    ## C/C++.
+    -Werror=implicit-fallthrough
+    -Werror=pointer-arith        # Disallow void* and function pointer arithmetic.
+    -Werror=string-compare       # Nonsensical string comparisons.
+    -Werror=switch               # Missing switch cases.
+    # -Werror=switch-enum          # Switch on enum (even if there is a default case).
+    -Werror=write-strings        # Strings in C should be const char*.
 
-        ## C/C++.
-        -Werror=implicit-fallthrough
-        -Werror=pointer-arith        # Disallow void* and function pointer arithmetic.
-        -Werror=string-compare       # Nonsensical string comparisons.
-        -Werror=switch               # Missing switch cases.
-        # -Werror=switch-enum          # Switch on enum (even if there is a default case).
-        -Werror=write-strings        # Strings in C should be const char*.
+    ## C++.
+    -Werror=missing-field-initializers
+    -Werror=non-virtual-dtor
+    -Werror=pessimizing-move
 
-        ## C++.
-        -Werror=missing-field-initializers
-        -Werror=non-virtual-dtor
-        -Werror=pessimizing-move
-    )
-endif()
+    ## Optimisation flags.
+    $<$<CONFIG:DEBUG>:-O0 -g3 -ggdb3>
+    $<$<CONFIG:RELEASE>:-O3 -march=native>
+)
 
-## Additional flags for GCC.
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(options INTERFACE
-        -Wlogical-op      # Duplicate or unintended logical operators.
-        -Werror=invalid-memory-model # For atomics.
-        -Werror=maybe-uninitialized
-        -Werror=missing-requires
-        -Werror=return-local-addr
-    )
-endif()
-
-## Additional flags for Clang.
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(options INTERFACE
-        -Werror=dangling
-        -Werror=return-stack-address
-    )
-endif()
-
-## Flags for MSVC.
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    target_compile_options(options INTERFACE
-        /W4 # Enable ‘all’ warnings.
-
-        # Allow unnamed structs/unions.
-        /wd4201
-
-        # Source code is UTF-8.
-        /utf-8
-    )
-endif()
-
-## On Windows, don’t suggest the _s nonsense functions.
-if (WIN32)
-    target_compile_definitions(options INTERFACE
-        _CRT_SECURE_NO_WARNINGS
-        _CRT_SECURE_NO_WARNINGS_GLOBALS
-        _CRT_NONSTDC_NO_WARNINGS
-    )
-endif()
-
-## Address Sanitiser.
-if (ENABLE_ASAN)
-    target_compile_options(options INTERFACE -fsanitize=address)
-    target_link_options(options INTERFACE -fsanitize=address)
-endif()
-
-## Debug/Release flags.
-if (NOT MSVC)
-    target_compile_options(options INTERFACE
-        $<$<CONFIG:DEBUG>:-O0 -g3 -ggdb3>
-        $<$<CONFIG:RELEASE>:-O3 -march=native>
-    )
-    target_link_options(options INTERFACE
-        $<$<CONFIG:DEBUG>:-O0 -g3 -ggdb3 -rdynamic>
-        $<$<CONFIG:RELEASE>:-O3 -march=native>
-    )
-else()
-    target_compile_options(options INTERFACE
-        $<$<CONFIG:DEBUG>:/Od>
-        $<$<CONFIG:RELEASE>:/O2>
-    )
-endif()
+target_link_options(options INTERFACE
+    $<$<CONFIG:DEBUG>:-O0 -g3 -ggdb3 -rdynamic>
+    $<$<CONFIG:RELEASE>:-O3 -march=native>
+)
 
 ## ============================================================================
 ##  Submodules and include dirs.
