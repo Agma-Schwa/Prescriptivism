@@ -90,6 +90,7 @@ DefinePacket(Disconnect) {
         ServerFull,    ///< Server already has the maximum number of players.
         UsernameInUse, ///< Username is already in use.
         WrongPassword, ///< The password was incorrect.
+        UnexpectedPacket, ///< That packet wasn’t supposed to be sent at that point.
     };
 
     Ctor(Disconnect)(Reason reason) : reason(reason) {}
