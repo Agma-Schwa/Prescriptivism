@@ -183,6 +183,13 @@ public:
     /// Event handler for when a selected element is given text input.
     virtual void event_input(InputSystem&) {}
 
+    /// Determine which of our children is being hovered, if any. Widgets
+    /// that don’t have children can just return themselves.
+    virtual auto hovered_child(InputSystem&) -> Widget* {
+        hovered = true;
+        return this;
+    }
+
     /// Recompute bounding box etc.
     virtual void refresh(Renderer&) {}
 
@@ -224,13 +231,16 @@ class pr::client::Screen : public Element
     , public WidgetHolder<> {
     LIBBASE_IMMOVABLE(Screen);
 
-    /// The selected element.
-    Widget* selected_element = nullptr;
-
     /// Previous size so we don’t refresh every frame.
     Size prev_size = {};
 
 protected:
+    /// The selected element.
+    Widget* selected_element = nullptr;
+
+    /// The hovered element.
+    Widget* hovered_element = nullptr;
+
     Screen() = default;
 
     /// Delete all children of this screen.
@@ -448,7 +458,7 @@ private:
     Property(CardId, id, CardId::$$Count);
     Property(Scale, scale, Field);
     u8 count{};
-    bool scale_changed = true; // Set initially so we recalculate everything.
+    bool needs_full_refresh = true; // Set initially so we recalculate everything.
     Label code;
     Label name;
     Label middle;
@@ -472,6 +482,7 @@ public:
     Group(Element* parent, Position pos) : Widget(parent, pos) {}
 
     void draw(Renderer& r) override;
+    auto hovered_child(InputSystem&) -> Widget* override;
     void refresh(Renderer&) override;
 };
 
@@ -504,6 +515,17 @@ public:
 template <typename WidgetType>
 void pr::client::Group<WidgetType>::draw(Renderer& r) {
     for (auto& c : this->children) c->draw(r);
+}
+
+template <typename WidgetType>
+auto pr::client::Group<WidgetType>::hovered_child(InputSystem& input) -> Widget* {
+    // If two children overlap, we pick the first in the list.
+    for (auto& c : this->children)
+        if (c->bounding_box.contains(input.mouse.pos))
+            return c->hovered_child(input);
+
+    // The group itself is a proxy widget that cannot be hovered.
+    return nullptr;
 }
 
 template <typename WidgetType>

@@ -252,7 +252,7 @@ auto Font::shape(
     bool* multiline
 ) -> ShapedText {
     if (multiline) *multiline = false;
-    if (text.empty()) return ShapedText{};
+    if (text.empty()) return ShapedText{FontSize(size), style};
     auto font = hb_font.get();
     Assert(font, "Forgot to call finalise()!");
 
@@ -616,7 +616,7 @@ auto Font::shape(
 
     // Shape (and if need be reflow) the lines.
     auto lines_to_shape = u32stream{norm}.lines() | vws::transform(&u32stream::text) | rgs::to<std::vector>();
-    if (lines_to_shape.empty()) return ShapedText{};
+    if (lines_to_shape.empty()) return ShapedText{FontSize(size), style};
     f32 max_x = ShapeLines(lines_to_shape);
     if (multiline) *multiline = lines.size() > 1;
 

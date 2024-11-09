@@ -138,6 +138,9 @@ class pr::client::GameScreen : public Screen {
     /// The words of other players.
     Group<>* other_words;
 
+    /// The card widget used to preview a card.
+    Card* preview;
+
     /// Our player id.
     u8 player_id;
 

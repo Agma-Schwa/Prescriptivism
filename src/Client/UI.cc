@@ -423,8 +423,8 @@ void Card::draw(Renderer& r) {
 
 void Card::refresh(Renderer& r) {
     SetBoundingBox(AABB{pos.relative(parent->bounding_box, CardSize[scale]), CardSize[scale]});
-    if (not scale_changed) return;
-    scale_changed = false;
+    if (not needs_full_refresh) return;
+    needs_full_refresh = false;
 
     // Adjust label font sizes.
     code.font_size(CodeSizes[scale]);
@@ -439,7 +439,7 @@ void Card::refresh(Renderer& r) {
 }
 
 void Card::set_id(CardId ct) {
-    if (ct == CardId::$$Count) return;
+    if (ct == CardId::$$Count or _id == ct) return;
     _id = ct;
     auto& data = CardDatabase[+ct];
     if (data.type == CardType::SoundCard) {
@@ -462,12 +462,16 @@ void Card::set_id(CardId ct) {
             }), "\n")
         ); // clang-format on
         needs_refresh = true;
+
+        // Also force the position of the labels to be recalculated since
+        // we may have added more text.
+        needs_full_refresh = true;
     } else {
         name.update_text(std::string{data.name});
     }
 }
 
-TRIVIAL_CACHING_SETTER(Card, Scale, scale, scale_changed = true)
+TRIVIAL_CACHING_SETTER(Card, Scale, scale, needs_full_refresh = true)
 
 void CardGroup::refresh(Renderer& r) {
     if (children.empty()) return;
@@ -553,6 +557,7 @@ void InputSystem::update_selection(bool is_element_selected) {
 // =============================================================================
 void Screen::DeleteAllChildren() {
     selected_element = nullptr;
+    hovered_element = nullptr;
     children.clear();
 }
 
@@ -590,6 +595,8 @@ void Screen::refresh(Renderer& r) {
 }
 
 void Screen::tick(InputSystem& input) {
+    hovered_element = nullptr;
+
     // Deselect the currently selected element if there was a click.
     if (input.mouse.left) selected_element = nullptr;
 
@@ -599,14 +606,17 @@ void Screen::tick(InputSystem& input) {
         // recompute them.
         e->reset_properties();
 
-        // If the cursor is within the element’s bounds, mark it as hovered.
-        e->hovered = e->bounding_box.contains(input.mouse.pos);
+        // If the cursor is within the element’s bounds, ask it which of its
+        // subelemets is being hovered over.
+        if (e->bounding_box.contains(input.mouse.pos)) {
+            hovered_element = e->hovered_child(input);
 
-        // If, additionally, we had a click, select the element and fire the
-        // event handler.
-        if (e->hovered and input.mouse.left) {
-            if (e->selectable) selected_element = e.get();
-            e->event_click(input);
+            // If, additionally, we had a click, select the element and fire the
+            // event handler.
+            if (input.mouse.left and hovered_element) {
+                if (e->selectable) selected_element = e.get();
+                e->event_click(input);
+            }
         }
     }
 

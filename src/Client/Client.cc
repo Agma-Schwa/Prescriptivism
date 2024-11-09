@@ -312,6 +312,9 @@ GameScreen::GameScreen(Client& c) : client(c) {
 void GameScreen::enter(packets::sc::StartGame sg) {
     DeleteAllChildren();
 
+    preview = &Create<Card>(Position::VCenter(-100));
+    preview->visible = false;
+    preview->scale = Card::Large;
     other_players.clear();
     other_words = &Create<Group<>>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
@@ -345,6 +348,15 @@ void GameScreen::tick(InputSystem& input) {
     }*/
 
     Screen::tick(input);
+
+    // Preview any card that the user is hovering over.
+    auto c = dynamic_cast<Card*>(hovered_element);
+    if (c and c != preview) {
+        preview->visible = true;
+        preview->id = c->id;
+    } else {
+        preview->visible = false;
+    }
 }
 
 // =============================================================================
