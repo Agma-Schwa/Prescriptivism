@@ -386,8 +386,6 @@ Card::Card(
     Element* parent,
     Position pos
 ) : Widget{parent, pos},
-    _id{CardId::$$Count},
-    _scale{Field},
     code{this, Position()},
     name{this, Position()},
     middle{this, Position::Center()},

@@ -425,8 +425,8 @@ private:
     static constexpr FontSize NameSpecialSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
-    Property(CardId, id);
-    Property(Scale, scale);
+    Property(CardId, id, CardId::$$Count);
+    Property(Scale, scale, Field);
     u8 count{};
     bool scale_changed = true; // Set initially so we recalculate everything.
     Label code;
@@ -446,14 +446,14 @@ class pr::client::CardGroup : public Widget {
     using Cards = std::vector<std::unique_ptr<Card>>;
 
     /// The scale that is set for all cards in the group.
-    Property(Scale, scale);
+    Property(Scale, scale, Scale::Field);
 
     /// The maximum width of the entire group. Ignored if 0.
-    Property(i32, max_width);
+    Property(i32, max_width, 0);
 
     /// Whether the group should scale to the next available
     /// card size if possible.
-    Property(bool, autoscale);
+    Property(bool, autoscale, false);
 
 
 public:
@@ -463,11 +463,7 @@ public:
     Cards cards;
 
     CardGroup(Element* parent, Position pos) : CardGroup(parent, pos, {}) {}
-    CardGroup(Element* parent, Position pos, std::vector<CardId> cards)
-        : Widget(parent, pos),
-          _scale{Scale::Field},
-          _max_width{0},
-          _autoscale{false} {
+    CardGroup(Element* parent, Position pos, std::vector<CardId> cards) : Widget(parent, pos) {
         for (auto c : cards) add(c);
     }
 
