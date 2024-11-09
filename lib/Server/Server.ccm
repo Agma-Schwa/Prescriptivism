@@ -57,10 +57,17 @@ public:
     /// The player submitted their word
     bool submitted_word = false;
 
+    /// The id of this player.
+    u8 id{};
+
     /// Create a new player.
     Player(net::TCPConnexion client_connexion, std::string name)
         : client_connexion(std::move(client_connexion)),
           name(std::move(name)) {}
+
+    /// Send a packet to the player.
+    template <typename T>
+    void send(const T& t) { client_connexion.send(t); }
 };
 
 /// Prescriptivism server instance.
@@ -133,6 +140,7 @@ private:
     void Draw(Player& p, usz count = 1);
     void MaybeStartGame();
     void NextPlayer();
+    void SendGameState(Player& p);
     void SetUpGame();
     void Tick();
 

@@ -168,8 +168,11 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
             Log("Player {} logging back in", login.name);
             p->client_connexion = client;
             player_map[client] = p.get();
-            if (set_up and not p->submitted_word)
-                p->client_connexion.send(sc::WordChoice{BuildWordArray(p->word)});
+
+            // Get the player up to date with the current game state.
+            if (set_up and not p->submitted_word) p->send(sc::WordChoice{BuildWordArray(p->word)});
+            if (started) SendGameState(*p);
+            if (current_player == p->id) p->send(sc::StartTurn{});
             return;
         }
     }
@@ -185,6 +188,15 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
 // =============================================================================
 //  Game Logic
 // =============================================================================
+void Server::Draw(Player& p, usz count) {
+    for (usz i = 0; i < count; ++i) {
+        if (deck.empty()) return;
+        p.hand.push_back(std::move(deck.back()));
+        deck.pop_back();
+        p.send(sc::Draw{p.hand.back().id});
+    }
+}
+
 void Server::MaybeStartGame() {
     // Start the game iff all players are connected and all words have been received.
     if (
@@ -195,7 +207,24 @@ void Server::MaybeStartGame() {
     ) return;
     started = true;
 
-    // Send each player’s word to every player.
+    // Send each player’s word to every player and tell the first
+    // player to start their turn.
+    for (auto& p : players) SendGameState(*p);
+    player().send(sc::StartTurn{});
+}
+
+void Server::NextPlayer() {
+    player().send(sc::EndTurn{});
+    // TODO fill back player deck to 7 cards
+    current_player = (current_player + 1) % players.size();
+    player().send(sc::StartTurn{});
+}
+
+void Server::SendGameState(Player& p) {
+    // Yes, we recompute this every time this packet is sent, but
+    // it’s sent so rarely (once at the start of the game and once
+    // every time someone rejoins), that it’s not really worth moving
+    // this into a separate function.
     std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
     for (auto [i, p] : players | vws::enumerate) {
         player_infos[i].name = p->name;
@@ -203,8 +232,12 @@ void Server::MaybeStartGame() {
             player_infos[i].word[j] = c.id;
     }
 
-    for (auto [i, p] : players | vws::enumerate)
-        p->client_connexion.send(sc::StartGame{player_infos, u8(i)});
+    // Send each player their hand and id.
+    p.send(sc::StartGame{
+        player_infos,
+        p.hand | vws::transform(&Card::get_id) | rgs::to<std::vector>(),
+        u8(p.id),
+    });
 }
 
 void Server::SetUpGame() {
@@ -242,32 +275,28 @@ void Server::SetUpGame() {
         }
 
         // Send the player their word.
-        p->client_connexion.send(sc::WordChoice{BuildWordArray(p->word)});
+        p->send(sc::WordChoice{BuildWordArray(p->word)});
     }
 
     // Special cards.
     AddCards(CardDatabasePowers);
 
-    // Draw each player’s hand.
+    // Draw each player’s hand, but don’t send the cards yet.
+    static constexpr usz StartingHandSize = 7;
     rgs::shuffle(deck, rng);
-    for (auto& p : players) Draw(*p, 7);
-    rgs::shuffle(players, rng);
-}
-
-void Server::NextPlayer() {
-    player().client_connexion.send(sc::EndTurn{});
-    // TODO fill back player deck to 7 cards
-    current_player = (current_player + 1) % players.size();
-    player().client_connexion.send(sc::StartTurn{});
-}
-
-void Server::Draw(Player& p, usz count) {
-    for (usz i = 0; i < count; ++i) {
-        if (deck.empty()) return;
-        p.hand.push_back(std::move(deck.back()));
-        deck.pop_back();
-        p.client_connexion.send(sc::Draw{p.hand.back().id});
+    for (auto& p : players) {
+        Assert(deck.size() > StartingHandSize, "Somehow out of cards?");
+        p->hand.insert(
+            p->hand.end(),
+            std::make_move_iterator(deck.end() - StartingHandSize),
+            std::make_move_iterator(deck.end())
+        );
+        deck.erase(deck.end() - StartingHandSize, deck.end());
     }
+    rgs::shuffle(players, rng);
+
+    // Initialise player IDs.
+    for (auto [i, p] : players | vws::enumerate) p->id = u8(i);
 }
 
 // =============================================================================

@@ -310,6 +310,20 @@ void WordChoiceScreen::tick(InputSystem& input) {
 GameScreen::GameScreen(Client& c) : client(c) {
 }
 
+void GameScreen::enter(packets::sc::StartGame sg) {
+    other_players.clear();
+    for (auto [i, p] : sg.player_data | vws::enumerate) {
+        if (i == sg.player_id) {
+            player_id = sg.player_id;
+            our_hand = std::move(sg.hand);
+            our_word = p.word | vws::all | rgs::to<std::vector>();
+        }
+        other_players.emplace_back(std::move(p.name), u8(i));
+        other_players.back().word = p.word | vws::all | rgs::to<std::vector>();
+    }
+    client.enter_screen(*this);
+}
+
 void GameScreen::tick(InputSystem& input) {
     if (client.server_connexion.disconnected) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
@@ -358,8 +372,8 @@ void Client::handle(sc::EndTurn) {
     Log("TODO: Handle EndTurn");
 }
 
-void Client::handle(sc::StartGame) {
-    Log("TODO: Game Started");
+void Client::handle(sc::StartGame sg) {
+    game_screen.enter(std::move(sg));
 }
 
 void Client::TickNetworking() {

@@ -27,6 +27,7 @@ class ConnexionScreen;
 class WaitingScreen;
 class WordChoiceScreen;
 class GameScreen;
+class Player;
 } // namespace pr::client
 
 // =============================================================================
@@ -107,12 +108,39 @@ public:
 // =============================================================================
 //  In-game Screens
 // =============================================================================
+class pr::client::Player {
+    /// The server-side player id.
+    Readonly(u8, id);
+
+    /// The player name.
+    Readonly(std::string, name);
+
+public:
+    /// The current word of this player.
+    std::vector<CardId> word;
+
+    explicit Player(std::string name, u8 id) : _id{id}, _name{name} {}
+};
+
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
     Client& client;
 
+    /// The other players in the game.
+    std::vector<Player> other_players;
+
+    /// Our own word.
+    std::vector<CardId> our_word;
+
+    /// The cards in our hand.
+    std::vector<CardId> our_hand;
+
+    /// Our player id.
+    u8 player_id;
+
 public:
     explicit GameScreen(Client& c);
+    void enter(packets::sc::StartGame sg);
     void tick(InputSystem& input) override;
 };
 

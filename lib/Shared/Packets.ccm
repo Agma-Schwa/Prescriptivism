@@ -85,11 +85,11 @@ namespace pr::packets::common {
 /// Packet sent by either side to disconnect the other.
 DefinePacket(Disconnect) {
     enum class Reason : u8 {
-        Unspecified,   ///< Unknown.
-        InvalidPacket, ///< Peer sent invalid packet.
-        ServerFull,    ///< Server already has the maximum number of players.
-        UsernameInUse, ///< Username is already in use.
-        WrongPassword, ///< The password was incorrect.
+        Unspecified,      ///< Unknown.
+        InvalidPacket,    ///< Peer sent invalid packet.
+        ServerFull,       ///< Server already has the maximum number of players.
+        UsernameInUse,    ///< Username is already in use.
+        WrongPassword,    ///< The password was incorrect.
         UnexpectedPacket, ///< That packet wasn’t supposed to be sent at that point.
     };
 
@@ -144,13 +144,25 @@ DefinePacket(StartGame) {
         std::string name;
     };
 
-    Ctor(StartGame)(std::array<PlayerInfo, constants::PlayersPerGame> words, u8 player) : words(words), player(player) {}
-    Serialisable(words, player);
+    Ctor(StartGame)(
+        std::array<PlayerInfo, constants::PlayersPerGame> words,
+        std::vector<CardId> hand,
+        u8 player
+    ) : player_data(words),
+        hand(hand),
+        player_id(player) {}
 
-    std::array<PlayerInfo, constants::PlayersPerGame> words;
-    u8 player;
+    Serialisable(player_data, hand, player_id);
+
+    /// Player data, in order of player ID.
+    std::array<PlayerInfo, constants::PlayersPerGame> player_data;
+
+    /// This player’s starting hand.
+    std::vector<CardId> hand;
+
+    /// ID of the player that this is sent to.
+    u8 player_id;
 };
-
 } // namespace pr::packets::sc
 
 // =============================================================================
