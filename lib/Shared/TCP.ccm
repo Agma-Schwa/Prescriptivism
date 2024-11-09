@@ -170,7 +170,7 @@ public:
     /// Send data to the remote peer.
     void send(std::span<const std::byte> data);
 
-    friend bool operator==(const TCPConnexion&, const TCPConnexion&) = default;
+    friend auto operator<=>(const TCPConnexion&, const TCPConnexion&) = default;
 };
 
 /// A reference type that holds a TCP server that can accept

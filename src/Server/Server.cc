@@ -2,7 +2,9 @@ module;
 #include <algorithm>
 #include <base/Macros.hh>
 #include <chrono>
+#include <map>
 #include <memory>
+#include <ranges>
 #include <thread>
 #include <vector>
 
@@ -10,6 +12,7 @@ module pr.server;
 
 import pr.constants;
 import pr.tcp;
+import pr.validation;
 
 using namespace pr;
 using namespace pr::server;
@@ -46,6 +49,7 @@ void Server::Tick() {
 
     // Clear out pending connexions that may have gone away.
     std::erase_if(pending_connexions, [](const auto& c) { return c.conn.disconnected(); });
+    std::erase_if(player_map, [](const auto& x){ return x.first.disconnected(); });
 
     // As the last step, accept new connexions and close stale ones.
     server.update_connexions();
@@ -88,7 +92,19 @@ void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
     client.disconnect();
 }
 
-void Server::handle(net::TCPConnexion& client, sc::WordChoice) {
+void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
+    if (not player_map.contains(client) or player_map[client]->submitted_word) {
+        Kick(client, DisconnectReason::UnexpectedPacket);
+        return;
+    }
+    validation::Word original;
+    for (auto [i, c] : player_map[client]->word | vws::enumerate) original[i] = c.id();
+    if (not validation::ValidateInitialWord(wc.word, original)) {
+        Kick(client, DisconnectReason::InvalidPacket);
+        return;
+    }
+    for (auto [i, c] : wc.word | vws::enumerate) player_map[client]->word[i] = Card{c};
+    player_map[client]->submitted_word = true;
     Log("Client gave back word");
 }
 
@@ -126,6 +142,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
 
             Log("Player {} loging back in", login.name);
             p->client_connexion = client;
+            player_map[client] = p.get();
             return;
         }
     }
@@ -134,6 +151,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     // reach the player limit for the first time, so perform game
     // initialisation here if we have enough players.
     players.push_back(std::make_unique<Player>(client, std::move(login.name)));
+    player_map[client] = players.back().get();
     if (players.size() == PlayersNeeded) SetUpGame();
 }
 
