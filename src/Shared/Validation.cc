@@ -3,6 +3,9 @@ module;
 #include <array>
 #include <ranges>
 module pr.validation;
+import pr.utils;
+import pr.cards;
+
 
 bool pr::validation::ValidateInitialWord(Word word, Word original) {
     static auto IsConsonant = [](CardId id) -> bool {
