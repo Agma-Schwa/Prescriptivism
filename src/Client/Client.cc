@@ -218,7 +218,7 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 }
 
 void WordChoiceScreen::SendWord() {
-    cs::WordChoice::Array a;
+    constants::Word a;
     for (auto [i, c] : cards->cards | vws::enumerate) a[i] = c->id;
     client.server_connexion.send(cs::WordChoice{a});
 }
@@ -321,6 +321,10 @@ void Client::handle(sc::StartTurn) {
 
 void Client::handle(sc::EndTurn) {
     Log("TODO: Handle EndTurn");
+}
+
+void Client::handle(sc::StartGame) {
+    Log("TODO: Game Started");
 }
 
 void Client::TickNetworking() {

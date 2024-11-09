@@ -7,13 +7,13 @@ import pr.utils;
 import pr.cards;
 
 
-bool pr::validation::ValidateInitialWord(Word word, Word original) {
+bool pr::validation::ValidateInitialWord(constants::Word word, constants::Word original) {
     static auto IsConsonant = [](CardId id) -> bool {
         return CardDatabase[+id].is_consonant();
     };
     // The word is a permutation of the original word
     rgs::sort(original);
-    Word w2 = word;
+    constants::Word w2 = word;
     rgs::sort(w2);
     if (w2 != original) return false;
 

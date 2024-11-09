@@ -97,7 +97,7 @@ void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
         Kick(client, DisconnectReason::UnexpectedPacket);
         return;
     }
-    validation::Word original;
+    constants::Word original;
     for (auto [i, c] : player_map[client]->word | vws::enumerate) original[i] = c.id();
     if (not validation::ValidateInitialWord(wc.word, original)) {
         Kick(client, DisconnectReason::InvalidPacket);
@@ -106,6 +106,16 @@ void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
     for (auto [i, c] : wc.word | vws::enumerate) player_map[client]->word[i] = Card{c};
     player_map[client]->submitted_word = true;
     Log("Client gave back word");
+    // Starting the game if all words have been recieved
+    if (rgs::any_of(players, [](auto& x){return not x->submitted_word;})) return;
+    std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
+    for (auto [i, p] : players | vws::enumerate) {
+        player_infos[i].name = p->name;
+        for(auto [j, c] : p->word | vws::enumerate)
+            player_infos[i].word[j] = c.id();
+    }
+    for (auto [i, p] : players | vws::enumerate)
+        p->client_connexion.send(sc::StartGame{player_infos, u8(i)});
 }
 
 void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
@@ -177,7 +187,7 @@ void Server::SetUpGame() {
     rgs::shuffle(deck.begin(), deck.begin() + num_consonants, rng);
     rgs::shuffle(deck.begin() + num_consonants, deck.end(), rng);
     for (auto& p : players) {
-        sc::WordChoice::Array cards;
+        constants::Word cards;
         for (u8 i = 0; i < 3; ++i) {
             // Add vowel.
             p->word.push_back(std::move(deck.back()));

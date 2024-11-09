@@ -100,12 +100,10 @@ DefinePacket(Disconnect) {
 };
 
 DefinePacket(WordChoice) {
-    using Array = std::array<CardId, constants::StartingWordSize>;
-
-    Ctor(WordChoice)(Array word) : word{word} {}
+    Ctor(WordChoice)(constants::Word word) : word{word} {}
     Serialisable(word);
 
-    Array word;
+    constants::Word word;
 };
 } // namespace pr::packets::common
 // =============================================================================
@@ -138,6 +136,21 @@ DefinePacket(Draw) {
 
     CardId card;
 };
+
+DefinePacket(StartGame) {
+    struct PlayerInfo {
+        PR_SERIALISE(word, name);
+        constants::Word word;
+        std::string name;
+    };
+
+    Ctor(StartGame)(std::array<PlayerInfo, constants::PlayersPerGame> words, u8 player) : words(words), player(player) {}
+    Serialisable(words, player);
+
+    std::array<PlayerInfo, constants::PlayersPerGame> words;
+    u8 player;
+};
+
 } // namespace pr::packets::sc
 
 // =============================================================================

@@ -1,11 +1,9 @@
 module;
-#include <array>
 export module pr.validation;
 import pr.cards;
 import pr.constants;
 
 
 export namespace pr::validation {
-using Word = std::array<pr::CardId, pr::constants::StartingWordSize>;
-bool ValidateInitialWord(Word word, Word original);
+bool ValidateInitialWord(constants::Word word, constants::Word original);
 }
