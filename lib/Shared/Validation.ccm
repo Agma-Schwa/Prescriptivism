@@ -5,5 +5,11 @@ import pr.constants;
 
 
 export namespace pr::validation {
-bool ValidateInitialWord(constants::Word word, constants::Word original);
+enum struct InitialWordValidationResult {
+    Valid,
+    NotAPermutation,
+    ClusterTooLong,
+    BadInitialCluster,
+};
+InitialWordValidationResult ValidateInitialWord(constants::Word word, constants::Word original);
 }

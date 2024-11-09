@@ -99,7 +99,7 @@ void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
     }
     constants::Word original;
     for (auto [i, c] : player_map[client]->word | vws::enumerate) original[i] = c.id();
-    if (not validation::ValidateInitialWord(wc.word, original)) {
+    if (validation::ValidateInitialWord(wc.word, original) != validation::InitialWordValidationResult::Valid) {
         Kick(client, DisconnectReason::InvalidPacket);
         return;
     }
