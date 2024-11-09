@@ -9,7 +9,8 @@
     X(HeartbeatRequest) \
     X(StartTurn) \
     X(EndTurn) \
-    X(Draw)
+    X(Draw) \
+    X(StartGame)
 
 #define CS_PACKETS(X) \
     X(HeartbeatResponse) \
