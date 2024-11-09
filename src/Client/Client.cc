@@ -220,14 +220,41 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 }
 
 void WordChoiceScreen::SendWord() {
+    using enum validation::InitialWordValidationResult;
     constants::Word a;
     for (auto [i, c] : cards->cards | vws::enumerate) a[i] = c->id;
-    if (not validation::ValidateInitialWord(a, original_word)) {
-        client.show_error("Error: Word is invalid!", *this);
+
+    // Validate the word; if it is valid, submit it.
+    if (validation::ValidateInitialWord(a, original_word) == Valid) {
+        // TODO: Switch screen to a ‘waiting for players to submit word’ screen.
+        client.server_connexion.send(cs::WordChoice{a});
         return;
     }
 
-    client.server_connexion.send(cs::WordChoice{a});
+    // If not, tell the user why it wasn’t valid.
+    auto msg = [&] -> std::string {
+        switch (validation::ValidateInitialWord(a, original_word)) {
+            case Valid: break;
+            case NotAPermutation:
+                return "Error: Not a permutation. This shouldn’t happen; please file a "
+                       "bug here: https://github.com/Agma-Schwa/Prescriptivism/issues/new";
+
+            case ClusterTooLong:
+                return "Invalid Word: A word must not have more than 2 consecutive "
+                       "consonants or vowels.";
+
+            case BadInitialClusterManner:
+                return "Invalid Word: A word must not start with M1 or M2 consonant"
+                       "followed by another consonant";
+
+            case BadInitialClusterCoordinates:
+                return "Invalid Word: If a word starts with a consonant cluster, the"
+                       "consonants must not have the same coordinates";
+        }
+        Unreachable();
+    }();
+
+    client.show_error(std::move(msg), *this);
 }
 
 void WordChoiceScreen::enter(const constants::Word& word) {
