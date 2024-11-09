@@ -5,7 +5,7 @@ This is the video game implementation of the Prescriptivism card game, designed 
 ## Building
 Currently, building this project requires the following dependencies:
 - CMake version 3.28 or later
-- Clang 19 or later (GCC 15 should also work, but isn’t tested)
+- Clang 19 or later (GCC will not work)
 - Ninja (`make` ***does not work***)
 
 The goal is that all other dependencies *should* be downloaded at build time, but this 
