@@ -101,7 +101,7 @@ public:
 
     // This takes an array instead of a span to force a specific word size.
     void enter(const constants::Word& word);
-    void refresh(Renderer&) override;
+    void on_refresh(Renderer& r) override;
     void tick(InputSystem& input) override;
 };
 
@@ -117,7 +117,7 @@ class pr::client::Player {
 
 public:
     /// The current word of this player.
-    std::vector<CardId> word;
+    CardGroup* word{};
 
     explicit Player(std::string name, u8 id) : _id{id}, _name{name} {}
 };
@@ -130,10 +130,13 @@ class pr::client::GameScreen : public Screen {
     std::vector<Player> other_players;
 
     /// Our own word.
-    std::vector<CardId> our_word;
+    CardGroup* our_word;
 
     /// The cards in our hand.
-    std::vector<CardId> our_hand;
+    CardGroup* our_hand;
+
+    /// The words of other players.
+    Group<>* other_words;
 
     /// Our player id.
     u8 player_id;
@@ -141,6 +144,7 @@ class pr::client::GameScreen : public Screen {
 public:
     explicit GameScreen(Client& c);
     void enter(packets::sc::StartGame sg);
+    void on_refresh(Renderer& r) override;
     void tick(InputSystem& input) override;
 };
 

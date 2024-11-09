@@ -1,4 +1,5 @@
 module;
+#include <algorithm>
 #include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <functional>
@@ -28,12 +29,19 @@ class Card;
 class Widget;
 class CardGroup;
 
+template <typename WidgetType = Widget>
+class Group;
+
 enum class Anchor : u8;
 } // namespace pr::client
 
 namespace pr::client {
 /// Intermediate widget that consists of a box that wraps some text.
 class TextBox;
+
+/// Container for widgets.
+template <typename WidgetType = Widget>
+class WidgetHolder;
 }
 
 /// An anchor point for positioning elements.
@@ -148,9 +156,6 @@ public:
 
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
-
-    /// Recompute bounding box etc.
-    virtual void refresh(Renderer&) {}
 };
 
 /// Element that is not a screen.
@@ -178,6 +183,9 @@ public:
     /// Event handler for when a selected element is given text input.
     virtual void event_input(InputSystem&) {}
 
+    /// Recompute bounding box etc.
+    virtual void refresh(Renderer&) {}
+
     /// Reset properties at the start of a tick.
     void reset_properties() {
         hovered = false;
@@ -193,14 +201,28 @@ public:
     }
 };
 
+template <typename WidgetType>
+class pr::client::WidgetHolder {
+public:
+    /// List of children.
+    std::vector<std::unique_ptr<WidgetType>> children;
+
+    /// Create an element with this as its parent.
+    template <std::derived_from<WidgetType> El, typename... Args>
+    auto Create(this auto& self, Args&&... args) -> El& {
+        auto el = std::make_unique<El>(std::addressof(self), std::forward<Args>(args)...);
+        auto& ref = *el;
+        self.children.push_back(std::move(el));
+        return ref;
+    }
+};
+
 /// A screen that displays elements and controls user
 /// interaction. A screen is an element mainly so we
 /// can set it as the parent of an element.
-class pr::client::Screen : public Element {
+class pr::client::Screen : public Element
+    , public WidgetHolder<> {
     LIBBASE_IMMOVABLE(Screen);
-
-    /// List of children.
-    std::vector<std::unique_ptr<Widget>> children;
 
     /// The selected element.
     Widget* selected_element = nullptr;
@@ -211,18 +233,16 @@ class pr::client::Screen : public Element {
 protected:
     Screen() = default;
 
-public:
-    /// Create an element with the screen as its parent.
-    template <std::derived_from<Widget> El, typename... Args>
-    auto Create(Args&&... args) -> El& {
-        auto el = std::make_unique<El>(this, std::forward<Args>(args)...);
-        auto& ref = *el;
-        children.push_back(std::move(el));
-        return ref;
-    }
+    /// Delete all children of this screen.
+    void DeleteAllChildren();
 
+public:
     /// Code to run to reset a screen when it is entered.
     virtual void on_entered() {}
+
+    /// Core to run when this screen is refreshed, before refreshing
+    /// any child widgets.
+    virtual void on_refresh(Renderer&) {}
 
     /// Render this screen.
     ///
@@ -234,7 +254,7 @@ public:
     ///
     /// This recomputes the position of each element after the screen
     /// has been resized and before ticking/rendering.
-    void refresh(Renderer& r) override;
+    void refresh(Renderer& r);
 
     /// Tick this screen.
     ///
@@ -441,9 +461,22 @@ public:
     void refresh(Renderer&) override;
 };
 
-class pr::client::CardGroup : public Widget {
+template <typename WidgetType>
+class pr::client::Group : public Widget
+    , public WidgetHolder<WidgetType> {
+    /// The maximum gap size; 0 means no gap; set to a large value
+    /// (e.g. INT_MAX) to use equal gaps.
+    Property(i32, max_gap, 10);
+
+public:
+    Group(Element* parent, Position pos) : Widget(parent, pos) {}
+
+    void draw(Renderer& r) override;
+    void refresh(Renderer&) override;
+};
+
+class pr::client::CardGroup : public Group<Card> {
     using Scale = Card::Scale;
-    using Cards = std::vector<std::unique_ptr<Card>>;
 
     /// The scale that is set for all cards in the group.
     Property(Scale, scale, Scale::Field);
@@ -455,22 +488,77 @@ class pr::client::CardGroup : public Widget {
     /// card size if possible.
     Property(bool, autoscale, false);
 
-
 public:
-    static constexpr i32 CardGaps[Scale::NumScales] { 5, 10, 20 };
-
-    /// The cards in the group.
-    Cards cards;
+    static constexpr i32 CardGaps[Scale::NumScales]{5, 10, 20};
 
     CardGroup(Element* parent, Position pos) : CardGroup(parent, pos, {}) {}
-    CardGroup(Element* parent, Position pos, std::vector<CardId> cards) : Widget(parent, pos) {
+    CardGroup(Element* parent, Position pos, std::span<CardId> cards) : Group(parent, pos) {
         for (auto c : cards) add(c);
     }
 
     void add(CardId c);
-    void draw(Renderer& r) override;
+
     void refresh(Renderer&) override;
 };
+
+template <typename WidgetType>
+void pr::client::Group<WidgetType>::draw(Renderer& r) {
+    for (auto& c : this->children) c->draw(r);
+}
+
+template <typename WidgetType>
+void pr::client::Group<WidgetType>::refresh(Renderer& r) {
+    if (this->children.empty()) return;
+
+    // Reset our bounding box to our parent’s before refreshing the
+    // children; otherwise, nested groups can get stuck at a smaller
+    // size: the child group will base its width around the parent’s
+    // which in turn is based on the width of the children; what should
+    // happen instead is that groups propagate the parent size downward
+    // and adjust to their actual size after the children have been
+    // positioned.
+    SetBoundingBox(parent->bounding_box);
+
+    // Refresh each element to make sure their sizes are up-to-date
+    // and compute the total width of all elements.
+    i32 total_width = 0;
+    for (auto& c : this->children) {
+        c->refresh(r);
+        total_width += c->bounding_box.size().wd;
+    }
+
+    // Compute gap size.
+    auto parent_wd = parent->bounding_box.width();
+    i32 gap = 0;
+    if (total_width < parent_wd and this->children.size() > 1) {
+        gap = std::min(
+            max_gap,
+            i32((parent_wd - total_width) / (this->children.size() - 1))
+        );
+    }
+
+    // Position the children.
+    i32 x = 0;
+    for (auto& c : this->children) {
+        c->pos = Position::VCenter(x);
+        x += c->bounding_box.width() + gap;
+    }
+
+    // Update our bounding box.
+    auto ht = rgs::max(this->children | vws::transform([&](auto& c) { return c->bounding_box.size().ht; }));
+    auto sz = Size{total_width + i32(this->children.size() - 1) * gap, ht};
+    SetBoundingBox(AABB{pos.relative(parent->bounding_box, sz), sz});
+
+    // And refresh the children again now that we know where everything is.
+    for (auto& c : this->children) c->refresh(r);
+}
+
+template <typename WidgetType>
+void pr::client::Group<WidgetType>::set_max_gap(i32 new_value) {
+    if (new_value == _max_gap) return;
+    _max_gap = new_value;
+    needs_refresh = true;
+}
 
 template <>
 struct std::formatter<pr::client::Position> : std::formatter<std::string> {

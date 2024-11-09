@@ -463,18 +463,14 @@ void Card::set_id(CardId ct) {
         ); // clang-format on
         needs_refresh = true;
     } else {
-        Log("TODO: Power cards");
+        name.update_text(std::string{data.name});
     }
 }
 
 TRIVIAL_CACHING_SETTER(Card, Scale, scale, scale_changed = true)
 
-void CardGroup::draw(Renderer& r) {
-    for (auto& card : cards) card->draw(r);
-}
-
 void CardGroup::refresh(Renderer& r) {
-    if (cards.empty()) return;
+    if (children.empty()) return;
 
     // If we’re allowed to scale up, determine the maximum scale that works.
     Scale s;
@@ -482,7 +478,7 @@ void CardGroup::refresh(Renderer& r) {
     if (autoscale) {
         s = Scale(Scale::NumScales - 1);
         while (s != scale) {
-            auto wd = i32(cards.size() * Card::CardSize[s].wd + (cards.size() - 1) * CardGaps[s]);
+            auto wd = i32(children.size() * Card::CardSize[s].wd + (children.size() - 1) * CardGaps[s]);
             if (wd < width) break;
             s = Scale(s - 1);
         }
@@ -490,21 +486,12 @@ void CardGroup::refresh(Renderer& r) {
         s = scale;
     }
 
-    i32 x = 0;
-    for (auto& c : cards) {
-        c->scale = s;
-        c->pos = Position::VCenter(x);
-        x += Card::CardSize[s].wd + CardGaps[s];
-    }
-
-    auto sz = Size{x - CardGaps[s], Card::CardSize[s].ht};
-    SetBoundingBox(AABB{pos.relative(parent->bounding_box, sz), sz});
-    for (auto& c : cards) c->refresh(r);
+    for (auto& c : children) c->scale = s;
+    Group::refresh(r);
 }
 
 void CardGroup::add(CardId c) {
-    cards.push_back(std::make_unique<Card>(this, Position()));
-    cards.back()->id = c;
+    Create<Card>(Position()).id = c;
     needs_refresh = true;
 }
 
@@ -564,6 +551,11 @@ void InputSystem::update_selection(bool is_element_selected) {
 // =============================================================================
 //  Screen
 // =============================================================================
+void Screen::DeleteAllChildren() {
+    selected_element = nullptr;
+    children.clear();
+}
+
 void Screen::draw(Renderer& r) {
     r.set_cursor(Cursor::Default);
     for (auto& e : visible()) e->draw(r);
@@ -571,6 +563,7 @@ void Screen::draw(Renderer& r) {
 
 void Screen::refresh(Renderer& r) {
     SetBoundingBox(AABB({0, 0}, r.size()));
+    on_refresh(r);
 
     // Size hasn’t changed. Still update any elements that
     // requested a refresh. Also ignore visibility here.

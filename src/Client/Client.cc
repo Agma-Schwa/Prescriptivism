@@ -222,7 +222,7 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 void WordChoiceScreen::SendWord() {
     using enum validation::InitialWordValidationResult;
     constants::Word a;
-    for (auto [i, c] : cards->cards | vws::enumerate) a[i] = c->id;
+    for (auto [a, c] : vws::zip(a, cards->children)) a = c->id;
 
     // Validate the word; if it is valid, submit it.
     if (validation::ValidateInitialWord(a, original_word) == Valid) {
@@ -259,13 +259,12 @@ void WordChoiceScreen::SendWord() {
 
 void WordChoiceScreen::enter(const constants::Word& word) {
     original_word = word;
-    for (auto [i, ct] : word | vws::enumerate) cards->cards[usz(i)]->id = ct;
+    for (auto [w, c] : vws::zip(word, cards->children)) c->id = w;
     client.enter_screen(*this);
 }
 
-void WordChoiceScreen::refresh(Renderer& r) {
+void WordChoiceScreen::on_refresh(Renderer& r) {
     cards->max_width = r.size().wd;
-    Screen::refresh(r);
 }
 
 void WordChoiceScreen::tick(InputSystem& input) {
@@ -274,15 +273,15 @@ void WordChoiceScreen::tick(InputSystem& input) {
     // Implement card swapping.
     if (input.mouse.left and cards->bounding_box.contains(input.mouse.pos)) {
         auto it = rgs::find_if(
-            cards->cards,
+            cards->children,
             [&](auto& c) { return c->bounding_box.contains(input.mouse.pos); }
         );
 
         // We didn’t click on any card.
-        if (it == cards->cards.end()) return;
+        if (it == cards->children.end()) return;
 
         // If no card is selected, select it.
-        u32 idx = u32(it - cards->cards.begin());
+        u32 idx = u32(it - cards->children.begin());
         if (not selected) {
             it->get()->selected = true;
             selected = idx;
@@ -297,7 +296,7 @@ void WordChoiceScreen::tick(InputSystem& input) {
         // Otherwise, swap the two and deselect.
         else {
             cards->needs_refresh = true;
-            std::iter_swap(cards->cards.begin() + selected.value(), it);
+            std::iter_swap(cards->children.begin() + selected.value(), it);
             it->get()->selected = false; // Deselect *after* swapping.
             selected = std::nullopt;
         }
@@ -311,24 +310,39 @@ GameScreen::GameScreen(Client& c) : client(c) {
 }
 
 void GameScreen::enter(packets::sc::StartGame sg) {
+    DeleteAllChildren();
+
     other_players.clear();
+    other_words = &Create<Group<>>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
         if (i == sg.player_id) {
             player_id = sg.player_id;
-            our_hand = std::move(sg.hand);
-            our_word = p.word | vws::all | rgs::to<std::vector>();
+            our_hand = &Create<CardGroup>(Position(), sg.hand);
+            our_word = &Create<CardGroup>(Position(), p.word);
+            our_hand->scale = Card::Large;
+            continue;
         }
-        other_players.emplace_back(std::move(p.name), u8(i));
-        other_players.back().word = p.word | vws::all | rgs::to<std::vector>();
+
+        auto& op = other_players.emplace_back(std::move(p.name), u8(i));
+        op.word = &other_words->Create<CardGroup>(Position(), p.word);
+        op.word->scale = Card::OtherPlayer;
     }
+
     client.enter_screen(*this);
 }
 
+void GameScreen::on_refresh(Renderer&) {
+    our_hand->pos = Position::HCenter(0).anchor_to(Anchor::Center);
+    our_word->pos = Position::HCenter(300);
+    other_words->pos = Position::HCenter(-100);
+    other_words->max_gap = 100;
+}
+
 void GameScreen::tick(InputSystem& input) {
-    if (client.server_connexion.disconnected) {
+    /*if (client.server_connexion.disconnected) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
         return;
-    }
+    }*/
 
     Screen::tick(input);
 }
@@ -398,7 +412,14 @@ void Client::TickNetworking() {
 //  API
 // =============================================================================
 Client::Client(Renderer r) : renderer(std::move(r)) {
-    enter_screen(menu_screen);
+    std::array pi {
+        sc::StartGame::PlayerInfo{constants::Word{CardId::C_b, CardId::C_b, CardId::C_b, CardId::C_b, CardId::C_b, CardId::C_b}, "Player"},
+        sc::StartGame::PlayerInfo{constants::Word{CardId::C_d, CardId::C_d, CardId::C_d, CardId::C_d, CardId::C_d, CardId::C_d}, "Player"}
+    };
+
+    // For testing.
+    sc::StartGame sg{pi, {CardId::C_f, CardId::C_f, CardId::C_f}, 0};
+    game_screen.enter(sg);
 }
 
 void Client::Run() {
