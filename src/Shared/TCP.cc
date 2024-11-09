@@ -390,8 +390,8 @@ usz TCPConnexion::Impl::SendImpl(std::span<const std::byte> data) {
 //  Impl - Server
 // =============================================================================
 void TCPServer::Impl::CloseConnexionAfterError(TCPConnexion& conn) {
-    if (errno == ECONNRESET) Log("Connexion {} reset by client", conn.address());
-    else Log("Error while processing connexion {}: {}", conn.address(), std::strerror(errno));
+    if (errno == ECONNRESET) Log("Connexion {} reset by client", conn.address);
+    else Log("Error while processing connexion {}: {}", conn.address, std::strerror(errno));
     conn.disconnect();
 }
 
@@ -410,7 +410,7 @@ void TCPServer::Impl::SetCallbacks(TCPServerCallbacks& callbacks) {
 void TCPServer::Impl::UpdateConnexions() {
     // Delete stale connexions.
     std::erase_if(all_connexions, [](const TCPConnexion& conn) {
-        return conn.disconnected();
+        return conn.disconnected;
     });
 
     // Accept incoming ones.
@@ -427,7 +427,7 @@ void TCPServer::Impl::UpdateConnexions() {
 
         // Try to accept it.
         if (tcp_callbacks->accept(c)) {
-            Log("Added connexion from {}", c.address());
+            Log("Added connexion from {}", c.address);
             all_connexions.push_back(std::move(c));
         }
     }
@@ -456,25 +456,25 @@ auto TCPServer::Create(u16 port, u32 max_connexions) -> Result<TCPServer> {
     return server;
 }
 
-auto TCPConnexion::address() const -> std::string_view {
-    if (disconnected()) return "";
+void TCPConnexion::disconnect() {
+    if (not disconnected) impl->Disconnect();
+}
+
+auto TCPConnexion::get_address() const -> std::string_view {
+    if (disconnected) return "";
     return impl->ip_address;
 }
 
-void TCPConnexion::disconnect() {
-    if (not disconnected()) impl->Disconnect();
-}
-
-bool TCPConnexion::disconnected() const {
+bool TCPConnexion::get_disconnected() const {
     return not impl or impl->disconnected;
 }
 
 void TCPConnexion::receive(std::function<void(ReceiveBuffer&)> callback) {
-    if (not disconnected()) return impl->Receive(callback);
+    if (not disconnected) return impl->Receive(callback);
 }
 
 void TCPConnexion::send(std::span<const std::byte> data) {
-    if (not disconnected()) return impl->Send(data);
+    if (not disconnected) return impl->Send(data);
 }
 
 auto TCPServer::connexions() -> std::span<TCPConnexion> { return impl->all_connexions; }

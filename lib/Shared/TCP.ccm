@@ -126,6 +126,12 @@ class pr::net::TCPConnexion {
     struct Impl;
     std::shared_ptr<Impl> impl;
 
+    /// Whether this connexion has been disconnected.
+    ComputedReadonly(bool, disconnected);
+
+    /// The address of the remote peer.
+    ComputedReadonly(std::string_view, address);
+
 public:
     TCPConnexion();
     ~TCPConnexion();
@@ -136,14 +142,8 @@ public:
     /// null-termination of the address.
     static auto Connect(std::string remote_address, u16 port) -> Result<TCPConnexion>;
 
-    /// Get the ip address of the remote peer.
-    auto address() const -> std::string_view;
-
     /// Close the connexion.
     void disconnect();
-
-    /// Check if the connexion has been disconnected.
-    bool disconnected() const;
 
     /// Receive data from the remote peer.
     void receive(std::function<void(ReceiveBuffer&)> callback);

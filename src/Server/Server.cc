@@ -51,16 +51,16 @@ void Server::Tick() {
             // Don’t even bother sending a packet here; if they didn’t
             // respond within the time frame, they’re likely not actually
             // a game client, but rather some random other connexion.
-            Log("Client {} took too long to send a login packet", conn.address());
+            Log("Client {} took too long to send a login packet", conn.address);
             conn.disconnect();
         }
     }
 
     // Clear out pending connexions that may have gone away.
-    std::erase_if(pending_connexions, [](const auto& c) { return c.conn.disconnected(); });
+    std::erase_if(pending_connexions, [](const auto& c) { return c.conn.disconnected; });
 
     // Clear out player connexions of players that are disconnected.
-    std::erase_if(player_map, [](const auto& x) { return x.first.disconnected(); });
+    std::erase_if(player_map, [](const auto& x) { return x.first.disconnected; });
 
     // As the last step, accept new connexions and close stale ones.
     server.update_connexions();
@@ -76,7 +76,7 @@ void Server::Tick() {
 
 bool Server::accept(net::TCPConnexion& connexion) {
     // Make sure we’re not full yet.
-    auto connected_players = rgs::distance(players | vws::filter([](auto& p) { return p->connected(); }));
+    auto connected_players = rgs::distance(players | vws::filter([](auto& p) { return p->connected; }));
     if (connected_players + pending_connexions.size() == PlayersNeeded) {
         connexion.send(packets::sc::Disconnect{DisconnectReason::ServerFull});
         return false;
@@ -87,12 +87,12 @@ bool Server::accept(net::TCPConnexion& connexion) {
 }
 
 void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buf) {
-    while (not client.disconnected() and not buf.empty()) {
+    while (not client.disconnected and not buf.empty()) {
         auto res = packets::HandleServerSidePacket(*this, client, buf);
 
         // If there was an error, close the connexion.
         if (not res) {
-            Log("Packet error while processing {}: {}", client.address(), res.error());
+            Log("Packet error while processing {}: {}", client.address, res.error());
             return Kick(client, DisconnectReason::InvalidPacket);
         }
 
@@ -108,7 +108,7 @@ namespace sc = packets::sc;
 namespace cs = packets::cs;
 
 void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
-    Log("Client {} disconnected", client.address());
+    Log("Client {} disconnected", client.address);
     client.disconnect();
 }
 
@@ -159,7 +159,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
         if (p->name == login.name) {
             // Someone is trying to connect to a player that is
             // already connected.
-            if (p->connected()) {
+            if (p->connected) {
                 Log("{} is already connected", login.name);
                 Kick(client, DisconnectReason::UsernameInUse);
                 return;

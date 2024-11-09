@@ -311,7 +311,7 @@ GameScreen::GameScreen(Client& c) : client(c) {
 }
 
 void GameScreen::tick(InputSystem& input) {
-    if (client.server_connexion.disconnected()) {
+    if (client.server_connexion.disconnected) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
         return;
     }
@@ -363,9 +363,9 @@ void Client::handle(sc::StartGame) {
 }
 
 void Client::TickNetworking() {
-    if (server_connexion.disconnected()) return;
+    if (server_connexion.disconnected) return;
     server_connexion.receive([&](net::ReceiveBuffer& buf) {
-        while (not server_connexion.disconnected() and not buf.empty()) {
+        while (not server_connexion.disconnected and not buf.empty()) {
             auto res = packets::HandleClientSidePacket(*this, buf);
 
             // If there was an error, close the connexion.

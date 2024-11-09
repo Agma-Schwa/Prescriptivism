@@ -35,6 +35,10 @@ public:
 
 class pr::server::Player {
     LIBBASE_IMMOVABLE(Player);
+
+    ComputedReadonly(bool, connected, not client_connexion.disconnected);
+    ComputedReadonly(bool, disconnected, not connected);
+
 public:
     /// The connexion for this player, if there is an established
     /// one. This may be unset if the player has (temporarily) left
@@ -57,11 +61,6 @@ public:
     Player(net::TCPConnexion client_connexion, std::string name)
         : client_connexion(std::move(client_connexion)),
           name(std::move(name)) {}
-
-    /// Check if this player is currently connected to the server.
-    [[nodiscard]] auto connected() const -> bool {
-        return not client_connexion.disconnected();
-    }
 };
 
 /// Prescriptivism server instance.
@@ -124,7 +123,7 @@ public:
 
 private:
     bool AllPlayersConnected() {
-        return rgs::all_of(players, [](const auto& p) { return p->connected(); });
+        return rgs::all_of(players, [](const auto& p) { return p->connected; });
     }
 
     bool AllWordsSubmitted() {
