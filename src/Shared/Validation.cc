@@ -28,14 +28,14 @@ auto pr::validation::ValidateInitialWord(constants::Word word, constants::Word o
 
     // M1 and M2 CANNOT start a consonant cluster word-initially.
     if(IsConsonant(word[0]) and IsConsonant(word[1]) and CardDatabase[+word[0]].manner_or_height <= 2)
-        return InitialWordValidationResult::BadInitialCluster;
+        return InitialWordValidationResult::BadInitialClusterManner;
 
     // Two consonants with the same coordinates CANNOT cluster word-initially.
     if (
         IsConsonant(word[0]) and IsConsonant(word[1]) and
         CardDatabase[+word[0]].manner_or_height == CardDatabase[+word[1]].manner_or_height and
         CardDatabase[+word[0]].place_or_frontness == CardDatabase[+word[1]].place_or_frontness
-    ) return InitialWordValidationResult::BadInitialCluster;
+    ) return InitialWordValidationResult::BadInitialClusterCoordinates;
 
     // Else all seems good
     return InitialWordValidationResult::Valid;
