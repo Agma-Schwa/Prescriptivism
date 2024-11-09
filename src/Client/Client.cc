@@ -248,15 +248,22 @@ void WordChoiceScreen::tick(InputSystem& input) {
 
         // If no card is selected, select it.
         u32 idx = u32(it - cards->cards.begin());
-        if (not selected) selected = idx;
+        if (not selected) {
+            it->get()->selected = true;
+            selected = idx;
+        }
 
         // If the selected card was clicked, deselect it.
-        else if (selected.value() == idx) selected = std::nullopt;
+        else if (selected.value() == idx) {
+            it->get()->selected = false;
+            selected = std::nullopt;
+        }
 
         // Otherwise, swap the two and deselect.
         else {
-            std::iter_swap(cards->cards.begin() + selected.value(), it);
             cards->needs_refresh = true;
+            std::iter_swap(cards->cards.begin() + selected.value(), it);
+            it->get()->selected = false; // Deselect *after* swapping.
             selected = std::nullopt;
         }
     }

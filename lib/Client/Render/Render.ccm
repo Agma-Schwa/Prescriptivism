@@ -523,6 +523,9 @@ public:
     /// Draw a line between two points.
     void draw_line(xy start, xy end, Colour c = Colour::White);
 
+    /// Draw an outline around a rectangle.
+    void draw_outline_rect(xy pos, Size size, i32 thickness = 1, Colour c = Colour::White);
+
     /// Draw a rectangle at a position in world coordinates.
     void draw_rect(AABB box, Colour c = Colour::White) { draw_rect(box.origin(), box.size(), c); }
     void draw_rect(xy pos, Size size, Colour c = Colour::White);

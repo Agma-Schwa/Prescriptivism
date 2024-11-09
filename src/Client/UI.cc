@@ -2,12 +2,12 @@ module;
 #include <algorithm>
 #include <base/Assert.hh>
 #include <cmath>
+#include <numeric>
 #include <pr/gl-headers.hh>
 #include <ranges>
 #include <SDL3/SDL.h>
 #include <string_view>
 #include <utility>
-#include <numeric>
 module pr.client.ui;
 
 import base.text;
@@ -404,6 +404,13 @@ void Card::draw(Renderer& r) {
     auto at = pos.relative(parent->bounding_box, sz);
 
     r.draw_rect(at, sz);
+    if (selected) r.draw_outline_rect(
+        at,
+        sz,
+        CardGroup::CardGaps[scale] / 2,
+        Colour{50, 50, 200, 255}
+    );
+
     code.draw(r);
     middle.draw(r);
     special.draw(r);

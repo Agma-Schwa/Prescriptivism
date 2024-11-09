@@ -783,6 +783,53 @@ void Renderer::draw_line(xy start, xy end, Colour c) {
     vao.draw_vertices();
 }
 
+void Renderer::draw_outline_rect(xy pos, Size size, i32 thickness, Colour c) {
+    use(primitive_shader);
+    primitive_shader.uniform("in_colour", c.vec4());
+    auto [x, y] = pos;
+    auto [wd, ht] = size;
+    VertexArrays vao{VertexLayout::Position2D};
+
+    // Draw four rectangles around the original rectangle.
+    vec2 verts[] {
+        // Left.
+        {x, y},
+        {x - thickness, y},
+        {x, y + ht},
+        {x, y + ht},
+        {x - thickness, y},
+        {x - thickness, y + ht},
+
+        // Right.
+        {x + wd , y},
+        {x + wd + thickness, y},
+        {x + wd , y + ht},
+        {x + wd , y + ht},
+        {x + wd + thickness, y},
+        {x + wd + thickness, y + ht},
+
+        // Top.
+        {x - thickness, y + ht},
+        {x - thickness, y + ht + thickness},
+        {x + wd + thickness, y + ht},
+        {x + wd + thickness, y + ht},
+        {x - thickness, y + ht + thickness},
+        {x + wd + thickness, y + ht + thickness},
+
+        // Bottom.
+        {x - thickness, y},
+        {x - thickness, y - thickness},
+        {x + wd + thickness, y},
+        {x + wd + thickness, y},
+        {x - thickness, y - thickness},
+        {x + wd + thickness, y - thickness},
+
+    };
+
+    vao.add_buffer(verts, GL_TRIANGLES);
+    vao.draw_vertices();
+}
+
 void Renderer::draw_rect(xy pos, Size size, Colour c) {
     use(primitive_shader);
     primitive_shader.uniform("in_colour", c.vec4());

@@ -455,9 +455,10 @@ class pr::client::CardGroup : public Widget {
     /// card size if possible.
     TrivialProperty(bool, autoscale);
 
-    static constexpr i32 CardGaps[Scale::NumScales] { 5, 10, 20 };
 
 public:
+    static constexpr i32 CardGaps[Scale::NumScales] { 5, 10, 20 };
+
     /// The cards in the group.
     Cards cards;
 
