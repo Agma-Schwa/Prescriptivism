@@ -27,11 +27,10 @@ using DisconnectReason = packets::sc::Disconnect::Reason;
 
 class pr::server::Card {
     LIBBASE_MOVE_ONLY(Card);
-    CardId card_type;
+    TrivialReadonly(CardId, id);
 
 public:
-    Card(CardId t) : card_type(t) {}
-    [[nodiscard]] auto id() const -> CardId { return card_type; }
+    Card(CardId t) : _id(t) {}
 };
 
 class pr::server::Player {
@@ -96,8 +95,17 @@ class pr::server::Server : net::TCPServerCallbacks {
     /// The password of the server.
     std::string password;
 
+    /// Deck and discard pile.
     std::vector<Card> deck;
     std::vector<Card> discard{};
+
+    /// Whether the game has been set up, i.e. the players are locked
+    /// in, and words have been generated.
+    bool set_up = false;
+
+    /// Whether the game has started, i.e. whether all players have
+    /// been assigned words, etc.
+    bool started = false;
 
 public:
     /// Create and start the server.
@@ -115,17 +123,21 @@ public:
 #undef X
 
 private:
-    void Tick();
-
-    void SetUpGame();
-    void NextPlayer();
-
-    void Draw(Player& p, usz count = 1);
-
-    auto player() -> Player& { return *players[current_player]; }
-    bool all_players_connected() {
+    bool AllPlayersConnected() {
         return rgs::all_of(players, [](const auto& p) { return p->connected(); });
     }
+
+    bool AllWordsSubmitted() {
+        return rgs::all_of(players, [](auto& x) { return x->submitted_word; });
+    }
+
+    void Draw(Player& p, usz count = 1);
+    void MaybeStartGame();
+    void NextPlayer();
+    void SetUpGame();
+    void Tick();
+
+    auto player() -> Player& { return *players[current_player]; }
 
     bool accept(net::TCPConnexion& connexion) override;
     void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;

@@ -143,7 +143,7 @@ public:
     void disconnect();
 
     /// Check if the connexion has been disconnected.
-    bool disconnected() const { return impl == nullptr; }
+    bool disconnected() const;
 
     /// Receive data from the remote peer.
     void receive(std::function<void(ReceiveBuffer&)> callback);

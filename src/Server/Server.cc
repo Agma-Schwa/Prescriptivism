@@ -1,5 +1,6 @@
 module;
 #include <algorithm>
+#include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <chrono>
 #include <map>
@@ -7,7 +8,6 @@ module;
 #include <ranges>
 #include <thread>
 #include <vector>
-
 module pr.server;
 
 import pr.constants;
@@ -19,8 +19,17 @@ using namespace pr::server;
 // ============================================================================
 // Constants
 // ============================================================================
-
 constexpr usz PlayersNeeded = pr::constants::PlayersPerGame;
+
+// ============================================================================
+// Helpers
+// ============================================================================
+auto BuildWordArray(std::span<const Card> card_range) -> constants::Word {
+    Assert(rgs::distance(card_range) == constants::StartingWordSize, "Invalid word size");
+    constants::Word w;
+    for (auto [i, el] : card_range | vws::enumerate) w[i] = el.id;
+    return w;
+}
 
 // =============================================================================
 //  Networking
@@ -49,15 +58,26 @@ void Server::Tick() {
 
     // Clear out pending connexions that may have gone away.
     std::erase_if(pending_connexions, [](const auto& c) { return c.conn.disconnected(); });
-    std::erase_if(player_map, [](const auto& x){ return x.first.disconnected(); });
+
+    // Clear out player connexions of players that are disconnected.
+    std::erase_if(player_map, [](const auto& x) { return x.first.disconnected(); });
 
     // As the last step, accept new connexions and close stale ones.
     server.update_connexions();
+
+    // Start the game if we have enough connected players.
+    //
+    // This check is here because it needs to be invoked in at least
+    // two places: when we receive the last word and all players are
+    // connected, or when a player reconnects after we have received
+    // all words.
+    MaybeStartGame();
 }
 
 bool Server::accept(net::TCPConnexion& connexion) {
     // Make sure we’re not full yet.
-    if (players.size() + pending_connexions.size() == PlayersNeeded) {
+    auto connected_players = rgs::distance(players | vws::filter([](auto& p) { return p->connected(); }));
+    if (connected_players + pending_connexions.size() == PlayersNeeded) {
         connexion.send(packets::sc::Disconnect{DisconnectReason::ServerFull});
         return false;
     }
@@ -93,29 +113,24 @@ void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
 }
 
 void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
+    // Player has already submitted a word.
     if (not player_map.contains(client) or player_map[client]->submitted_word) {
         Kick(client, DisconnectReason::UnexpectedPacket);
         return;
     }
+
+    // Word is invalid.
     constants::Word original;
-    for (auto [i, c] : player_map[client]->word | vws::enumerate) original[i] = c.id();
+    for (auto [i, c] : player_map[client]->word | vws::enumerate) original[i] = c.id;
     if (validation::ValidateInitialWord(wc.word, original) != validation::InitialWordValidationResult::Valid) {
         Kick(client, DisconnectReason::InvalidPacket);
         return;
     }
+
+    // Word is valid. Mark it as submitted.
     for (auto [i, c] : wc.word | vws::enumerate) player_map[client]->word[i] = Card{c};
     player_map[client]->submitted_word = true;
     Log("Client gave back word");
-    // Starting the game if all words have been recieved
-    if (rgs::any_of(players, [](auto& x){return not x->submitted_word;})) return;
-    std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
-    for (auto [i, p] : players | vws::enumerate) {
-        player_infos[i].name = p->name;
-        for(auto [j, c] : p->word | vws::enumerate)
-            player_infos[i].word[j] = c.id();
-    }
-    for (auto [i, p] : players | vws::enumerate)
-        p->client_connexion.send(sc::StartGame{player_infos, u8(i)});
 }
 
 void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
@@ -150,9 +165,11 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
                 return;
             }
 
-            Log("Player {} loging back in", login.name);
+            Log("Player {} logging back in", login.name);
             p->client_connexion = client;
             player_map[client] = p.get();
+            if (set_up and not p->submitted_word)
+                p->client_connexion.send(sc::WordChoice{BuildWordArray(p->word)});
             return;
         }
     }
@@ -168,7 +185,31 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
 // =============================================================================
 //  Game Logic
 // =============================================================================
+void Server::MaybeStartGame() {
+    // Start the game iff all players are connected and all words have been received.
+    if (
+        started or
+        not set_up or
+        not AllPlayersConnected() or
+        not AllWordsSubmitted()
+    ) return;
+    started = true;
+
+    // Send each player’s word to every player.
+    std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
+    for (auto [i, p] : players | vws::enumerate) {
+        player_infos[i].name = p->name;
+        for (auto [j, c] : p->word | vws::enumerate)
+            player_infos[i].word[j] = c.id;
+    }
+
+    for (auto [i, p] : players | vws::enumerate)
+        p->client_connexion.send(sc::StartGame{player_infos, u8(i)});
+}
+
 void Server::SetUpGame() {
+    set_up = true;
+
     // Consonants.
     auto AddCards = [&](std::span<const CardData> s) {
         for (auto& c : s) {
@@ -183,25 +224,25 @@ void Server::SetUpGame() {
 
     // Vowels.
     AddCards(CardDatabaseVowels);
-    // Draw the cards for reach player’s word.
+
+    // Draw the cards for reach player’s word. Alternate vowels
+    // and consonants so the player always gets a valid word to
+    // begin with.
     rgs::shuffle(deck.begin(), deck.begin() + num_consonants, rng);
     rgs::shuffle(deck.begin() + num_consonants, deck.end(), rng);
     for (auto& p : players) {
-        constants::Word cards;
         for (u8 i = 0; i < 3; ++i) {
-            // Add vowel.
-            p->word.push_back(std::move(deck.back()));
-            cards[i] = p->word.back().id();
-            deck.pop_back();
-
             // Add consonant.
             p->word.push_back(std::move(deck.front()));
-            cards[i + 3] = p->word.back().id();
             deck.erase(deck.begin());
+
+            // Add vowel.
+            p->word.push_back(std::move(deck.back()));
+            deck.pop_back();
         }
 
         // Send the player their word.
-        p->client_connexion.send(sc::WordChoice{cards});
+        p->client_connexion.send(sc::WordChoice{BuildWordArray(p->word)});
     }
 
     // Special cards.
@@ -209,11 +250,8 @@ void Server::SetUpGame() {
 
     // Draw each player’s hand.
     rgs::shuffle(deck, rng);
-    for (auto& p : players) {
-        Draw(*p, 7);
-    }
+    for (auto& p : players) Draw(*p, 7);
     rgs::shuffle(players, rng);
-    player().client_connexion.send(sc::StartTurn());
 }
 
 void Server::NextPlayer() {
@@ -228,9 +266,8 @@ void Server::Draw(Player& p, usz count) {
         if (deck.empty()) return;
         p.hand.push_back(std::move(deck.back()));
         deck.pop_back();
-        p.client_connexion.send(sc::Draw{p.hand.back().id()});
+        p.client_connexion.send(sc::Draw{p.hand.back().id});
     }
-
 }
 
 // =============================================================================

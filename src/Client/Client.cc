@@ -384,7 +384,7 @@ void Client::TickNetworking() {
 //  API
 // =============================================================================
 Client::Client(Renderer r) : renderer(std::move(r)) {
-    enter_screen(word_choice_screen);
+    enter_screen(menu_screen);
 }
 
 void Client::Run() {

@@ -266,6 +266,11 @@ struct TCPConnexion::Impl : impl::SocketHolder {
     std::vector<std::byte> receive_buffer;
     std::vector<std::byte> send_buffer;
 
+    // We need this because multiple copies of a connexion need
+    // to be able to communicate to each other the fact that a
+    // connexion has gone away.
+    bool disconnected = false;
+
     explicit Impl(SocketHolder socket, std::string ip_address)
         : SocketHolder(std::move(socket)),
           ip_address(std::move(ip_address)) {}
@@ -297,6 +302,8 @@ struct TCPServer::Impl : impl::SocketHolder {
 //  Impl - Connexion
 // =============================================================================
 void TCPConnexion::Impl::Disconnect() {
+    disconnected = true;
+
     // Try to flush the send buffer before closing the connexion so
     // the client hopefully gets any disconnect packets that might
     // have been queued up.
@@ -450,21 +457,24 @@ auto TCPServer::Create(u16 port, u32 max_connexions) -> Result<TCPServer> {
 }
 
 auto TCPConnexion::address() const -> std::string_view {
-    if (not impl) return "";
+    if (disconnected()) return "";
     return impl->ip_address;
 }
 
 void TCPConnexion::disconnect() {
-    if (impl) impl->Disconnect();
-    impl = {};
+    if (not disconnected()) impl->Disconnect();
+}
+
+bool TCPConnexion::disconnected() const {
+    return not impl or impl->disconnected;
 }
 
 void TCPConnexion::receive(std::function<void(ReceiveBuffer&)> callback) {
-    if (impl) return impl->Receive(callback);
+    if (not disconnected()) return impl->Receive(callback);
 }
 
 void TCPConnexion::send(std::span<const std::byte> data) {
-    if (impl) return impl->Send(data);
+    if (not disconnected()) return impl->Send(data);
 }
 
 auto TCPServer::connexions() -> std::span<TCPConnexion> { return impl->all_connexions; }
