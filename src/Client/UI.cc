@@ -157,7 +157,7 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
     ),
 
     Entry(
-        Nope,
+        Negation,
         "",
         ""
     ),
@@ -709,6 +709,11 @@ void Card::draw(Renderer& r) {
     if (scale > OtherPlayer or CardDatabase[+id].is_power())
         name.draw(r);
 
+    // TODO: Sounds that have been deleted or added to the word
+    //       should be greyed out / orange (or a plus in the corner),
+    //       respectively.
+
+    // TODO: Reenable for power cards only.
     /*auto offs = Padding[scale];
     for (int i = 0; i < count; ++i) r.draw_rect(
         Position{-3 * offs, -(2 * offs + 2 * i * offs)}.relative(at, sz, {5 * offs, offs}),
