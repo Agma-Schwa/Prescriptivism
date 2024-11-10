@@ -57,8 +57,8 @@ auto pr::validation::ValidatePlaySoundCard(CardId played, std::span<CardId> on, 
     // Is this an adjacent phoneme or a different phoneme with the same coordinates? If so yes
     if (
         IsConsonant(played) == IsConsonant(on[at]) and
-        std::abs(CardDatabase[+played].place_or_frontness - CardDatabase[+on[at]].place_or_frontness) < 2 and
-        std::abs(CardDatabase[+played].manner_or_height - CardDatabase[+on[at]].manner_or_height) < 2 and
+        std::abs(CardDatabase[+played].place_or_frontness - CardDatabase[+on[at]].place_or_frontness) +
+            std::abs(CardDatabase[+played].manner_or_height - CardDatabase[+on[at]].manner_or_height) < 2 and
         played != on[at]
     ) return PlaySoundCardValidationResult::Valid;
 
