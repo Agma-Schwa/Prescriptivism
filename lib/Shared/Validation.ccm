@@ -1,8 +1,8 @@
 module;
+#include <span>
 export module pr.validation;
 import pr.cards;
 import pr.constants;
-
 
 export namespace pr::validation {
 enum struct InitialWordValidationResult {
@@ -12,5 +12,13 @@ enum struct InitialWordValidationResult {
     BadInitialClusterManner,
     BadInitialClusterCoordinates,
 };
-InitialWordValidationResult ValidateInitialWord(constants::Word word, constants::Word original);
+enum struct PlaySoundCardValidationResult {
+    Valid,
+    NeedsOtherCard,
+    Invalid,
+};
+
+auto ValidateInitialWord(constants::Word word, constants::Word original) -> InitialWordValidationResult;
+auto ValidatePlaySoundCard(CardId played, std::span<CardId> on, usz at) -> PlaySoundCardValidationResult;
+
 }
