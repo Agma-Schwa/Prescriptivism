@@ -430,7 +430,7 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
     };
 
     // For testing.
-    sc::StartGame sg{pi, {CardId::C_f, CardId::C_f, CardId::C_f}, 0};
+    sc::StartGame sg{pi, {CardId::P_SpellingReform, CardId::C_f, CardId::C_f}, 0};
     game_screen.enter(sg);
 }
 

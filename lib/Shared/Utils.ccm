@@ -67,8 +67,8 @@ private:
 template <typename T>
 class pr::LateInit {
     LIBBASE_IMMOVABLE(LateInit);
-    alignas(T) std::byte storage[sizeof(T)];
-    bool initialised = false;
+    alignas(T) mutable std::byte storage[sizeof(T)];
+    mutable bool initialised = false;
 
 public:
     LateInit() = default;
@@ -89,8 +89,8 @@ public:
     }
 
     template <typename... Args>
-    auto init(Args&&... args) -> T* {
-        if (initialised) reset();
+    auto init(Args&&... args) const -> T* {
+        if (initialised) Ptr()->~T();
         initialised = true;
         new (storage) T(std::forward<Args>(args)...);
         return Ptr();
@@ -107,7 +107,7 @@ public:
     }
 
 private:
-    auto Ptr() -> T* { return reinterpret_cast<T*>(std::launder(storage)); }
+    auto Ptr() const -> T* { return reinterpret_cast<T*>(std::launder(storage)); }
 };
 
 struct pr::Profile {

@@ -1067,6 +1067,7 @@ void AssetLoader::load(std::stop_token stop) {
         auto f : {
             FontSize::Small,
             FontSize::Text,
+            FontSize::Intermediate,
             FontSize::Medium,
             FontSize::Large,
             FontSize::Huge,

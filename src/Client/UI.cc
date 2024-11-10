@@ -1,6 +1,7 @@
 module;
 #include <algorithm>
 #include <base/Assert.hh>
+#include <base/Macros.hh>
 #include <cmath>
 #include <numeric>
 #include <pr/gl-headers.hh>
@@ -14,6 +15,7 @@ import base.text;
 import pr.client.utils;
 import pr.client.render;
 import pr.client.render.gl;
+import pr.client.powercards;
 
 using namespace pr;
 using namespace pr::client;
@@ -101,6 +103,12 @@ void Label::refresh(Renderer& r) {
     if (not reflow) return;
     text.reflow(r, parent->bounding_box.width());
 }
+
+void Label::set_font_size(FontSize new_value) {
+    text.font_size = new_value;
+}
+
+TRIVIAL_CACHING_SETTER(Label, bool, reflow);
 
 TextBox::TextBox(
     Element* parent,
@@ -389,11 +397,11 @@ Card::Card(
     code{this, Position()},
     name{this, Position()},
     middle{this, Position::Center()},
-    special{this, Position()} {
+    description{this, Position()} {
     code.colour = Colour::Black;
     name.colour = Colour::Black;
     middle.colour = Colour::Black;
-    special.colour = Colour::Black;
+    description.colour = Colour::Black;
 }
 
 void Card::draw(Renderer& r) {
@@ -411,7 +419,7 @@ void Card::draw(Renderer& r) {
 
     code.draw(r);
     middle.draw(r);
-    special.draw(r);
+    description.draw(r);
     name.draw(r);
 
     for (int i = 0; i < count; ++i) r.draw_rect(
@@ -422,19 +430,37 @@ void Card::draw(Renderer& r) {
 }
 
 void Card::refresh(Renderer& r) {
-    SetBoundingBox(AABB{pos.relative(parent->bounding_box, CardSize[scale]), CardSize[scale]});
+    SetBoundingBox(
+        pos.relative(parent->bounding_box, CardSize[scale]),
+        CardSize[scale]
+    );
+
+    // Refresh our children *after* we’re done potentially
+    // setting properties for them.
+    defer {
+        code.refresh(r);
+        name.refresh(r);
+        middle.refresh(r);
+        description.refresh(r);
+    };
+
+    // If the window was resized, we don’t need to update the
+    // font size etc. every time.
     if (not needs_full_refresh) return;
     needs_full_refresh = false;
 
     // Adjust label font sizes.
-    code.font_size(CodeSizes[scale]);
-    name.font_size(NameSpecialSizes[scale]);
-    middle.font_size(MiddleSizes[scale]);
-    special.font_size(NameSpecialSizes[scale]);
+    code.font_size = CodeSizes[scale];
+    name.font_size = NameSizes[scale];
+    middle.font_size = MiddleSizes[scale];
+    description.font_size = //
+        CardDatabase[+id].is_power()
+            ? PowerDescriptionSizes[scale]
+            : SoundDescriptionSizes[scale];
 
     // Adjust label positions.
     code.pos = Position{Offset[scale], -Offset[scale]};
-    special.pos = Position::HCenter(10 * Offset[scale]);
+    description.pos = Position::HCenter(10 * Offset[scale]);
     name.pos = Position(Offset[scale], -(4 * Offset[scale] + code.size(r).ht));
 }
 
@@ -442,8 +468,13 @@ void Card::set_id(CardId ct) {
     if (ct == CardId::$$Count or _id == ct) return;
     _id = ct;
     auto& data = CardDatabase[+ct];
+
+    // Common properties.
+    count = std::saturate_cast<u8>(data.count_in_deck);
+    name.update_text(std::string{data.name});
+
+    // Sound card properties.
     if (data.type == CardType::SoundCard) {
-        count = std::saturate_cast<u8>(data.count_in_deck);
         code.update_text(std::format( //
             "{}{}{}{}",
             data.is_consonant() ? 'P' : 'F',
@@ -452,23 +483,33 @@ void Card::set_id(CardId ct) {
             data.manner_or_height
         ));
 
-        name.update_text(std::string{data.name});
         middle.update_text(std::string{data.center});
-        special.update_text( // clang-format off
+        description.update_text( // clang-format off
             utils::join(data.converts_to | vws::transform([](auto& vec) {
                 return std::format("→ {}", utils::join(vec | vws::transform([](CardId id) {
                     return CardDatabase[+id].center;
                 }), ", "));
             }), "\n")
         ); // clang-format on
-        needs_refresh = true;
-
-        // Also force the position of the labels to be recalculated since
-        // we may have added more text.
-        needs_full_refresh = true;
-    } else {
-        name.update_text(std::string{data.name});
+        description.reflow = false;
+        image = nullptr;
     }
+
+    // Power card properties.
+    else {
+        auto& power = PowerCardDatabase[ct];
+        name.update_text(std::string{data.name});
+        code.update_text("");
+        middle.update_text("");
+        description.update_text(std::string{power.rules});
+        description.reflow = true;
+    }
+
+    needs_refresh = true;
+
+    // Also force the position of the labels to be recalculated since
+    // we may have added more text.
+    needs_full_refresh = true;
 }
 
 TRIVIAL_CACHING_SETTER(Card, Scale, scale, needs_full_refresh = true)

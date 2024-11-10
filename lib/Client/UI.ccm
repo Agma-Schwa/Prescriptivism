@@ -282,7 +282,8 @@ public:
 /// Label that supports reflowing text automatically.
 class pr::client::Label : public Widget {
     Text text;
-    bool reflow = false;
+    Property(bool, reflow, false);
+    ComputedProperty(FontSize, font_size, text.font_size);
 
 public:
     Colour colour = Colour::White;
@@ -300,7 +301,7 @@ public:
         bool reflow = true
     ) : Widget(parent, pos),
         text("", sz, align, style),
-        reflow(reflow) {}
+        _reflow(reflow) {}
 
     explicit Label(
         Element* parent,
@@ -315,14 +316,7 @@ public:
     }
 
     void draw(Renderer& r) override;
-    void font_size(FontSize new_size) { text.font_size = new_size; }
     void refresh(Renderer& r) override;
-
-    void should_reflow(bool should_reflow = true) {
-        reflow = should_reflow;
-        needs_refresh = true;
-    }
-
     auto size(Renderer& r) -> Size { return text.size(r); }
 
     void update_text(std::string new_text) {
@@ -452,7 +446,9 @@ public:
 private:
     static constexpr u16 Offset[NumScales] = {1, 2, 4};
     static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge};
-    static constexpr FontSize NameSpecialSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
+    static constexpr FontSize NameSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
+    static constexpr FontSize SoundDescriptionSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Large};
+    static constexpr FontSize PowerDescriptionSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Intermediate};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
 
     Property(CardId, id, CardId::$$Count);
@@ -462,7 +458,8 @@ private:
     Label code;
     Label name;
     Label middle;
-    Label special;
+    Label description;
+    DrawableTexture* image;
 
 public:
     Card(Element* parent, Position pos);

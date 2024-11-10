@@ -42,6 +42,7 @@ enum struct Cursor : u32;
 enum struct pr::client::FontSize : base::u32 {
     Small = 6,
     Text = 12,
+    Intermediate = 18,
     Medium = 24,
     Large = 36,
     Huge = 48,
