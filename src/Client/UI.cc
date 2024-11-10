@@ -746,27 +746,28 @@ void Card::refresh(Renderer& r) {
     description.max_width = CardSize[scale].wd - 2 * Padding[scale] - 2 * Border[scale].wd;
     name.max_width = description.max_width;
 
-    // Adjust label positions.
-    code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
-    name.pos = power ? Position::HCenter(code.pos) : code.pos;
-    if (not code.empty) name.pos.voffset(-code.size(r).ht - 2 * Padding[scale]);
-
-    // Adjust image position.
-    //
-    // For the vertical offset, subtract the padding once to account
-    // for the padding above the text, and once more to add padding
-    // between the image and the text.
+    // Handle power-card-specific formatting.
     if (power) {
-        // TODO: Use font strut or sth, otherwise, cards where
-        // the text doesn’t fit on one line will move the image
-        // down, and we’d like for the image to always be in the
-        // same position.
-        auto voffs = -name.size(r).ht - 2 * Padding[scale];
-        Log("Name: {}, Height: {}", name.pos, name.size(r).ht);
+        // Set name position.
+        //
+        // For power cards, we want to make sure the image always stays
+        // in the same place, even if we need multiple lines for the name;
+        // set the height of the name field to a fixed value based on the
+        // font’s strut (which *should* work for any font size), and center
+        // the name vertically in that field.
+        auto name_height = i32(1.75 * r.font_for_text(name.shaped(r)).strut());
+        name.pos = Position::HCenter(-Border[scale].ht - (name_height - name.size(r).ht) / 2);
+
+        // Position the image right below the name. Since the name field ends
+        // up being larger than the height of the nam text, we don’t need to
+        // add any extra vertical paddinxg here.
         auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
         auto ht = wd / 4 * 3; // Arbitrary aspect ratio.
         image.fixed_size = Size{wd, ht};
-        image.pos = Position{Border[scale].wd, -Border[scale].ht}.voffset(voffs);
+        image.pos = Position{Border[scale].wd, -Border[scale].ht}.voffset(-name_height);
+    } else {
+        code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
+        name.pos = auto{code.pos}.voffset(-code.size(r).ht - 2 * Padding[scale]);
     }
 
     // The description is either below the image, or at a fixed offset
@@ -817,7 +818,7 @@ void Card::set_id(CardId ct) {
     // Power card properties.
     else {
         auto& power = PowerCardDatabase[ct];
-        outline_colour = Colour::RGBA(data.count_in_deck == 1 ? 0xb08a'f5ff : 0xb2ce'feff);
+        outline_colour = Colour::RGBA(data.count_in_deck == 1 ? 0xd0bc'f3ff : 0xb2ce'feff);
         name.update_text(std::string{data.name});
         code.update_text("");
         middle.update_text("");
