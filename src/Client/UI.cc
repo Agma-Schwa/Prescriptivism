@@ -684,7 +684,7 @@ void Card::draw(Renderer& r) {
     auto sz = CardSize[scale];
     auto at = pos.relative(parent->bounding_box, sz);
 
-    r.draw_rect(at, sz);
+    r.draw_rect(at, sz, Colour::White, BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
         at,
         sz,
@@ -692,11 +692,11 @@ void Card::draw(Renderer& r) {
         Colour{50, 50, 200, 255}
     );
 
-    r.draw_outline_rect(
+    /*r.draw_outline_rect(
         AABB{at, sz}.shrink(Border[scale].wd, Border[scale].ht),
         Size{Border[scale]},
         outline_colour
-    );
+    );*/
 
     code.draw(r);
     image.draw(r);

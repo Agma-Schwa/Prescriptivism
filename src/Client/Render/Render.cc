@@ -88,6 +88,14 @@ constexpr char ThrobberFragmentShaderData[]{
 #embed "Shaders/Throbber.frag"
 };
 
+constexpr char RectangleVertexShaderData[]{
+#embed "Shaders/Rectangle.vert"
+};
+
+constexpr char RectangleFragmentShaderData[]{
+#embed "Shaders/Rectangle.frag"
+};
+
 constexpr char DefaultFontRegular[]{
 #embed "Fonts/Regular.ttf"
 };
@@ -761,6 +769,11 @@ Renderer::Renderer(int initial_wd, int initial_ht) {
         std::span{ThrobberFragmentShaderData}
     );
 
+    rect_shader = ShaderProgram(
+        std::span{RectangleVertexShaderData},
+        std::span{RectangleFragmentShaderData}
+    );
+
     // Enable blending.
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -841,16 +854,18 @@ void Renderer::draw_outline_rect(
     vao.draw_vertices();
 }
 
-void Renderer::draw_rect(xy pos, Size size, Colour c) {
-    use(primitive_shader);
-    primitive_shader.uniform("in_colour", c.vec4());
-    auto [x, y] = pos;
+void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
+    use(rect_shader);
+    rect_shader.uniform("in_colour", c.vec4());
+    rect_shader.uniform("position", pos.vec());
+    rect_shader.uniform("size", size.vec());
+    rect_shader.uniform("radius", border_radius);
     VertexArrays vao{VertexLayout::Position2D};
     vec2 verts[]{
-        {x, y},
-        {x + size.wd, y},
-        {x, y + size.ht},
-        {x + size.wd, y + size.ht}
+        {0, 0},
+        {0 + size.wd, 0},
+        {0, 0 + size.ht},
+        {0 + size.wd, 0 + size.ht}
     };
     vao.add_buffer(verts, GL_TRIANGLE_STRIP);
     vao.draw_vertices();
@@ -1008,6 +1023,7 @@ void Renderer::reload_shaders() {
     Reload(text_shader, "Text");
     Reload(image_shader, "Image");
     Reload(throbber_shader, "Throbber");
+    Reload(rect_shader, "Rectangle");
 }
 
 void Renderer::set_cursor(Cursor c) {

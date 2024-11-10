@@ -496,6 +496,7 @@ public:
     ShaderProgram text_shader;
     ShaderProgram image_shader;
     ShaderProgram throbber_shader;
+    ShaderProgram rect_shader;
 
 private:
     FontData font_data;
@@ -548,9 +549,9 @@ public:
     ) { draw_outline_rect(box.origin(), box.size(), thickness, c); }
 
     /// Draw a rectangle at a position in world coordinates.
-    void draw_rect(xy pos, Size size, Colour c = Colour::White);
-    void draw_rect(AABB box, Colour c = Colour::White) {
-        draw_rect(box.origin(), box.size(), c);
+    void draw_rect(xy pos, Size size, Colour c = Colour::White, i32 border_radius = 0);
+    void draw_rect(AABB box, Colour c = Colour::White, i32 border_radius = 0) {
+        draw_rect(box.origin(), box.size(), c, border_radius);
     }
 
     /// Draw text at a position in world coordinates.

@@ -83,6 +83,9 @@ struct pr::client::Size {
     // Compute the area of this size.
     constexpr auto area() const -> i32 { return wd * ht; }
 
+    // Get this as a vector.
+    constexpr auto vec() const -> vec2 { return {wd, ht}; }
+
 private:
     friend constexpr bool operator==(Size, Size) = default;
 };
