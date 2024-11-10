@@ -63,210 +63,210 @@ struct PowerCardData {
 namespace pr::client::power_card_database {
 using enum CardId;
 
-#define Entry(x, ...) [+x - +$$PowersStart] = PowerCardData(#x, __VA_ARGS__)
+#define Entry(x, ...) [+P_##x - +$$PowersStart] = PowerCardData(#x ".webp", __VA_ARGS__)
 
 const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
     Entry(
-        P_Assimilation,
+        Assimilation,
         "",
         ""
     ),
 
     Entry(
-        P_Babel,
+        Babel,
         "",
         ""
     ),
 
     Entry(
-        P_Brasil,
+        Brasil,
         "",
         ""
     ),
 
     Entry(
-        P_Campbell,
+        Campbell,
         "",
         ""
     ),
 
     Entry(
-        P_Chomsky,
+        Chomsky,
         "",
         ""
     ),
 
     Entry(
-        P_Darija,
+        Darija,
         "",
         ""
     ),
 
     Entry(
-        P_Descriptivism,
+        Descriptivism,
         "",
         ""
     ),
 
     Entry(
-        P_Dissimilation,
+        Dissimilation,
         "",
         ""
     ),
 
     Entry(
-        P_Elision,
+        Elision,
         "",
         ""
     ),
 
     Entry(
-        P_Epenthesis,
+        Epenthesis,
         "",
         ""
     ),
 
     Entry(
-        P_GVS,
+        GVS,
         "",
         ""
     ),
 
     Entry(
-        P_Grimm,
+        Grimm,
         "",
         ""
     ),
 
     Entry(
-        P_Gvprtskvni,
+        Gvprtskvni,
         "",
         ""
     ),
 
     Entry(
-        P_Heffer,
+        Heffer,
         "",
         ""
     ),
 
     Entry(
-        P_LinguaFranca,
+        LinguaFranca,
         "",
         ""
     ),
 
     Entry(
-        P_Nope,
+        Nope,
         "",
         ""
     ),
 
     Entry(
-        P_Owl,
+        Owl,
         "",
         ""
     ),
 
     Entry(
-        P_Pinker,
+        Pinker,
         "",
         ""
     ),
 
     Entry(
-        P_ProtoWorld,
+        ProtoWorld,
         "",
         ""
     ),
 
     Entry(
-        P_REA,
+        REA,
         "",
         ""
     ),
 
     Entry(
-        P_Reconstruction,
+        Reconstruction,
         "",
         ""
     ),
 
     Entry(
-        P_Regression,
+        Regression,
         "",
         ""
     ),
 
     Entry(
-        P_Revival,
+        Revival,
         "",
         ""
     ),
 
     Entry(
-        P_Rosetta,
+        Rosetta,
         "",
         ""
     ),
 
     Entry(
-        P_Schleicher,
+        Schleicher,
         "",
         ""
     ),
 
     Entry(
-        P_Schleyer,
+        Schleyer,
         "",
         ""
     ),
 
     Entry(
-        P_SpellingReform,
+        SpellingReform,
         "Lock one of your sounds, or combine with a sound card to break "
         "a lock on an adjacent sound",
         ""
     ),
 
     Entry(
-        P_Substratum,
+        Substratum,
         "",
         ""
     ),
 
     Entry(
-        P_Superstratum,
+        Superstratum,
         "",
         ""
     ),
 
     Entry(
-        P_Urheimat,
+        Urheimat,
         "",
         ""
     ),
 
     Entry(
-        P_Vajda,
+        Vajda,
         "",
         ""
     ),
 
     Entry(
-        P_Vernacular,
+        Vernacular,
         "",
         ""
     ),
 
     Entry(
-        P_Whorf,
+        Whorf,
         "",
         ""
     ),
 
     Entry(
-        P_Zamnenhoff,
+        Zamnenhoff,
         "",
         ""
     ),
@@ -744,6 +744,7 @@ void Card::refresh(Renderer& r) {
     middle.font_size = MiddleSizes[scale];
     description.font_size = (power ? PowerDescriptionSizes : SoundDescriptionSizes)[scale];
     description.max_width = CardSize[scale].wd - 2 * Padding[scale] - 2 * Border[scale].wd;
+    name.max_width = description.max_width;
 
     // Adjust label positions.
     code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
@@ -757,6 +758,7 @@ void Card::refresh(Renderer& r) {
     // between the image and the text.
     if (power) {
         auto voffs = -name.size(r).ht - 2 * Padding[scale];
+        Log("Name: {}, Height: {}", name.pos, name.size(r).ht);
         auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
         auto ht = wd / 4 * 3; // Arbitrary aspect ratio.
         image.fixed_size = Size{wd, ht};
@@ -803,18 +805,22 @@ void Card::set_id(CardId ct) {
             }), "\n")
         ); // clang-format on
         description.reflow = false;
+        name.reflow = false;
+        name.align = TextAlign::Left;
         image.texture = nullptr;
     }
 
     // Power card properties.
     else {
         auto& power = PowerCardDatabase[ct];
-        outline_colour = Colour::RGBA(0xb2ce'feff);
+        outline_colour = Colour::RGBA(data.count_in_deck == 1 ? 0xb08a'f5ff : 0xb2ce'feff);
         name.update_text(std::string{data.name});
         code.update_text("");
         middle.update_text("");
         description.update_text(std::string{power.rules});
         description.reflow = true;
+        name.reflow = true;
+        name.align = TextAlign::Center;
         image.texture = &*power.image;
     }
 

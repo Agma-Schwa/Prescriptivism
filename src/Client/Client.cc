@@ -338,8 +338,8 @@ void GameScreen::enter(packets::sc::StartGame sg) {
 }
 
 void GameScreen::on_refresh(Renderer&) {
-    our_hand->pos = Position::HCenter(0).anchor_to(Anchor::Center);
-    our_word->pos = Position::HCenter(300);
+    our_hand->pos = Position::HCenter(50).anchor_to(Anchor::Center);
+    our_word->pos = Position::HCenter(400);
     other_words->pos = Position::HCenter(-100);
     other_words->max_gap = 100;
 }
@@ -433,7 +433,7 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
     };
 
     // For testing.
-    sc::StartGame sg{pi, {CardId::P_SpellingReform, CardId::C_f, CardId::V_u}, 0};
+    sc::StartGame sg{pi, {CardId::P_SpellingReform, CardId::P_Chomsky, CardId::V_u}, 0};
     game_screen.enter(sg);
 }
 

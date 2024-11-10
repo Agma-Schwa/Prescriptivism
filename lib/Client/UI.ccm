@@ -331,7 +331,14 @@ public:
 
     void draw(Renderer& r) override;
     void refresh(Renderer& r) override;
-    auto size(Renderer& r) -> Size { return text.size(r); }
+    auto size(Renderer& r) -> Size {
+        if (needs_refresh) {
+            refresh(r);
+            needs_refresh = false;
+        }
+
+        return text.size(r);
+    }
 
     void update_text(std::string new_text) {
         text.set(std::move(new_text));

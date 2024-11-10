@@ -612,7 +612,7 @@ auto Font::shape(
 
             // Advance past the glyph.
             x += xadv;
-            line_ht = std::max(line_ht, ypos + h);
+            line_ht = std::max(line_ht, yoffs - desc + h);
             line_dp = std::max(line_dp, desc);
 
             // Build vertices for the glyph’s position and texture coordinates.
