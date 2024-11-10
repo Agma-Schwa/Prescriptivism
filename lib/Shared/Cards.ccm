@@ -114,7 +114,7 @@ struct CardData {
     usz count_in_deck;
 
     /// The place/frontness and manner/height, if this is a sound card.
-    u8 place_or_frontness{}, manner_or_height{};
+    i8 place_or_frontness{}, manner_or_height{};
 
     /// The name of this card.
     ///
@@ -134,8 +134,8 @@ struct CardData {
     static constexpr auto Sound(
         CardId id,
         usz count,
-        u8 place,
-        u8 manner,
+        i8 place,
+        i8 manner,
         std::string_view name,
         std::string_view center,
         std::vector<std::vector<CardId>> converts_to = {}
