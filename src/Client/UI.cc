@@ -689,14 +689,16 @@ void Card::draw(Renderer& r) {
         at,
         sz,
         CardGroup::CardGaps[scale] / 2,
-        Colour{50, 50, 200, 255}
+        Colour{50, 50, 200, 255},
+        BorderRadius[scale]
     );
 
-    /*r.draw_outline_rect(
+    r.draw_outline_rect(
         AABB{at, sz}.shrink(Border[scale].wd, Border[scale].ht),
         Size{Border[scale]},
-        outline_colour
-    );*/
+        outline_colour,
+        BorderRadius[scale]
+    );
 
     code.draw(r);
     image.draw(r);

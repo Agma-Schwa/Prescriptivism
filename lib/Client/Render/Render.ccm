@@ -166,6 +166,12 @@ struct pr::client::AABB {
     /// Check if this box contains a point.
     [[nodiscard]] auto contains(xy) const -> bool;
 
+    /// Grow the box.
+    [[nodiscard]] constexpr auto grow(i32 amount) const -> AABB { return grow(amount, amount); }
+    [[nodiscard]] constexpr auto grow(i32 x, i32 y) const -> AABB {
+        return {min - xy(x, y), max + xy(x, y)};
+    }
+
     /// Get the height of this box.
     [[nodiscard]] constexpr auto height() const -> i32 { return max.y - min.y; }
 
@@ -538,15 +544,24 @@ public:
         xy pos,
         Size size,
         Size thickness = 1,
-        Colour c = Colour::White
-    );
+        Colour c = Colour::White,
+        i32 border_radius = 0
+    ) {
+        draw_outline_rect(
+            AABB{pos, size},
+            thickness,
+            c,
+            border_radius
+        );
+    }
 
     /// \see draw_outline_rect() above.
     void draw_outline_rect(
         AABB box,
         Size thickness = 1,
-        Colour c = Colour::White
-    ) { draw_outline_rect(box.origin(), box.size(), thickness, c); }
+        Colour c = Colour::White,
+        i32 border_radius = 0
+    );
 
     /// Draw a rectangle at a position in world coordinates.
     void draw_rect(xy pos, Size size, Colour c = Colour::White, i32 border_radius = 0);

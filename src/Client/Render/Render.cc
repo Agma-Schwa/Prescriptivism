@@ -802,51 +802,63 @@ void Renderer::draw_line(xy start, xy end, Colour c) {
 }
 
 void Renderer::draw_outline_rect(
-    xy pos,
-    Size size,
+    AABB box,
     Size thickness,
-    Colour c
+    Colour c,
+    i32 border_radius
 ) {
-    use(primitive_shader);
-    primitive_shader.uniform("in_colour", c.vec4());
-    auto [x, y] = pos;
+    box = box.grow(thickness.wd, thickness.ht);
+    auto pos = box.origin();
+    auto size = box.size();
     auto [wd, ht] = size;
     auto [tx, ty] = thickness;
+    use(rect_shader);
+    rect_shader.uniform("in_colour", c.vec4());
+    rect_shader.uniform("position", pos.vec());
+    rect_shader.uniform("size", size.vec());
+    rect_shader.uniform("radius", border_radius);
     VertexArrays vao{VertexLayout::Position2D};
 
     // Draw four rectangles around the original rectangle.
+    //
+    // These vertices actually draw a rectangle *inside* 'box', but
+    // we grow 'box' by the thickness of the outline, so the result
+    // is an outline around what the user passed in.
+    //
+    // We do it this way because the rectangle shader can only draw
+    // the inside of a rectangle.
     vec2 verts[]{
-        // Left.
-        {x, y},
-        {x - tx, y},
-        {x, y + ht},
-        {x, y + ht},
-        {x - tx, y},
-        {x - tx, y + ht},
+        // Left, inner.
+        {0, ty},
+        {tx, ty},
+        {tx, ht - ty},
+        {tx, ht - ty},
+        {0, ty},
+        {0, ht - ty},
 
-        // Right.
-        {x + wd, y},
-        {x + wd + tx, y},
-        {x + wd, y + ht},
-        {x + wd, y + ht},
-        {x + wd + tx, y},
-        {x + wd + tx, y + ht},
+        // Right, inner.
+        {wd - tx, 0},
+        {wd, 0},
+        {wd - tx, ht},
+        {wd - tx, ht},
+        {wd, 0},
+        {wd, ht},
 
-        // Top.
-        {x - tx, y + ht},
-        {x - tx, y + ht + ty},
-        {x + wd + tx, y + ht},
-        {x + wd + tx, y + ht},
-        {x - tx, y + ht + ty},
-        {x + wd + tx, y + ht + ty},
+        // Top, outer.
+        {0, ht - ty},
+        {0, ht},
+        {wd, ht - ty},
+        {wd, ht - ty},
+        {0, ht},
+        {wd, ht},
 
-        // Bottom.
-        {x - tx, y},
-        {x - tx, y - ty},
-        {x + wd + tx, y},
-        {x + wd + tx, y},
-        {x - tx, y - ty},
-        {x + wd + tx, y - ty},
+        // Bottom, outer.
+        {0, 0},
+        {0, ty},
+        {wd, ty},
+        {wd, ty},
+        {0, 0},
+        {wd, 0},
 
     };
 
@@ -863,9 +875,9 @@ void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
     VertexArrays vao{VertexLayout::Position2D};
     vec2 verts[]{
         {0, 0},
-        {0 + size.wd, 0},
-        {0, 0 + size.ht},
-        {0 + size.wd, 0 + size.ht}
+        {size.wd, 0},
+        {0, size.ht},
+        {size.wd, size.ht}
     };
     vao.add_buffer(verts, GL_TRIANGLE_STRIP);
     vao.draw_vertices();

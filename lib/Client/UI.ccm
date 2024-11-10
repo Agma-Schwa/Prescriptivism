@@ -485,7 +485,7 @@ private:
     static constexpr FontSize SoundDescriptionSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Large, FontSize::Huge};
     static constexpr FontSize PowerDescriptionSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Intermediate, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title, FontSize::Gargantuan};
-    static constexpr f32 BorderRadius[NumScales] = {5.f, 10.f, 20.f, 30.f};
+    static constexpr i32 BorderRadius[NumScales] = {5.f, 10.f, 20.f, 30.f};
 
     Property(CardId, id, CardId::$$Count);
     Property(Scale, scale, Field);
