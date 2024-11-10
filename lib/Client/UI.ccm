@@ -290,6 +290,7 @@ public:
 class pr::client::Label : public Widget {
     Text text;
     Property(bool, reflow, false);
+    Property(i32, max_width, std::numeric_limits<i32>::max());
     ComputedReadonly(bool, empty, text.empty());
     ComputedProperty(FontSize, font_size, text.font_size);
     ComputedProperty(TextAlign, align, text.align);
@@ -446,24 +447,25 @@ public:
     enum Scale : u8 {
         OtherPlayer,
         Field,
-        Large,
+        Hand,
+        Preview,
         NumScales
     };
 
-    static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}};
-    static constexpr u16 Padding[NumScales] = {1, 2, 4};
+    static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
+    static constexpr u16 Padding[NumScales] = {1, 2, 4, 6};
 
     // The border is slightly uneven; this is because of an optical illusion
     // that makes vertical lines appear thinner than horizontal lines, so we
     // compensate for that here, by making the X border wider than the Y border.
-    static constexpr Size Border[NumScales] = {{5, 4}, {9, 8}, {17, 16}};
+    static constexpr Size Border[NumScales] = {{5, 4}, {9, 8}, {17, 16}, {25, 24}};
 
 private:
-    static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge};
-    static constexpr FontSize NameSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium};
-    static constexpr FontSize SoundDescriptionSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Large};
-    static constexpr FontSize PowerDescriptionSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Intermediate};
-    static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title};
+    static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge, FontSize::Title};
+    static constexpr FontSize NameSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium, FontSize::Large};
+    static constexpr FontSize SoundDescriptionSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Large, FontSize::Huge};
+    static constexpr FontSize PowerDescriptionSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Intermediate, FontSize::Medium};
+    static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title, FontSize::Gargantuan};
 
     Property(CardId, id, CardId::$$Count);
     Property(Scale, scale, Field);

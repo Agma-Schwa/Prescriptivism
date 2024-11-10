@@ -46,6 +46,7 @@ enum struct pr::client::FontSize : base::u32 {
     Large = 36,
     Huge = 48,
     Title = 96,
+    Gargantuan = 144,
 };
 
 /// Alignment of shaped text.

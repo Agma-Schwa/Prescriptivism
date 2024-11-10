@@ -25,7 +25,7 @@ auto GetDefaultTexture() -> DrawableTexture {
 auto DrawableTexture::LoadFromFile(fs::PathRef path) -> DrawableTexture {
     auto file = File::Read(path);
     if (not file) {
-        Log("Could not read file '{}': {}", path.string(), file.error());
+        Log("{}", file.error());
         return GetDefaultTexture();
     }
 

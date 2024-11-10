@@ -1089,6 +1089,7 @@ void AssetLoader::load(std::stop_token stop) {
             FontSize::Large,
             FontSize::Huge,
             FontSize::Title,
+            FontSize::Gargantuan,
         }
     ) {
         for (auto s : {Regular, Italic, Bold, BoldItalic})

@@ -312,9 +312,6 @@ GameScreen::GameScreen(Client& c) : client(c) {
 void GameScreen::enter(packets::sc::StartGame sg) {
     DeleteAllChildren();
 
-    preview = &Create<Card>(Position::VCenter(-100));
-    preview->visible = false;
-    preview->scale = Card::Large;
     other_players.clear();
     other_words = &Create<Group<>>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
@@ -322,7 +319,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
             player_id = sg.player_id;
             our_hand = &Create<CardGroup>(Position(), sg.hand);
             our_word = &Create<CardGroup>(Position(), p.word);
-            our_hand->scale = Card::Large;
+            our_hand->scale = Card::Hand;
             continue;
         }
 
@@ -330,6 +327,12 @@ void GameScreen::enter(packets::sc::StartGame sg) {
         op.word = &other_words->Create<CardGroup>(Position(), p.word);
         op.word->scale = Card::OtherPlayer;
     }
+
+    // The preview must be created at the end so it’s drawn
+    // above everything else.
+    preview = &Create<Card>(Position::VCenter(-100));
+    preview->visible = false;
+    preview->scale = Card::Preview;
 
     client.enter_screen(*this);
 }

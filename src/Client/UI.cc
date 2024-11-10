@@ -289,7 +289,7 @@ using power_card_database::PowerCardDatabase;
 // after the renderer has been initialised.
 void client::InitialiseUI(Renderer&) {
     for (auto& p : PowerCardDatabase) {
-        p.image.init(DrawableTexture::LoadFromFile(p.image_path));
+        p.image.init(DrawableTexture::LoadFromFile(fs::Path{"assets/Cards"} / p.image_path));
     }
 }
 
@@ -357,13 +357,14 @@ void Label::draw(Renderer& r) {
 
 void Label::refresh(Renderer& r) {
     if (not reflow) return;
-    text.reflow(r, parent->bounding_box.width());
+    text.reflow(r, std::min(max_width, parent->bounding_box.width()));
 }
 
 void Label::set_align(TextAlign new_value) { text.align = new_value; }
 void Label::set_font_size(FontSize new_value) { text.font_size = new_value; }
 
 TRIVIAL_CACHING_SETTER(Label, bool, reflow);
+TRIVIAL_CACHING_SETTER(Label, i32, max_width);
 
 TextBox::TextBox(
     Element* parent,
@@ -735,11 +736,14 @@ void Card::refresh(Renderer& r) {
     name.font_size = NameSizes[scale];
     middle.font_size = MiddleSizes[scale];
     description.font_size = (power ? PowerDescriptionSizes : SoundDescriptionSizes)[scale];
+    description.max_width = CardSize[scale].wd - 2 * Padding[scale] - 2 * Border[scale].wd;
 
     // Adjust label positions.
     code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
     name.pos = power ? Position::HCenter(code.pos) : code.pos;
     if (not code.empty) name.pos.voffset(-code.size(r).ht - 2 * Padding[scale]);
+
+    // FIXME: Adjust position for power cards (put it below the image).
     description.pos = Position::HCenter(10 * Padding[scale]);
 }
 
