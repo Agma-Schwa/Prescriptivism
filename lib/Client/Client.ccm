@@ -184,6 +184,13 @@ public:
     /// Run the client for ever.
     static void Run();
 
+    /// Run the client for ever, and immediately connect to a server.
+    static void RunAndConnect(
+        std::string address,
+        std::string username,
+        std::string password
+    );
+
     /// Enter a screen.
     void enter_screen(Screen& s);
 
@@ -196,7 +203,9 @@ public:
 #undef X
 
 private:
-    void Tick();
+    static auto Startup() -> Renderer;
+
     void RunGame();
+    void Tick();
     void TickNetworking();
 };

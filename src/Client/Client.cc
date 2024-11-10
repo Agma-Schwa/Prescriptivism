@@ -428,7 +428,7 @@ void Client::TickNetworking() {
 //  API
 // =============================================================================
 Client::Client(Renderer r) : renderer(std::move(r)) {
-    std::array pi {
+    std::array pi{
         sc::StartGame::PlayerInfo{constants::Word{CardId::C_b, CardId::V_a, CardId::V_e, CardId::C_b, CardId::C_b, CardId::C_b}, "Player"},
         sc::StartGame::PlayerInfo{constants::Word{CardId::C_d, CardId::V_y, CardId::C_d, CardId::C_d, CardId::V_i, CardId::C_d}, "Player"}
     };
@@ -439,51 +439,17 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
 }
 
 void Client::Run() {
-    // Load assets and display a minimal window in the meantime; we
-    // can’t access most features of the renderer (e.g. text) while
-    // this is happening, but we can clear the screen and draw a
-    // throbber.
-    //
-    // Note: Asset loading doesn’t perform OpenGL calls until we
-    // call finalise(), so the reason we can’t do much here is not
-    // that another thread is using OpenGl, but rather simply the
-    // fact that we don’t have the required assets yet.
-    Screen screen;
-    Renderer r{1800, 1000};
-    Thread asset_loader{AssetLoader::Create(r)};
-    InputSystem startup{r};
-    screen.Create<Throbber>(Position::Center());
+    Client c{Startup()};
+    c.RunGame();
+}
 
-    // Flag used to avoid a race condition in case the thread
-    // finishes just after the user has pressed 'close' since
-    // we set the 'quit' flag of the startup input system to
-    // tell it to stop the game loop.
-    bool done = false;
-
-    // Display only the throbber until the assets are loaded.
-    startup.game_loop([&] {
-        Renderer::Frame _ = r.frame();
-        screen.draw(r);
-        if (not asset_loader.running()) {
-            done = true;
-            startup.quit = true;
-        }
-    });
-
-    // If we get here, and 'done' isn’t set, then the user
-    // pressed the close button. Also tell the asset loader
-    // to stop since we don’t need the assets anymore.
-    if (not done) {
-        asset_loader.stop_and_release();
-        return;
-    }
-
-    // Finish asset loading.
-    asset_loader.value().value().finalise(r);
-    InitialiseUI(r);
-
-    // Run the actual game.
-    Client c{std::move(r)};
+void Client::RunAndConnect(std::string address, std::string username, std::string password) {
+    Client c{Startup()};
+    c.connexion_screen.enter(
+        std::move(address),
+        std::move(username),
+        std::move(password)
+    );
     c.RunGame();
 }
 
@@ -512,6 +478,52 @@ void Client::Tick() {
 
 void Client::RunGame() {
     input_system.game_loop([&] { Tick(); });
+}
+
+auto Client::Startup() -> Renderer {
+    // Load assets and display a minimal window in the meantime; we
+    // can’t access most features of the renderer (e.g. text) while
+    // this is happening, but we can clear the screen and draw a
+    // throbber.
+    //
+    // Note: Asset loading doesn’t perform OpenGL calls until we
+    // call finalise(), so the reason we can’t do much here is not
+    // that another thread is using OpenGl, but rather simply the
+    // fact that we don’t have the required assets yet.
+    Screen screen;
+    Renderer r{1'800, 1'000};
+    Thread asset_loader{AssetLoader::Create(r)};
+    InputSystem startup{r};
+    screen.Create<Throbber>(Position::Center());
+
+    // Flag used to avoid a race condition in case the thread
+    // finishes just after the user has pressed 'close' since
+    // we set the 'quit' flag of the startup input system to
+    // tell it to stop the game loop.
+    bool done = false;
+
+    // Display only the throbber until the assets are loaded.
+    startup.game_loop([&] {
+        Renderer::Frame _ = r.frame();
+        screen.draw(r);
+        if (not asset_loader.running()) {
+            done = true;
+            startup.quit = true;
+        }
+    });
+
+    // If we get here, and 'done' isn’t set, then the user
+    // pressed the close button. Also tell the asset loader
+    // to stop since we don’t need the assets anymore.
+    if (not done) {
+        asset_loader.stop_and_release();
+        std::exit(0);
+    }
+
+    // Finish asset loading.
+    asset_loader.value().value().finalise(r);
+    InitialiseUI(r);
+    return r;
 }
 
 void Client::show_error(std::string error, Screen& return_to) {
