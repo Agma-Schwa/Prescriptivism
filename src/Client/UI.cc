@@ -968,7 +968,10 @@ void Screen::tick(InputSystem& input) {
     hovered_element = nullptr;
 
     // Deselect the currently selected element if there was a click.
-    if (input.mouse.left) selected_element = nullptr;
+    if (input.mouse.left and selected_element) {
+        selected_element->selected = false;
+        selected_element = nullptr;
+    }
 
     // Tick each child.
     for (auto& e : visible()) {
@@ -984,8 +987,8 @@ void Screen::tick(InputSystem& input) {
             // If, additionally, we had a click, select the element and fire the
             // event handler.
             if (input.mouse.left and hovered_element) {
-                if (e->selectable) selected_element = e.get();
-                e->event_click(input);
+                if (hovered_element->selectable) selected_element = hovered_element;
+                hovered_element->event_click(input);
             }
         }
     }
