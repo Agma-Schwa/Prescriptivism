@@ -3,6 +3,7 @@ module;
 export module pr.validation;
 import pr.cards;
 import pr.constants;
+import pr.utils;
 
 export namespace pr::validation {
 enum struct InitialWordValidationResult {
