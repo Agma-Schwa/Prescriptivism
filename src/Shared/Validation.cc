@@ -8,14 +8,12 @@ import pr.cards;
 
 namespace pr {
 auto IsConsonant(CardId id) -> bool {
-
     return CardDatabase[+id].is_consonant();
 }
 }
 
 auto pr::validation::ValidateInitialWord(constants::Word word, constants::Word original)
     -> InitialWordValidationResult {
-
     // The word is a permutation of the original word
     rgs::sort(original);
     constants::Word w2 = word;
@@ -31,7 +29,7 @@ auto pr::validation::ValidateInitialWord(constants::Word word, constants::Word o
     ) return InitialWordValidationResult::ClusterTooLong; // clang-format on
 
     // M1 and M2 CANNOT start a consonant cluster word-initially.
-    if(IsConsonant(word[0]) and IsConsonant(word[1]) and CardDatabase[+word[0]].manner_or_height <= 2)
+    if (IsConsonant(word[0]) and IsConsonant(word[1]) and CardDatabase[+word[0]].manner_or_height <= 2)
         return InitialWordValidationResult::BadInitialClusterManner;
 
     // Two consonants with the same coordinates CANNOT cluster word-initially.
