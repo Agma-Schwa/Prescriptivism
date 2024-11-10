@@ -151,7 +151,10 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     strut_desc = size * -ft_face->descender / em;
 
     // Compute the interline skip.
-    skip = u32(ft_face->height / f32(ft_face->units_per_EM) * size);
+    // Note: the interline skip for the font we’re using is absurd
+    // if calculated this way, so just do it manually.
+    skip = u32(1.2f * size);
+    // skip = u32(ft_face->height / f32(ft_face->units_per_EM) * size);
 
     // Determine the maximum width and height amongst all glyphs; we
     // need to do this now to ensure that the dimensions of a cell

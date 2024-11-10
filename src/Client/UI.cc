@@ -699,10 +699,13 @@ void Card::draw(Renderer& r) {
     );
 
     code.draw(r);
-    name.draw(r);
     image.draw(r);
     middle.draw(r);
     description.draw(r);
+
+    // Do not draw the name if this is a small sound card.
+    if (scale > OtherPlayer or CardDatabase[+id].is_power())
+        name.draw(r);
 
     /*auto offs = Padding[scale];
     for (int i = 0; i < count; ++i) r.draw_rect(
