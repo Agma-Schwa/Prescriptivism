@@ -6,13 +6,15 @@ module pr.validation;
 import pr.utils;
 import pr.cards;
 
+using namespace pr;
+
 namespace pr {
 auto IsConsonant(CardId id) -> bool {
     return CardDatabase[+id].is_consonant();
 }
 }
 
-auto pr::validation::ValidateInitialWord(constants::Word word, constants::Word original)
+auto validation::ValidateInitialWord(constants::Word word, constants::Word original)
     -> InitialWordValidationResult {
     // The word is a permutation of the original word
     rgs::sort(original);
@@ -43,7 +45,7 @@ auto pr::validation::ValidateInitialWord(constants::Word word, constants::Word o
     return InitialWordValidationResult::Valid;
 }
 
-auto pr::validation::ValidatePlaySoundCard(CardId played, std::span<CardId> on, usz at) -> PlaySoundCardValidationResult {
+auto validation::ValidatePlaySoundCard(CardId played, std::span<CardId> on, usz at) -> PlaySoundCardValidationResult {
     // Is this played on a /h/ or a /ə/ and the played sound is adjacent? If so yes
     if (
         (on[at] == CardId::C_h or on[at] == CardId::V_ə) and
