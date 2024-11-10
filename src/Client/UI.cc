@@ -684,7 +684,7 @@ void Card::draw(Renderer& r) {
     auto sz = CardSize[scale];
     auto at = pos.relative(parent->bounding_box, sz);
 
-    r.draw_rect(at, sz, outline_colour.lighten(.1), BorderRadius[scale]);
+    r.draw_rect(at, sz, outline_colour.lighten(.1f), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
         at,
         sz,
@@ -785,7 +785,7 @@ void Card::set_id(CardId ct) {
 
     // Sound card properties.
     if (data.type == CardType::SoundCard) {
-        outline_colour = Colour::RGBA(data.is_consonant() ? 0xe066'80ff : 0xe8b4'4eff);
+        outline_colour = Colour::RGBA(data.is_consonant() ? 0xfea3'aaff : 0xfad3'84ff);
         code.update_text(std::format( //
             "{}{}{}{}",
             data.is_consonant() ? 'P' : 'F',
@@ -809,7 +809,7 @@ void Card::set_id(CardId ct) {
     // Power card properties.
     else {
         auto& power = PowerCardDatabase[ct];
-        outline_colour = Colour::RGBA(0x7db8'f1ff);
+        outline_colour = Colour::RGBA(0xb2ce'feff);
         name.update_text(std::string{data.name});
         code.update_text("");
         middle.update_text("");
