@@ -80,16 +80,34 @@ LIBBASE_DEFINE_FLAG_ENUM(TextStyle);
 }
 
 struct pr::client::Colour {
-    PR_SERIALISE(r, g, b, a);
+    PR_SERIALISE(r8, g8, b8, a8);
 
-    u8 r{};
-    u8 g{};
-    u8 b{};
-    u8 a{255};
+    u8 r8{};
+    u8 g8{};
+    u8 b8{};
+    u8 a8{255};
 
+    ComputedProperty(f32, r, r8 / 255.0f);
+    ComputedProperty(f32, g, g8 / 255.0f);
+    ComputedProperty(f32, b, b8 / 255.0f);
+    ComputedProperty(f32, a, a8 / 255.0f);
+
+public:
     /// Create a new colour.
     constexpr Colour() = default;
-    constexpr Colour(u8 r, u8 g, u8 b, u8 a = 255) : r(r), g(g), b(b), a(a) {}
+    constexpr Colour(
+        std::integral auto r,
+        std::integral auto g,
+        std::integral auto b,
+        std::integral auto a = 255
+    ) : r8(u8(r)), g8(u8(g)), b8(u8(b)), a8(u8(a)) {}
+    constexpr Colour(
+        std::same_as<f32> auto r,
+        std::same_as<f32> auto g,
+        std::same_as<f32> auto b,
+        std::same_as<f32> auto a = 1
+    ) : Colour(u8(r * 255), u8(g * 255), u8(b * 255), u8(a * 255)) {}
+
     constexpr static auto ABGR(u32 abgr) -> Colour {
         if constexpr (std::endian::native == std::endian::big)
             abgr = std::byteswap(abgr);
@@ -114,11 +132,42 @@ struct pr::client::Colour {
         };
     }
 
-    constexpr f32 red() const { return r / 255.0f; }
-    constexpr f32 green() const { return g / 255.0f; }
-    constexpr f32 blue() const { return b / 255.0f; }
-    constexpr f32 alpha() const { return a / 255.0f; }
-    constexpr auto vec4() const -> glm::vec4 { return {red(), green(), blue(), alpha()}; }
+    constexpr static auto HSLA(f32 h, f32 s, f32 l, f32 alpha) -> Colour {
+        f32 a = s * std::min(l, 1 - l);
+        auto F = [&](f32 n) {
+            f32 k = std::fmod(n + h / 30.f, 12.f);
+            return l - a * std::max(-1.f, std::min<f32>({k - 3, 9 - k, 1}));
+        };
+        return Colour{F(0), F(8), F(4), alpha};
+    }
+
+    constexpr auto darken(f32 amount) const -> Colour {
+        auto [h, s, l] = hsl();
+        return HSLA(h, s, std::max(0.f, l - amount), a);
+    }
+
+    constexpr auto hsl() const -> std::tuple<f32, f32, f32> {
+        f32 xmin = std::min({r, g, b});
+        f32 v = std::max({r, g, b});
+        f32 c = v - xmin;
+        f32 l = (v + xmin) / 2;
+        f32 h = 0;
+        f32 s = 0;
+        if (c != 0) {
+            s = l == 0 or l == 1 ? 0 : (v - l) / std::min(l, 1 - l);
+            if (v == r) h = 60 * std::fmod((g - b) / c, 6.f);
+            if (v == g) h = 60 * ((b - r) / c + 2);
+            if (v == b) h = 60 * ((r - g) / c + 4);
+        }
+        return {h, s, l};
+    }
+
+    constexpr auto lighten(f32 amount) const -> Colour {
+        auto [h, s, l] = hsl();
+        return HSLA(h, s, std::min(1.f, l + amount), a);
+    }
+
+    constexpr auto vec4() const -> glm::vec4 { return {r, g, b, a}; }
 
     static constinit const Colour White;
     static constinit const Colour Black;

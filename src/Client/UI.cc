@@ -684,7 +684,7 @@ void Card::draw(Renderer& r) {
     auto sz = CardSize[scale];
     auto at = pos.relative(parent->bounding_box, sz);
 
-    r.draw_rect(at, sz, Colour::White, BorderRadius[scale]);
+    r.draw_rect(at, sz, outline_colour.lighten(.1), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
         at,
         sz,

@@ -788,7 +788,7 @@ Renderer::Frame::~Frame() { r.frame_end(); }
 void Renderer::clear(Colour c) {
     auto [sx, sy] = size();
     glViewport(0, 0, sx, sy);
-    glClearColor(c.red(), c.green(), c.blue(), c.alpha());
+    glClearColor(c.r, c.g, c.b, c.a);
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
