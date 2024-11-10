@@ -879,6 +879,15 @@ void Renderer::draw_texture(
     tex.draw_vertices();
 }
 
+void Renderer::draw_texture_repeat(const DrawableTexture& tex, xy pos, Size size) {
+    use(image_shader);
+    image_shader.uniform("position", pos.vec());
+    tex.bind();
+    VertexArrays vao{VertexLayout::PositionTexture4D};
+    vao.add_buffer(tex.create_vertices(size), GL_TRIANGLE_STRIP);
+    vao.draw_vertices();
+}
+
 void Renderer::frame_end() {
 #if 0 // FOR TESTING
     // Draw an image.

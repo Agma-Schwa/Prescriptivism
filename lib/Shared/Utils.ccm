@@ -83,11 +83,6 @@ public:
         else *Ptr() = std::move(value);
     }
 
-    void reset() {
-        if (initialised) Ptr()->~T();
-        initialised = false;
-    }
-
     template <typename... Args>
     auto init(Args&&... args) const -> T* {
         if (initialised) Ptr()->~T();
@@ -96,12 +91,17 @@ public:
         return Ptr();
     }
 
-    [[nodiscard]] auto operator->() -> T* {
+    void reset() {
+        if (initialised) Ptr()->~T();
+        initialised = false;
+    }
+
+    [[nodiscard]] auto operator->() const -> T* {
         Assert(initialised, "LateInit not initialised!");
         return Ptr();
     }
 
-    [[nodiscard]] auto operator*() -> T& {
+    [[nodiscard]] auto operator*() const -> T& {
         Assert(initialised, "LateInit not initialised!");
         return *Ptr();
     }

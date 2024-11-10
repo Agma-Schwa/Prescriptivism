@@ -19,7 +19,6 @@ import pr.serialisation;
 
 export namespace pr::client {
 struct Colour;
-struct Size;
 struct AABB;
 struct xy;
 
@@ -115,22 +114,6 @@ struct pr::client::Colour {
 constexpr pr::client::Colour pr::client::Colour::White = {255, 255, 255, 255};
 constexpr pr::client::Colour pr::client::Colour::Black = {0, 0, 0, 255};
 constexpr pr::client::Colour pr::client::Colour::Grey = {128, 128, 128, 255};
-
-struct pr::client::Size {
-    PR_SERIALISE(wd, ht);
-
-    i32 wd{};
-    i32 ht{};
-
-    constexpr Size() = default;
-    constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
-
-    // Compute the area of this size.
-    constexpr auto area() const -> i32 { return wd * ht; }
-
-private:
-    friend constexpr bool operator==(Size, Size) = default;
-};
 
 // XY position that is destructurable.
 struct pr::client::xy {
@@ -537,6 +520,15 @@ public:
 
     /// Draw a texture at a position in world coordinates.
     void draw_texture(const DrawableTexture& tex, xy pos);
+
+    /// Draw a texture at a position in world coordinates.
+    ///
+    /// If the texture is smaller than the requested size, the texture
+    /// will be clamped or tiled, depending on the texture’s settings.
+    ///
+    /// If the texture is larger than the requested size, only part of
+    /// the texture will be drawn.
+    void draw_texture_repeat(const DrawableTexture& tex, xy pos, Size size);
 
     /// Get the font used to shape a text element.
     auto font_for_text(const ShapedText& r) -> Font&;

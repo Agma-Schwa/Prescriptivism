@@ -3,6 +3,7 @@ module;
 #include <base/Macros.hh>
 #include <glm/gtc/type_ptr.hpp>
 #include <pr/gl-headers.hh>
+#include <pr/Utils.hh>
 #include <utility>
 export module pr.client.render.gl;
 
@@ -18,6 +19,8 @@ using namespace pr::client;
 
 export namespace pr::client {
 enum class VertexLayout : u8;
+
+struct Size;
 
 class DrawableTexture;
 class ShaderProgram;
@@ -64,6 +67,23 @@ struct pr::ser::Serialiser<glm::vec<n, T>> {
 enum class client::VertexLayout : u8 {
     Position2D,        /// vec2f position
     PositionTexture4D, /// vec4f position(xy)+texture(zw)
+};
+
+struct pr::client::Size {
+    PR_SERIALISE(wd, ht);
+
+    i32 wd{};
+    i32 ht{};
+
+    constexpr Size() = default;
+    constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
+    constexpr Size(u32 wd, u32 ht) : wd(i32(wd)), ht(i32(ht)) {}
+
+    // Compute the area of this size.
+    constexpr auto area() const -> i32 { return wd * ht; }
+
+private:
+    friend constexpr bool operator==(Size, Size) = default;
 };
 
 /// Helper to keep track of and delete OpenGL objects.
@@ -398,16 +418,7 @@ public:
         GLenum unit = GL_TEXTURE0,
         bool tile = false
     ) : Texture(data, width, height, format, type, target, unit, tile) {
-        // Flip the texture uv coordinates upside-down since the origin
-        // is in the bottom-left corner, but that’s not how images work.
-        vec4 verts[]{
-            {0, 0, 0, 1},
-            {width, 0, 1, 1},
-            {0, height, 0, 0},
-            {width, height, 1, 0},
-        };
-
-        vao.add_buffer(verts, GL_TRIANGLE_STRIP);
+        vao.add_buffer(create_vertices(Size{width, height}), GL_TRIANGLE_STRIP);
     }
 
     DrawableTexture(
@@ -418,6 +429,23 @@ public:
         GLenum type,
         bool tile
     ) : DrawableTexture(data, width, height, format, type, GL_TEXTURE_2D, GL_TEXTURE0, tile) {}
+
+    /// Create triangle strip texture vertices for a given size.
+    auto create_vertices(Size size) const -> std::array<vec4, 4> {
+        // Scale uv coordinates to create tiling if the requested size is
+        // larger than the texture size.
+        f32 u = f32(size.wd) / width;
+        f32 v = f32(size.ht) / height;
+
+        // Flip the texture uv coordinates upside-down since the origin
+        // is in the bottom-left corner, but that’s not how images work.
+        return {
+            vec4{0, 0, 0, v},
+            vec4{size.wd, 0, u, v},
+            vec4{0, size.ht, 0, 0},
+            vec4{size.wd, size.ht, u, 0},
+        };
+    }
 
     /// Load a texture from a file.
     ///

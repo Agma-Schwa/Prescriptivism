@@ -444,7 +444,7 @@ void Client::Run() {
     // call finalise(), so the reason we can’t do much here is not
     // that another thread is using OpenGl, but rather simply the
     // fact that we don’t have the required assets yet.
-    Renderer r{800, 600};
+    Renderer r{1800, 1000};
     Thread asset_loader{AssetLoader::Create(r)};
     Throbber throb{nullptr, Position::Center()};
     InputSystem startup{r};
@@ -475,6 +475,7 @@ void Client::Run() {
 
     // Finish asset loading.
     asset_loader.value().value().finalise(r);
+    InitialiseUI(r);
 
     // Run the actual game.
     Client c{std::move(r)};

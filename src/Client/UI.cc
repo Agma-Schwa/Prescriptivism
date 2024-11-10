@@ -15,7 +15,6 @@ import base.text;
 import pr.client.utils;
 import pr.client.render;
 import pr.client.render.gl;
-import pr.client.powercards;
 
 using namespace pr;
 using namespace pr::client;
@@ -36,6 +35,263 @@ using namespace pr::client;
 // =============================================================================
 constexpr Colour DefaultButtonColour{36, 36, 36, 255};
 constexpr Colour HoverButtonColour{23, 23, 23, 255};
+
+// =============================================================================
+//  Data
+// =============================================================================
+struct PowerCardData {
+    /// Basic rules text.
+    std::string_view rules;
+
+    /// Extended tooltip with the complete rules text; this
+    /// is shown if the user holds down some key (e.g. shift).
+    std::string_view extended_rules;
+
+    /// Path to the image.
+    std::string_view image_path;
+
+    /// Cached image texture.
+    LateInit<DrawableTexture> image{};
+
+    explicit PowerCardData(
+        std::string_view image_path,
+        std::string_view rules,
+        std::string_view extended_rules
+    ) : rules(rules), extended_rules(extended_rules), image_path(image_path) {}
+};
+
+namespace pr::client::power_card_database {
+using enum CardId;
+
+#define Entry(x, ...) [+x - +$$PowersStart] = PowerCardData(#x, __VA_ARGS__)
+
+const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
+    Entry(
+        P_Assimilation,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Babel,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Brasil,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Campbell,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Chomsky,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Darija,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Descriptivism,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Dissimilation,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Elision,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Epenthesis,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_GVS,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Grimm,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Gvprtskvni,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Heffer,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_LinguaFranca,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Nope,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Owl,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Pinker,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_ProtoWorld,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_REA,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Reconstruction,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Regression,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Revival,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Rosetta,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Schleicher,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Schleyer,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_SpellingReform,
+        "Lock one of your sounds, or combine with a sound card to break "
+        "a lock on an adjacent sound",
+        ""
+    ),
+
+    Entry(
+        P_Substratum,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Superstratum,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Urheimat,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Vajda,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Vernacular,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Whorf,
+        "",
+        ""
+    ),
+
+    Entry(
+        P_Zamnenhoff,
+        "",
+        ""
+    ),
+};
+
+struct DatabaseImpl {
+    auto operator[](CardId id) -> const PowerCardData& { return Database[+id - +$$PowersStart]; }
+    auto begin() { return std::begin(Database); }
+    auto end() { return std::end(Database); }
+} PowerCardDatabase;
+
+#undef Entry
+} // namespace pr::client::power_card_database
+
+namespace pr::client {
+using power_card_database::PowerCardDatabase;
+}
+
+// This only takes a renderer to ensure that it is called
+// after the renderer has been initialised.
+void client::InitialiseUI(Renderer&) {
+    for (auto& p : PowerCardDatabase) {
+        p.image.init(DrawableTexture::LoadFromFile(p.image_path));
+    }
+}
 
 // =============================================================================
 //  Helpers
@@ -422,6 +678,19 @@ void Card::draw(Renderer& r) {
     description.draw(r);
     name.draw(r);
 
+    if (image) {
+        // TODO: Image widget.
+        auto wd = CardSize[scale].wd - 2 * Offset[scale];
+        auto ht = wd / 3 * 2;
+        r.draw_texture_repeat(
+            *image,
+            auto{name.pos}
+                .voffset(-name.size(r).ht - Offset[scale])
+                .relative(bounding_box, Size{wd, ht}),
+            Size{wd, ht}
+        );
+    }
+
     for (int i = 0; i < count; ++i) r.draw_rect(
         Position{-3 * offs, -(2 * offs + 2 * i * offs)}.relative(at, sz, {5 * offs, offs}),
         {5 * offs, offs},
@@ -460,8 +729,9 @@ void Card::refresh(Renderer& r) {
 
     // Adjust label positions.
     code.pos = Position{Offset[scale], -Offset[scale]};
+    name.pos = code.pos;
+    if (not code.empty) name.pos.voffset(-code.size(r).ht - 2 * Offset[scale]);
     description.pos = Position::HCenter(10 * Offset[scale]);
-    name.pos = Position(Offset[scale], -(4 * Offset[scale] + code.size(r).ht));
 }
 
 void Card::set_id(CardId ct) {
@@ -503,6 +773,7 @@ void Card::set_id(CardId ct) {
         middle.update_text("");
         description.update_text(std::string{power.rules});
         description.reflow = true;
+        image = &*power.image;
     }
 
     needs_refresh = true;
