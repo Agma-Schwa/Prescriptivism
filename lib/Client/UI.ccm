@@ -25,6 +25,7 @@ class TextEdit;
 class InputSystem;
 class Label;
 class Throbber;
+class Image;
 class Card;
 class Widget;
 class CardGroup;
@@ -181,7 +182,9 @@ public:
 
 protected:
     explicit Widget(Element* parent, Position pos = {})
-        : _parent(parent), pos(pos) {}
+        : _parent(parent), pos(pos) {
+        Assert(parent, "Every widget must have a parent!");
+    }
 
 public:
     /// Event handler for when the mouse is clicked on this element.
@@ -248,12 +251,13 @@ protected:
     /// The hovered element.
     Widget* hovered_element = nullptr;
 
-    Screen() = default;
 
     /// Delete all children of this screen.
     void DeleteAllChildren();
 
 public:
+    Screen() = default;
+
     /// Code to run to reset a screen when it is entered.
     virtual void on_entered() {}
 
@@ -442,6 +446,21 @@ public:
     void draw(Renderer& r) override;
 };
 
+class pr::client::Image : public Widget {
+    Property(DrawableTexture*, texture, nullptr);
+
+    /// The size of the image. If x or y is 0, they are set from the texture.
+    Property(Size, fixed_size, {});
+
+public:
+    Image(Element* parent, Position pos) : Widget(parent, pos) {}
+
+    void draw(Renderer& r) override;
+
+private:
+    void UpdateDimensions();
+};
+
 class pr::client::Card : public Widget {
 public:
     enum Scale : u8 {
@@ -476,7 +495,7 @@ private:
     Label middle;
     Label description;
     Colour outline_colour;
-    DrawableTexture* image;
+    Image image;
 
 public:
     Card(Element* parent, Position pos);

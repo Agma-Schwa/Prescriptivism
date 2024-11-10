@@ -447,10 +447,11 @@ void Client::Run() {
     // call finalise(), so the reason we can’t do much here is not
     // that another thread is using OpenGl, but rather simply the
     // fact that we don’t have the required assets yet.
+    Screen screen;
     Renderer r{1800, 1000};
     Thread asset_loader{AssetLoader::Create(r)};
-    Throbber throb{nullptr, Position::Center()};
     InputSystem startup{r};
+    screen.Create<Throbber>(Position::Center());
 
     // Flag used to avoid a race condition in case the thread
     // finishes just after the user has pressed 'close' since
@@ -461,7 +462,7 @@ void Client::Run() {
     // Display only the throbber until the assets are loaded.
     startup.game_loop([&] {
         Renderer::Frame _ = r.frame();
-        throb.draw(r);
+        screen.draw(r);
         if (not asset_loader.running()) {
             done = true;
             startup.quit = true;

@@ -646,6 +646,25 @@ void Throbber::draw(Renderer& r) {
     vao.draw_vertices();
 }
 
+void Image::draw(Renderer& r) {
+    if (texture) r.draw_texture_sized(*texture, rbox());
+}
+
+void Image::UpdateDimensions() {
+    if (not texture) {
+        UpdateBoundingBox(Size{});
+        return;
+    }
+
+    auto sz = texture->size;
+    if (fixed_size.wd) sz.wd = fixed_size.wd;
+    if (fixed_size.ht) sz.ht = fixed_size.ht;
+    UpdateBoundingBox(sz);
+}
+
+TRIVIAL_CACHING_SETTER(Image, Size, fixed_size, UpdateDimensions());
+TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture, UpdateDimensions());
+
 Card::Card(
     Element* parent,
     Position pos
@@ -653,7 +672,8 @@ Card::Card(
     code{this, Position()},
     name{this, Position()},
     middle{this, Position::Center()},
-    description{this, Position()} {
+    description{this, Position()},
+    image{this, Position()} {
     code.colour = Colour::Black;
     name.colour = Colour::Black;
     middle.colour = Colour::Black;
@@ -679,28 +699,10 @@ void Card::draw(Renderer& r) {
     );
 
     code.draw(r);
+    name.draw(r);
+    image.draw(r);
     middle.draw(r);
     description.draw(r);
-    name.draw(r);
-
-    // TODO: Image widget.
-    if (image) {
-        // Subtract the padding once to account for the padding
-        // above the text, and once more to add padding between
-        // the image and the text.
-        auto voffs = -name.size(r).ht - 2 * Padding[scale];
-
-        // Make the image touch the borders.
-        auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
-        auto ht = wd / 4 * 3;
-        r.draw_texture_repeat(
-            *image,
-            Position{Border[scale].wd, -Border[scale].ht}
-                .voffset(voffs)
-                .relative(bounding_box, Size{wd, ht}),
-            Size{wd, ht}
-        );
-    }
 
     /*auto offs = Padding[scale];
     for (int i = 0; i < count; ++i) r.draw_rect(
@@ -743,8 +745,28 @@ void Card::refresh(Renderer& r) {
     name.pos = power ? Position::HCenter(code.pos) : code.pos;
     if (not code.empty) name.pos.voffset(-code.size(r).ht - 2 * Padding[scale]);
 
-    // FIXME: Adjust position for power cards (put it below the image).
-    description.pos = Position::HCenter(10 * Padding[scale]);
+    // Adjust image position.
+    //
+    // For the vertical offset, subtract the padding once to account
+    // for the padding above the text, and once more to add padding
+    // between the image and the text.
+    if (power) {
+        auto voffs = -name.size(r).ht - 2 * Padding[scale];
+        auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
+        auto ht = wd / 4 * 3; // Arbitrary aspect ratio.
+        image.fixed_size = Size{wd, ht};
+        image.pos = Position{Border[scale].wd, -Border[scale].ht}.voffset(voffs);
+    }
+
+    // The description is either below the image, or at a fixed offset
+    // from the bottom of the card that positions it roughly below the
+    // middle text.
+    description.pos = //
+        power
+            ? auto{image.pos}
+                  .voffset(-image.bounding_box.height() - Padding[scale])
+                  .hoffset(Padding[scale])
+            : Position::HCenter(10 * Padding[scale]);
 }
 
 void Card::set_id(CardId ct) {
@@ -776,7 +798,7 @@ void Card::set_id(CardId ct) {
             }), "\n")
         ); // clang-format on
         description.reflow = false;
-        image = nullptr;
+        image.texture = nullptr;
     }
 
     // Power card properties.
@@ -788,7 +810,7 @@ void Card::set_id(CardId ct) {
         middle.update_text("");
         description.update_text(std::string{power.rules});
         description.reflow = true;
-        image = &*power.image;
+        image.texture = &*power.image;
     }
 
     needs_refresh = true;

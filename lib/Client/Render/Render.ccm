@@ -567,7 +567,7 @@ public:
     ///
     /// If the texture is larger than the requested size, only part of
     /// the texture will be drawn.
-    void draw_texture_repeat(const DrawableTexture& tex, xy pos, Size size);
+    void draw_texture_sized(const DrawableTexture& tex, AABB box);
 
     /// Get the font used to shape a text element.
     auto font_for_text(const ShapedText& r) -> Font&;

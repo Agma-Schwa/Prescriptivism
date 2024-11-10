@@ -887,12 +887,12 @@ void Renderer::draw_texture(
     tex.draw_vertices();
 }
 
-void Renderer::draw_texture_repeat(const DrawableTexture& tex, xy pos, Size size) {
+void Renderer::draw_texture_sized(const DrawableTexture& tex, AABB box) {
     use(image_shader);
-    image_shader.uniform("position", pos.vec());
+    image_shader.uniform("position", box.origin().vec());
     tex.bind();
     VertexArrays vao{VertexLayout::PositionTexture4D};
-    vao.add_buffer(tex.create_vertices(size), GL_TRIANGLE_STRIP);
+    vao.add_buffer(tex.create_vertices(box.size()), GL_TRIANGLE_STRIP);
     vao.draw_vertices();
 }
 
