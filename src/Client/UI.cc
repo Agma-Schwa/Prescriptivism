@@ -757,6 +757,10 @@ void Card::refresh(Renderer& r) {
     // for the padding above the text, and once more to add padding
     // between the image and the text.
     if (power) {
+        // TODO: Use font strut or sth, otherwise, cards where
+        // the text doesn’t fit on one line will move the image
+        // down, and we’d like for the image to always be in the
+        // same position.
         auto voffs = -name.size(r).ht - 2 * Padding[scale];
         Log("Name: {}, Height: {}", name.pos, name.size(r).ht);
         auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
@@ -967,8 +971,8 @@ void Screen::tick(InputSystem& input) {
         e->reset_properties();
 
         // If the cursor is within the element’s bounds, ask it which of its
-        // subelemets is being hovered over.
-        if (e->bounding_box.contains(input.mouse.pos)) {
+        // subelements is being hovered over.
+        if (e->hoverable and e->bounding_box.contains(input.mouse.pos)) {
             hovered_element = e->hovered_child(input);
 
             // If, additionally, we had a click, select the element and fire the

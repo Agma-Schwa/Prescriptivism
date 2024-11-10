@@ -172,6 +172,7 @@ class pr::client::Widget : public Element {
 
 public:
     bool hovered       : 1 = false; ///< Element is being hovered.
+    bool hoverable     : 1 = true;  ///< Element can be hovered over.
     bool selectable    : 1 = false; ///< Element can be selected.
     bool selected      : 1 = false; ///< Element is selected.
     bool visible       : 1 = true;  ///< Element is rendered, ticked, and interactable.
@@ -196,6 +197,7 @@ public:
     /// Determine which of our children is being hovered, if any. Widgets
     /// that don’t have children can just return themselves.
     virtual auto hovered_child(InputSystem&) -> Widget* {
+        if (not hoverable) return nullptr;
         hovered = true;
         return this;
     }
@@ -250,7 +252,6 @@ protected:
 
     /// The hovered element.
     Widget* hovered_element = nullptr;
-
 
     /// Delete all children of this screen.
     void DeleteAllChildren();
@@ -561,9 +562,12 @@ void pr::client::Group<WidgetType>::draw(Renderer& r) {
 template <typename WidgetType>
 auto pr::client::Group<WidgetType>::hovered_child(InputSystem& input) -> Widget* {
     // If two children overlap, we pick the first in the list.
-    for (auto& c : this->children)
-        if (c->bounding_box.contains(input.mouse.pos))
-            return c->hovered_child(input);
+    for (auto& c : this->children) {
+        if (c->bounding_box.contains(input.mouse.pos)) {
+            auto child = c->hovered_child(input);
+            if (child) return child;
+        }
+    }
 
     // The group itself is a proxy widget that cannot be hovered.
     return nullptr;

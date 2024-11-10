@@ -332,6 +332,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     // above everything else.
     preview = &Create<Card>(Position::VCenter(-100));
     preview->visible = false;
+    preview->hoverable = false;
     preview->scale = Card::Preview;
 
     client.enter_screen(*this);
@@ -354,7 +355,7 @@ void GameScreen::tick(InputSystem& input) {
 
     // Preview any card that the user is hovering over.
     auto c = dynamic_cast<Card*>(hovered_element);
-    if (c and c != preview) {
+    if (c) {
         preview->visible = true;
         preview->id = c->id;
     } else {
