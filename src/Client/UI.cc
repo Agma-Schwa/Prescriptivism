@@ -360,9 +360,8 @@ void Label::refresh(Renderer& r) {
     text.reflow(r, parent->bounding_box.width());
 }
 
-void Label::set_font_size(FontSize new_value) {
-    text.font_size = new_value;
-}
+void Label::set_align(TextAlign new_value) { text.align = new_value; }
+void Label::set_font_size(FontSize new_value) { text.font_size = new_value; }
 
 TRIVIAL_CACHING_SETTER(Label, bool, reflow);
 
@@ -661,7 +660,6 @@ Card::Card(
 }
 
 void Card::draw(Renderer& r) {
-    auto offs = Offset[scale];
     auto sz = CardSize[scale];
     auto at = pos.relative(parent->bounding_box, sz);
 
@@ -673,29 +671,42 @@ void Card::draw(Renderer& r) {
         Colour{50, 50, 200, 255}
     );
 
+    r.draw_outline_rect(
+        AABB{at, sz}.shrink(Border[scale].wd, Border[scale].ht),
+        Size{Border[scale]},
+        outline_colour
+    );
+
     code.draw(r);
     middle.draw(r);
     description.draw(r);
     name.draw(r);
 
+    // TODO: Image widget.
     if (image) {
-        // TODO: Image widget.
-        auto wd = CardSize[scale].wd - 2 * Offset[scale];
-        auto ht = wd / 3 * 2;
+        // Subtract the padding once to account for the padding
+        // above the text, and once more to add padding between
+        // the image and the text.
+        auto voffs = -name.size(r).ht - 2 * Padding[scale];
+
+        // Make the image touch the borders.
+        auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
+        auto ht = wd / 4 * 3;
         r.draw_texture_repeat(
             *image,
-            auto{name.pos}
-                .voffset(-name.size(r).ht - Offset[scale])
+            Position{Border[scale].wd, -Border[scale].ht}
+                .voffset(voffs)
                 .relative(bounding_box, Size{wd, ht}),
             Size{wd, ht}
         );
     }
 
+    /*auto offs = Padding[scale];
     for (int i = 0; i < count; ++i) r.draw_rect(
         Position{-3 * offs, -(2 * offs + 2 * i * offs)}.relative(at, sz, {5 * offs, offs}),
         {5 * offs, offs},
         Colour::Black
-    );
+    );*/
 }
 
 void Card::refresh(Renderer& r) {
@@ -719,19 +730,17 @@ void Card::refresh(Renderer& r) {
     needs_full_refresh = false;
 
     // Adjust label font sizes.
+    bool power = CardDatabase[+id].is_power();
     code.font_size = CodeSizes[scale];
     name.font_size = NameSizes[scale];
     middle.font_size = MiddleSizes[scale];
-    description.font_size = //
-        CardDatabase[+id].is_power()
-            ? PowerDescriptionSizes[scale]
-            : SoundDescriptionSizes[scale];
+    description.font_size = (power ? PowerDescriptionSizes : SoundDescriptionSizes)[scale];
 
     // Adjust label positions.
-    code.pos = Position{Offset[scale], -Offset[scale]};
-    name.pos = code.pos;
-    if (not code.empty) name.pos.voffset(-code.size(r).ht - 2 * Offset[scale]);
-    description.pos = Position::HCenter(10 * Offset[scale]);
+    code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
+    name.pos = power ? Position::HCenter(code.pos) : code.pos;
+    if (not code.empty) name.pos.voffset(-code.size(r).ht - 2 * Padding[scale]);
+    description.pos = Position::HCenter(10 * Padding[scale]);
 }
 
 void Card::set_id(CardId ct) {
@@ -745,6 +754,7 @@ void Card::set_id(CardId ct) {
 
     // Sound card properties.
     if (data.type == CardType::SoundCard) {
+        outline_colour = Colour::RGBA(data.is_consonant() ? 0xe066'80ff : 0xe8b4'4eff);
         code.update_text(std::format( //
             "{}{}{}{}",
             data.is_consonant() ? 'P' : 'F',
@@ -768,6 +778,7 @@ void Card::set_id(CardId ct) {
     // Power card properties.
     else {
         auto& power = PowerCardDatabase[ct];
+        outline_colour = Colour::RGBA(0x7db8'f1ff);
         name.update_text(std::string{data.name});
         code.update_text("");
         middle.update_text("");

@@ -76,6 +76,7 @@ struct pr::client::Size {
     i32 ht{};
 
     constexpr Size() = default;
+    constexpr Size(i32 both) : wd(both), ht(both) {}
     constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
     constexpr Size(u32 wd, u32 ht) : wd(i32(wd)), ht(i32(ht)) {}
 

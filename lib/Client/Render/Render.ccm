@@ -81,12 +81,13 @@ LIBBASE_DEFINE_FLAG_ENUM(TextStyle);
 struct pr::client::Colour {
     PR_SERIALISE(r, g, b, a);
 
-    u8 r;
-    u8 g;
-    u8 b;
-    u8 a;
+    u8 r{};
+    u8 g{};
+    u8 b{};
+    u8 a{255};
 
     /// Create a new colour.
+    constexpr Colour() = default;
     constexpr Colour(u8 r, u8 g, u8 b, u8 a = 255) : r(r), g(g), b(b), a(a) {}
     constexpr static auto ABGR(u32 abgr) -> Colour {
         if constexpr (std::endian::native == std::endian::big)
@@ -97,6 +98,18 @@ struct pr::client::Colour {
             u8(abgr >> 8 & 0xFF),
             u8(abgr >> 16 & 0xFF),
             u8(abgr >> 24 & 0xFF),
+        };
+    }
+
+    constexpr static auto RGBA(u32 rgba) -> Colour {
+        if constexpr (std::endian::native == std::endian::big)
+            rgba = std::byteswap(rgba);
+
+        return {
+            u8(rgba >> 24 & 0xFF),
+            u8(rgba >> 16 & 0xFF),
+            u8(rgba >> 8 & 0xFF),
+            u8(rgba & 0xFF),
         };
     }
 
@@ -150,19 +163,25 @@ struct pr::client::AABB {
     constexpr AABB(xy pos, Size sz) : min(pos), max(pos.x + sz.wd, pos.y + sz.ht) {}
 
     /// Check if this box contains a point.
-    auto contains(xy) const -> bool;
+    [[nodiscard]] auto contains(xy) const -> bool;
 
     /// Get the height of this box.
-    constexpr auto height() const -> i32 { return max.y - min.y; }
+    [[nodiscard]] constexpr auto height() const -> i32 { return max.y - min.y; }
 
     /// Get the origin point of this box.
-    constexpr auto origin() const -> xy { return min; }
+    [[nodiscard]] constexpr auto origin() const -> xy { return min; }
+
+    /// Shrink the box by a given amount.
+    [[nodiscard]] constexpr auto shrink(i32 amount) const -> AABB { return shrink(amount, amount); }
+    [[nodiscard]] constexpr auto shrink(i32 x, i32 y) const -> AABB {
+        return {min + xy(x, y), max - xy(x, y)};
+    }
 
     /// Get the size of this box.
-    constexpr auto size() const -> Size { return {width(), height()}; }
+    [[nodiscard]] constexpr auto size() const -> Size { return {width(), height()}; }
 
     /// Get the width of this box.
-    constexpr auto width() const -> i32 { return max.x - min.x; }
+    [[nodiscard]] constexpr auto width() const -> i32 { return max.x - min.x; }
 };
 
 template <>
@@ -266,7 +285,7 @@ class pr::client::Text {
     mutable bool needs_multiple_lines = false;
 
 public:
-    Text(): _align(TextAlign::SingleLine), _style(TextStyle::Regular) {}
+    Text() : _align(TextAlign::SingleLine), _style(TextStyle::Regular) {}
     Text(
         ShapedText t,
         TextAlign align = TextAlign::SingleLine,
@@ -508,11 +527,30 @@ public:
     void draw_line(xy start, xy end, Colour c = Colour::White);
 
     /// Draw an outline around a rectangle.
-    void draw_outline_rect(xy pos, Size size, i32 thickness = 1, Colour c = Colour::White);
+    ///
+    /// \param pos The position of the bottom left corner of the rectangle.
+    /// \param size The size of the rectangle.
+    /// \param thickness The thickness of the outline; can be different for x and y.
+    /// \param c The colour of the outline.
+    void draw_outline_rect(
+        xy pos,
+        Size size,
+        Size thickness = 1,
+        Colour c = Colour::White
+    );
+
+    /// \see draw_outline_rect() above.
+    void draw_outline_rect(
+        AABB box,
+        Size thickness = 1,
+        Colour c = Colour::White
+    ) { draw_outline_rect(box.origin(), box.size(), thickness, c); }
 
     /// Draw a rectangle at a position in world coordinates.
-    void draw_rect(AABB box, Colour c = Colour::White) { draw_rect(box.origin(), box.size(), c); }
     void draw_rect(xy pos, Size size, Colour c = Colour::White);
+    void draw_rect(AABB box, Colour c = Colour::White) {
+        draw_rect(box.origin(), box.size(), c);
+    }
 
     /// Draw text at a position in world coordinates.
     void draw_text(const ShapedText& text, xy pos, Colour c = Colour::White);

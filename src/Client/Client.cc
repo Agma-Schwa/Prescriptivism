@@ -425,12 +425,12 @@ void Client::TickNetworking() {
 // =============================================================================
 Client::Client(Renderer r) : renderer(std::move(r)) {
     std::array pi {
-        sc::StartGame::PlayerInfo{constants::Word{CardId::C_b, CardId::C_b, CardId::C_b, CardId::C_b, CardId::C_b, CardId::C_b}, "Player"},
-        sc::StartGame::PlayerInfo{constants::Word{CardId::C_d, CardId::C_d, CardId::C_d, CardId::C_d, CardId::C_d, CardId::C_d}, "Player"}
+        sc::StartGame::PlayerInfo{constants::Word{CardId::C_b, CardId::V_a, CardId::V_e, CardId::C_b, CardId::C_b, CardId::C_b}, "Player"},
+        sc::StartGame::PlayerInfo{constants::Word{CardId::C_d, CardId::V_y, CardId::C_d, CardId::C_d, CardId::V_i, CardId::C_d}, "Player"}
     };
 
     // For testing.
-    sc::StartGame sg{pi, {CardId::P_SpellingReform, CardId::C_f, CardId::C_f}, 0};
+    sc::StartGame sg{pi, {CardId::P_SpellingReform, CardId::C_f, CardId::V_u}, 0};
     game_screen.enter(sg);
 }
 

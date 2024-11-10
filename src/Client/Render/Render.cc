@@ -191,6 +191,7 @@ void Text::reflow(Renderer& r, i32 width) {
 }
 
 void Text::set_align(TextAlign a) {
+    if (_align == a) return;
     _align = a;
     dirty = true;
 }
@@ -201,6 +202,7 @@ void Text::set_font_size(FontSize new_value) {
 }
 
 void Text::set_style(TextStyle s) {
+    if (_style == s) return;
     _style = s;
     dirty = true;
 }
@@ -783,46 +785,52 @@ void Renderer::draw_line(xy start, xy end, Colour c) {
     vao.draw_vertices();
 }
 
-void Renderer::draw_outline_rect(xy pos, Size size, i32 thickness, Colour c) {
+void Renderer::draw_outline_rect(
+    xy pos,
+    Size size,
+    Size thickness,
+    Colour c
+) {
     use(primitive_shader);
     primitive_shader.uniform("in_colour", c.vec4());
     auto [x, y] = pos;
     auto [wd, ht] = size;
+    auto [tx, ty] = thickness;
     VertexArrays vao{VertexLayout::Position2D};
 
     // Draw four rectangles around the original rectangle.
-    vec2 verts[] {
+    vec2 verts[]{
         // Left.
         {x, y},
-        {x - thickness, y},
+        {x - tx, y},
         {x, y + ht},
         {x, y + ht},
-        {x - thickness, y},
-        {x - thickness, y + ht},
+        {x - tx, y},
+        {x - tx, y + ht},
 
         // Right.
-        {x + wd , y},
-        {x + wd + thickness, y},
-        {x + wd , y + ht},
-        {x + wd , y + ht},
-        {x + wd + thickness, y},
-        {x + wd + thickness, y + ht},
+        {x + wd, y},
+        {x + wd + tx, y},
+        {x + wd, y + ht},
+        {x + wd, y + ht},
+        {x + wd + tx, y},
+        {x + wd + tx, y + ht},
 
         // Top.
-        {x - thickness, y + ht},
-        {x - thickness, y + ht + thickness},
-        {x + wd + thickness, y + ht},
-        {x + wd + thickness, y + ht},
-        {x - thickness, y + ht + thickness},
-        {x + wd + thickness, y + ht + thickness},
+        {x - tx, y + ht},
+        {x - tx, y + ht + ty},
+        {x + wd + tx, y + ht},
+        {x + wd + tx, y + ht},
+        {x - tx, y + ht + ty},
+        {x + wd + tx, y + ht + ty},
 
         // Bottom.
-        {x - thickness, y},
-        {x - thickness, y - thickness},
-        {x + wd + thickness, y},
-        {x + wd + thickness, y},
-        {x - thickness, y - thickness},
-        {x + wd + thickness, y - thickness},
+        {x - tx, y},
+        {x - tx, y - ty},
+        {x + wd + tx, y},
+        {x + wd + tx, y},
+        {x - tx, y - ty},
+        {x + wd + tx, y - ty},
 
     };
 
