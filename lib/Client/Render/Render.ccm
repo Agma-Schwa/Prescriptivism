@@ -459,6 +459,7 @@ private:
     Font(FT_Face ft_face, u32 size, TextStyle style);
 
 public:
+    i32 x_height{};
     Font() = default;
 
     /// Shape text using this font.

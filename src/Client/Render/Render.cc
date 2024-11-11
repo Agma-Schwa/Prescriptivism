@@ -154,10 +154,6 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     FT_Set_Pixel_Sizes(ft_face, 0, size);
     f32 em = f32(ft_face->units_per_EM);
 
-    // Compute the font’s strut.
-    strut_asc = size * ft_face->ascender / em;
-    strut_desc = size * -ft_face->descender / em;
-
     // Compute the interline skip.
     // Note: the interline skip for the font we’re using is absurd
     // if calculated this way, so just do it manually.
@@ -181,6 +177,17 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     Assert(f, "Failed to create HarfBuzz font");
     hb_font = f;
     hb_ft_font_set_funcs(hb_font.get());
+
+    // Compute the font strut.
+    //
+    // Freetype tends to give us stupid nonsense metrics that make no
+    // sense whatsoever, so ignore them and just do it the dumb way.
+    FT_Load_Char(face, 'l', FT_LOAD_RENDER);
+    strut_asc = face->glyph->bitmap.rows;
+    FT_Load_Char(face, 'x', FT_LOAD_RENDER);
+    u32 base = face->glyph->bitmap.rows;
+    FT_Load_Char(face, 'q', FT_LOAD_RENDER);
+    strut_desc = face->glyph->bitmap.rows - base;
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {

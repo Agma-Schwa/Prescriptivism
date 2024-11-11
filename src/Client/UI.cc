@@ -387,13 +387,13 @@ void TextBox::UpdateText(ShapedText new_text) {
     needs_refresh = true;
 }
 
-auto TextBox::TextPos(const ShapedText& text) -> xy {
-    return Position::Center().voffset(i32(text.depth)).relative(rbox(), text.size());
+auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
+    return Position::Center().relative(rbox(), Size{text.width, f32(r.font_for_text(text).strut_split().first)});
 }
 
 void TextBox::draw(Renderer& r) {
     auto& text = label.empty() ? placeholder : label;
-    auto pos = TextPos(text);
+    auto pos = TextPos(r, text);
     r.draw_text(text, pos, label.empty() ? Colour::Grey : Colour::White);
     if (cursor_offs != -1) {
         auto [asc, desc] = r.font_for_text(label).strut_split();
@@ -520,7 +520,7 @@ void TextEdit::event_click(InputSystem& input) {
     // we stop and go back to the one before it.
     no_blink_ticks = 20;
     i32 mx = input.mouse.pos.x;
-    i32 x0 = TextPos(label).x;
+    i32 x0 = TextPos(input.renderer, label).x;
     i32 x1 = x0 + i32(label.width);
     if (mx < x0) cursor = 0;
     else if (mx > x1) cursor = i32(text.size());
