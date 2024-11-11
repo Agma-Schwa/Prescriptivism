@@ -295,6 +295,13 @@ void Server::SetUpGame() {
     }
     rgs::shuffle(players, rng);
 
+    // FIXME: FOR TESTING ONLY. COMMENT THIS OUT IN PRODUCTION.
+    auto it = rgs::find_if(players, [](auto& p) { return p->name == "debugger" or p->name == "console"; });
+    if (it != players.end()) {
+        Log("Debugger or console found.");
+        std::iter_swap(it, players.begin());
+    }
+
     // Initialise player IDs.
     for (auto [i, p] : players | vws::enumerate) p->id = u8(i);
 }

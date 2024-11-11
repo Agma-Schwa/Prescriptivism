@@ -309,17 +309,94 @@ void WordChoiceScreen::tick(InputSystem& input) {
 GameScreen::GameScreen(Client& c) : client(c) {
 }
 
-void GameScreen::enter(packets::sc::StartGame sg) {
+auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
+    Assert(c);
+    auto cg = dynamic_cast<CardGroup*>(c->parent);
+    if (not cg) return nullptr;
+    auto p = player_map.find(cg);
+    if (p == player_map.end()) return nullptr;
+    return p->second;
+}
+
+void GameScreen::TickSelection() {
+    if (not selected_element) return;
+    auto card = dynamic_cast<Card*>(selected_element);
+    Assert(card, "Currently, only cards are selectable");
+
+    // We selected one of our own cards. Make it so we can now select
+    // other player’s cards. Unselect the card manually in that case
+    // since we don’t want to clear the 'selected' property.
+    if (card->parent == our_hand) {
+        // We selected the same card again; do nothing.
+        if (card == our_selected_card) return;
+
+        // Unselect the previously selected card, set the current selected
+        // element of the screen to null, and save it as our selected card;
+        if (our_selected_card) our_selected_card->unselect();
+        our_selected_card = card;
+
+        // Do not unselect this card as we want to keep it selected.
+        selected_element = nullptr;
+
+        // Make other player’s cards selectable if we can play this card on it.
+        for (auto& p : other_players) {
+            auto cards = p.cards();
+            for (auto [i, c] : p.word->children | vws::enumerate) {
+                auto v = validation::ValidatePlaySoundCard(our_selected_card->id, cards, i);
+                c->selectable = v == validation::PlaySoundCardValidationResult::Valid;
+            }
+        }
+        return;
+    }
+
+    // Otherwise, we selected another player’s card. We should never get here
+    // if we didn’t previously select one of our cards.
+    Assert(our_selected_card, "We should have selected one of our cards");
+    auto owner = PlayerForCardInWord(card);
+    Assert(owner, "Selected card without owner?");
+
+    // Make opponents’ cards non-selectable again.
+    // TODO: We’ll need to amend this once we allow selecting multiple cards.
+    for (auto& p : other_players)
+        for (auto& c : p.word->children)
+            c->selectable = false;
+
+    Log(
+        "Targeting opponent {}’s {} with {}",
+        owner->name,
+        CardDatabase[+card->id].name,
+        CardDatabase[+our_selected_card->id].name
+    );
+
+    // TODO: Send action to server.
+    selected_element->unselect();
+    our_selected_card->unselect();
+    our_selected_card = nullptr;
+}
+
+void GameScreen::draw(Renderer& r) {
+    Screen::draw(r);
+
+    // Draw a white rectangle over our hand if it’s not our turn.
+    if (not our_turn) r.draw_rect(
+        our_hand->bounding_box,
+        Colour{255, 255, 255, 30}
+    );
+}
+
+
+void GameScreen::enter(sc::StartGame sg) {
     DeleteAllChildren();
 
     other_players.clear();
     other_words = &Create<Group<>>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
         if (i == sg.player_id) {
-            player_id = sg.player_id;
+            us = Player("You", sg.player_id);
+            us.word = &Create<CardGroup>(Position(), p.word);
             our_hand = &Create<CardGroup>(Position(), sg.hand);
-            our_word = &Create<CardGroup>(Position(), p.word);
             our_hand->scale = Card::Hand;
+            player_map[us.word] = &us;
             continue;
         }
 
@@ -327,6 +404,11 @@ void GameScreen::enter(packets::sc::StartGame sg) {
         op.word = &other_words->Create<CardGroup>(Position(), p.word);
         op.word->scale = Card::OtherPlayer;
     }
+
+    // Build the player map *after* creating all the players, since they
+    // might move while in the loop above.
+    player_map.clear();
+    for (auto& p : other_players) player_map[p.word] = &p;
 
     // The preview must be created at the end so it’s drawn
     // above everything else.
@@ -340,7 +422,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
 
 void GameScreen::on_refresh(Renderer&) {
     our_hand->pos = Position::HCenter(50).anchor_to(Anchor::Center);
-    our_word->pos = Position::HCenter(400);
+    us.word->pos = Position::HCenter(400);
     other_words->pos = Position::HCenter(-100);
     other_words->max_gap = 100;
 }
@@ -352,40 +434,7 @@ void GameScreen::tick(InputSystem& input) {
     }
 
     Screen::tick(input);
-
-    // Allow selecting valid targets when selecting one’s own card
-    if (rgs::any_of(our_hand->children, [](auto& x) { return x->selected; })) {
-        auto selected_card = dynamic_cast<Card*>(selected_element);
-        our_selected_card = selected_card;
-        Assert(selected_element, "The card should have been selected");
-        for (auto& p : other_players) {
-            std::vector<CardId> other_word;
-            for (auto& c : p.word->children) {
-                other_word.push_back(c->get_id());
-            }
-            for (auto [i, c] : p.word->children | vws::enumerate) {
-                if (validation::ValidatePlaySoundCard(selected_card->get_id(), other_word, i) == validation::PlaySoundCardValidationResult::Valid)
-                    c->selectable = true;
-            }
-        }
-    } else {
-        for (auto& p : other_players) {
-            for (auto& c : p.word->children) {
-                c->selectable = false;
-            }
-        }
-    }
-
-    // If the current selected card is in another player’s word, send the action
-    for (auto& p : other_players) {
-        if (rgs::any_of(p.word->children, [](auto& x) { return x->selected; })) {
-            // TODO send action to player
-            auto selected_card = dynamic_cast<Card*>(selected_element);
-            Log("Targetting oponent {}’s {} with {}", p.name, CardDatabase[+our_selected_card->get_id()].name, CardDatabase[+selected_card->get_id()].name);
-            our_selected_card = nullptr;
-            selected_element->unselect();
-        }
-    }
+    TickSelection();
 
     // Preview any card that the user is hovering over.
     auto c = dynamic_cast<Card*>(hovered_element);
@@ -399,16 +448,12 @@ void GameScreen::tick(InputSystem& input) {
 
 void GameScreen::start_turn() {
     our_turn = true;
-    for (auto& c : our_hand->children) {
-        c->selectable = true;
-    }
+    our_hand->selectable = true;
 }
 
 void GameScreen::end_turn() {
     our_turn = false;
-    for (auto& c : our_hand->children) {
-        c->selectable = false;
-    }
+    our_hand->selectable = false;
 }
 
 // =============================================================================

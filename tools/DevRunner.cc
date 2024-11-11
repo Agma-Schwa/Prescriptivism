@@ -16,7 +16,7 @@ int main() {
     _Exit(42);
 }
 
-int main() {
+int main(int argc, char** argv) {
     setpgid(0, 0);
 
     std::atexit([] { Kill(); });
@@ -58,7 +58,7 @@ int main() {
         abort();
     }
 
-    if (fork() == 0) {
+    if ((argc < 2 or std::string_view{argv[1]} != "-1") and fork() == 0) {
         execl(
             "./Prescriptivism",
             "Prescriptivism",

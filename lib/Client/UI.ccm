@@ -530,6 +530,9 @@ class pr::client::Group : public Widget
     /// (e.g. INT_MAX) to use equal gaps.
     Property(i32, max_gap, 10);
 
+    /// Write-only property to make the group selectable.
+    Writeonly(bool, selectable);
+
 public:
     Group(Element* parent, Position pos) : Widget(parent, pos) {}
 
@@ -635,6 +638,11 @@ void pr::client::Group<WidgetType>::set_max_gap(i32 new_value) {
     if (new_value == _max_gap) return;
     _max_gap = new_value;
     needs_refresh = true;
+}
+
+template <typename WidgetType>
+void pr::client::Group<WidgetType>::set_selectable(bool new_value) {
+    for (auto& c : this->children) c->selectable = new_value;
 }
 
 template <>
