@@ -588,16 +588,23 @@ void pr::client::Group<WidgetType>::draw(Renderer& r) {
 
 template <typename WidgetType>
 auto pr::client::Group<WidgetType>::hovered_child(InputSystem& input) -> Widget* {
-    // If two children overlap, we pick the first in the list.
-    for (auto& c : this->children) {
-        if (c->bounding_box.contains(input.mouse.pos)) {
-            auto child = c->hovered_child(input);
-            if (child) return child;
+    auto Get = [&]<typename T>(T&& range) -> Widget* {
+        for (auto& c : std::forward<T>(range)) {
+            if (c->bounding_box.contains(input.mouse.pos)) {
+                auto child = c->hovered_child(input);
+                if (child) return child;
+            }
         }
-    }
 
-    // The group itself is a proxy widget that cannot be hovered.
-    return nullptr;
+        // The group itself is a proxy widget that cannot be hovered.
+        return nullptr;
+    };
+
+    // If two children overlap, we pick the first in the list, unless
+    // the maximum gap is negative (which means that the widgets may
+    // overlap with widgets on the right being above), in which case
+    // we pick the last one.
+    return max_gap < 0 ? Get(this->children | vws::reverse) : Get(this->children);
 }
 
 template <typename WidgetType>
@@ -619,6 +626,10 @@ void pr::client::Group<WidgetType>::refresh(Renderer& r) {
     for (auto& c : this->children) {
         c->refresh(r);
         total_width += c->bounding_box.size().wd;
+
+        // If the gap is *negative*, i.e. we’re supposed to overlap
+        // elements, factor it into the calculation.
+        if (max_gap < 0) total_width += max_gap;
     }
 
     // Compute gap size.
@@ -629,6 +640,8 @@ void pr::client::Group<WidgetType>::refresh(Renderer& r) {
             max_gap,
             i32((parent_wd - total_width) / (this->children.size() - 1))
         );
+    } else if (max_gap < 0) {
+        gap = max_gap;
     }
 
     // Position the children.
@@ -640,7 +653,7 @@ void pr::client::Group<WidgetType>::refresh(Renderer& r) {
 
     // Update our bounding box.
     auto ht = rgs::max(this->children | vws::transform([&](auto& c) { return c->bounding_box.size().ht; }));
-    auto sz = Size{total_width + i32(this->children.size() - 1) * gap, ht};
+    auto sz = Size{x - gap, ht};
     SetBoundingBox(AABB{pos.relative(parent->bounding_box, sz), sz});
 
     // And refresh the children again now that we know where everything is.

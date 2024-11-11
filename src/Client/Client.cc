@@ -396,6 +396,7 @@ void GameScreen::enter(sc::StartGame sg) {
             us.word = &Create<CardGroup>(Position(), p.word);
             our_hand = &Create<CardGroup>(Position(), sg.hand);
             our_hand->scale = Card::Hand;
+            our_hand->max_gap = -Card::CardSize[Card::Hand].wd / 2;
             continue;
         }
 
