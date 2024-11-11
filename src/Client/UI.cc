@@ -705,17 +705,17 @@ void Card::draw(Renderer& r) {
     if (scale > OtherPlayer or CardDatabase[+id].is_power())
         name.draw(r);
 
-    // TODO: Sounds that have been deleted or added to the word
-    //       should be greyed out / orange (or a plus in the corner),
-    //       respectively.
-
-    // TODO: Reenable for power cards only.
-    /*auto offs = Padding[scale];
-    for (int i = 0; i < count; ++i) r.draw_rect(
-        Position{-3 * offs, -(2 * offs + 2 * i * offs)}.relative(at, sz, {5 * offs, offs}),
-        {5 * offs, offs},
-        Colour::Black
-    );*/
+    if (CardDatabase[+id].is_sound()) {
+        auto offs = Padding[scale];
+        for (int i = 0; i < count; ++i) r.draw_rect(
+            Position{-3 * offs, -(2 * offs + 2 * i * offs)}
+                .hoffset(-Border[scale].ht)
+                .voffset(-Border[scale].wd)
+                .relative(bounding_box, {5 * offs, offs}),
+            {5 * offs, offs},
+            Colour::Black
+        );
+    }
 
     // Draw a white rectangle on top of this card if it is inactive.
     if (display_state == DisplayState::Inactive) r.draw_rect(
@@ -723,6 +723,10 @@ void Card::draw(Renderer& r) {
         Colour{255, 255, 255, 200},
         BorderRadius[scale]
     );
+
+    // TODO: Sounds that have been deleted or added to the word
+    //       should be greyed out / orange (or a plus in the corner),
+    //       respectively.
 }
 
 void Card::refresh(Renderer& r) {
