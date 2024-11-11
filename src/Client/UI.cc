@@ -705,7 +705,6 @@ void Card::draw(Renderer& r) {
     if (scale > OtherPlayer or CardDatabase[+id].is_power())
         name.draw(r);
 
-
     // TODO: Sounds that have been deleted or added to the word
     //       should be greyed out / orange (or a plus in the corner),
     //       respectively.

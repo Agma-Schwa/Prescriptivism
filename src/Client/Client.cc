@@ -517,13 +517,11 @@ void Client::handle(sc::Draw dr) {
 void Client::handle(sc::StartTurn) {
     Assert(current_screen == &game_screen, "StartTurn should only happen after StartGame");
     game_screen.start_turn();
-    Log("TODO: Handle StartTurn");
 }
 
 void Client::handle(sc::EndTurn) {
     Assert(current_screen == &game_screen, "StartTurn should only happen after StartGame");
     game_screen.end_turn();
-    Log("TODO: Handle EndTurn");
 }
 
 void Client::handle(sc::StartGame sg) {
