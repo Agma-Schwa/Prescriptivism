@@ -188,6 +188,9 @@ protected:
     }
 
 public:
+    /// Unselect the element
+    void unselect();
+
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
 
@@ -201,6 +204,9 @@ public:
         hovered = true;
         return this;
     }
+
+    /// Get the widget’s parent screen
+    auto parent_screen() -> Screen &;
 
     /// Recompute bounding box etc.
     virtual void refresh(Renderer&) {}
@@ -289,6 +295,9 @@ public:
     auto visible() {
         return children | vws::filter([](auto& e) { return e->visible; });
     }
+
+
+    friend void Widget::unselect();
 };
 
 /// Label that supports reflowing text automatically.

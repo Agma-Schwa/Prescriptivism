@@ -289,7 +289,7 @@ void WordChoiceScreen::tick(InputSystem& input) {
 
         // If the selected card was clicked, deselect it.
         else if (selected.value() == idx) {
-            it->get()->selected = false;
+            it->get()->unselect();
             selected = std::nullopt;
         }
 
@@ -297,7 +297,7 @@ void WordChoiceScreen::tick(InputSystem& input) {
         else {
             cards->needs_refresh = true;
             std::iter_swap(cards->children.begin() + selected.value(), it);
-            it->get()->selected = false; // Deselect *after* swapping.
+            it->get()->unselect(); // Deselect *after* swapping.
             selected = std::nullopt;
         }
     }
@@ -383,7 +383,7 @@ void GameScreen::tick(InputSystem& input) {
             auto selected_card = dynamic_cast<Card*>(selected_element);
             Log("Targetting oponent {}’s {} with {}", p.name, CardDatabase[+our_selected_card->get_id()].name, CardDatabase[+selected_card->get_id()].name);
             our_selected_card = nullptr;
-            for (auto& c : p.word->children) c->selected = false;
+            selected_element->unselect();
         }
     }
 

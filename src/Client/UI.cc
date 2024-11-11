@@ -873,6 +873,27 @@ TRIVIAL_CACHING_SETTER(CardGroup, bool, autoscale);
 TRIVIAL_CACHING_SETTER(CardGroup, i32, max_width);
 TRIVIAL_CACHING_SETTER(CardGroup, Scale, scale);
 
+auto Widget::parent_screen() -> Screen & {
+    Element* e = parent;
+    for (;;) {
+        if (auto screen = dynamic_cast<Screen*>(e)) return *screen;
+        auto widget = dynamic_cast<Widget*>(e)
+        Assert(widget, "Widget without parent screen");
+        e = widget->parent;
+    }
+}
+
+void Widget::unselect(){
+    auto& parent = parent_screen();
+    if (selected) {
+        selected = false;
+        if (parent.selected_element == this)
+            parent.selected_element = nullptr;
+    }
+
+}
+
+
 // =============================================================================
 //  Input Handler.
 // =============================================================================
@@ -968,10 +989,7 @@ void Screen::tick(InputSystem& input) {
     hovered_element = nullptr;
 
     // Deselect the currently selected element if there was a click.
-    if (input.mouse.left and selected_element) {
-        selected_element->selected = false;
-        selected_element = nullptr;
-    }
+    if (input.mouse.left and selected_element) selected_element->unselect();
 
     // Tick each child.
     for (auto& e : visible()) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cmake --build out
+cmake --build out -- -j $(($(nproc) - 1))
 ./PrescriptivismServer --pwd password &
 srv=$!
 
