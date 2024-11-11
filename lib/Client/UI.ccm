@@ -206,7 +206,7 @@ public:
     }
 
     /// Get the widget’s parent screen
-    auto parent_screen() -> Screen &;
+    auto parent_screen() -> Screen&;
 
     /// Recompute bounding box etc.
     virtual void refresh(Renderer&) {}
@@ -295,7 +295,6 @@ public:
     auto visible() {
         return children | vws::filter([](auto& e) { return e->visible; });
     }
-
 
     friend void Widget::unselect();
 };
@@ -489,6 +488,15 @@ public:
         NumScales
     };
 
+    enum struct DisplayState : u8 {
+        /// Used for most cards.
+        Default,
+
+        /// A card in hand that can not be interacted with, either because it’s
+        /// not our turn, or because there are no valid targets.
+        Inactive,
+    };
+
     static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
     static constexpr u16 Padding[NumScales] = {1, 2, 4, 6};
 
@@ -517,6 +525,8 @@ private:
     Image image;
 
 public:
+    DisplayState display_state = DisplayState::Default;
+
     Card(Element* parent, Position pos);
 
     void draw(Renderer& r) override;
@@ -553,6 +563,9 @@ class pr::client::CardGroup : public Group<Card> {
     /// Whether the group should scale to the next available
     /// card size if possible.
     Property(bool, autoscale, false);
+
+    /// Write-only property to set the display state.
+    Writeonly(Card::DisplayState, display_state);
 
 public:
     static constexpr i32 CardGaps[Scale::NumScales]{5, 10, 20};

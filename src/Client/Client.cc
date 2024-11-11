@@ -318,6 +318,13 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
     return p->second;
 }
 
+void GameScreen::ResetOpponentWords() {
+    for (auto& p : other_players) {
+        p.word->selectable = false;
+        p.word->display_state = Card::DisplayState::Default;
+    }
+}
+
 void GameScreen::TickSelection() {
     if (not selected_element) return;
     auto card = dynamic_cast<Card*>(selected_element);
@@ -327,8 +334,13 @@ void GameScreen::TickSelection() {
     // other player’s cards. Unselect the card manually in that case
     // since we don’t want to clear the 'selected' property.
     if (card->parent == our_hand) {
-        // We selected the same card again; do nothing.
-        if (card == our_selected_card) return;
+        // We selected the same card again; unselect it this time.
+        if (card == our_selected_card) {
+            ResetOpponentWords();
+            our_selected_card = nullptr;
+            card->unselect();
+            return;
+        }
 
         // Unselect the previously selected card, set the current selected
         // element of the screen to null, and save it as our selected card;
@@ -344,6 +356,7 @@ void GameScreen::TickSelection() {
             for (auto [i, c] : p.word->children | vws::enumerate) {
                 auto v = validation::ValidatePlaySoundCard(our_selected_card->id, cards, i);
                 c->selectable = v == validation::PlaySoundCardValidationResult::Valid;
+                c->display_state = c->selectable ? Card::DisplayState::Default : Card::DisplayState::Inactive;
             }
         }
         return;
@@ -357,9 +370,7 @@ void GameScreen::TickSelection() {
 
     // Make opponents’ cards non-selectable again.
     // TODO: We’ll need to amend this once we allow selecting multiple cards.
-    for (auto& p : other_players)
-        for (auto& c : p.word->children)
-            c->selectable = false;
+    ResetOpponentWords();
 
     Log(
         "Targeting opponent {}’s {} with {}",
@@ -373,17 +384,6 @@ void GameScreen::TickSelection() {
     our_selected_card->unselect();
     our_selected_card = nullptr;
 }
-
-void GameScreen::draw(Renderer& r) {
-    Screen::draw(r);
-
-    // Draw a white rectangle over our hand if it’s not our turn.
-    if (not our_turn) r.draw_rect(
-        our_hand->bounding_box,
-        Colour{255, 255, 255, 30}
-    );
-}
-
 
 void GameScreen::enter(sc::StartGame sg) {
     DeleteAllChildren();
@@ -417,6 +417,8 @@ void GameScreen::enter(sc::StartGame sg) {
     preview->hoverable = false;
     preview->scale = Card::Preview;
 
+    // Finally, ‘end’ our turn to reset everything.
+    end_turn();
     client.enter_screen(*this);
 }
 
@@ -448,12 +450,36 @@ void GameScreen::tick(InputSystem& input) {
 
 void GameScreen::start_turn() {
     our_turn = true;
-    our_hand->selectable = true;
+    for (auto& c : our_hand->children) {
+        // Power cards are always usable for now.
+        // TODO: Some power cards may not always have valid targets; check for that.
+        if (CardDatabase[+c->id].is_power()) {
+            c->display_state = Card::DisplayState::Default;
+            c->selectable = true;
+            continue;
+        }
+
+        // For sound cards, check if there are any sounds we can play them on.
+        for (auto& p : other_players) {
+            auto w = p.cards();
+            for (usz i = 0; i < w.size(); i++) {
+                auto v = validation::ValidatePlaySoundCard(c->id, w, i);
+                if (v == validation::PlaySoundCardValidationResult::Valid) {
+                    c->display_state = Card::DisplayState::Default;
+                    c->selectable = true;
+                    goto next_card;
+                }
+            }
+        }
+    next_card:;
+    }
 }
 
 void GameScreen::end_turn() {
     our_turn = false;
     our_hand->selectable = false;
+    our_hand->display_state = Card::DisplayState::Inactive;
+    ResetOpponentWords();
 }
 
 // =============================================================================

@@ -681,20 +681,16 @@ Card::Card(
 }
 
 void Card::draw(Renderer& r) {
-    auto sz = CardSize[scale];
-    auto at = pos.relative(parent->bounding_box, sz);
-
-    r.draw_rect(at, sz, outline_colour.lighten(.1f), BorderRadius[scale]);
+    r.draw_rect(bounding_box, outline_colour.lighten(.1f), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
-        at,
-        sz,
+        bounding_box,
         CardGroup::CardGaps[scale] / 2,
         Colour{50, 50, 200, 255},
         BorderRadius[scale]
     );
 
     r.draw_outline_rect(
-        AABB{at, sz}.shrink(Border[scale].wd, Border[scale].ht),
+        bounding_box.shrink(Border[scale].wd, Border[scale].ht),
         Size{Border[scale]},
         outline_colour,
         BorderRadius[scale]
@@ -709,6 +705,7 @@ void Card::draw(Renderer& r) {
     if (scale > OtherPlayer or CardDatabase[+id].is_power())
         name.draw(r);
 
+
     // TODO: Sounds that have been deleted or added to the word
     //       should be greyed out / orange (or a plus in the corner),
     //       respectively.
@@ -720,6 +717,13 @@ void Card::draw(Renderer& r) {
         {5 * offs, offs},
         Colour::Black
     );*/
+
+    // Draw a white rectangle on top of this card if it is inactive.
+    if (display_state == DisplayState::Inactive) r.draw_rect(
+        bounding_box,
+        Colour{255, 255, 255, 200},
+        BorderRadius[scale]
+    );
 }
 
 void Card::refresh(Renderer& r) {
@@ -867,6 +871,10 @@ void CardGroup::refresh(Renderer& r) {
 void CardGroup::add(CardId c) {
     Create<Card>(Position()).id = c;
     needs_refresh = true;
+}
+
+void CardGroup::set_display_state(Card::DisplayState new_value) {
+    for (auto& c : children) c->display_state = new_value;
 }
 
 TRIVIAL_CACHING_SETTER(CardGroup, bool, autoscale);

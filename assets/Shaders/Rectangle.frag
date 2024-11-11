@@ -24,6 +24,6 @@ void main() {
     float smoothedAlpha =  1.0f - smoothstep(0.0f, edgeSoftness * 2.0f,distance);
 
     // Return the resultant shape.
-    colour = vec4(in_colour.rgb, smoothedAlpha);
+    colour = vec4(in_colour.rgb, min(smoothedAlpha, in_colour.a));
 }
 
