@@ -873,26 +873,24 @@ TRIVIAL_CACHING_SETTER(CardGroup, bool, autoscale);
 TRIVIAL_CACHING_SETTER(CardGroup, i32, max_width);
 TRIVIAL_CACHING_SETTER(CardGroup, Scale, scale);
 
-auto Widget::parent_screen() -> Screen & {
+auto Widget::parent_screen() -> Screen& {
     Element* e = parent;
     for (;;) {
         if (auto screen = dynamic_cast<Screen*>(e)) return *screen;
-        auto widget = dynamic_cast<Widget*>(e)
+        auto widget = dynamic_cast<Widget*>(e);
         Assert(widget, "Widget without parent screen");
         e = widget->parent;
     }
 }
 
-void Widget::unselect(){
+void Widget::unselect() {
     auto& parent = parent_screen();
     if (selected) {
         selected = false;
         if (parent.selected_element == this)
             parent.selected_element = nullptr;
     }
-
 }
-
 
 // =============================================================================
 //  Input Handler.

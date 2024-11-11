@@ -346,24 +346,24 @@ void GameScreen::on_refresh(Renderer&) {
 }
 
 void GameScreen::tick(InputSystem& input) {
-    /*if (client.server_connexion.disconnected) {
+    if (client.server_connexion.disconnected) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
         return;
-    }*/
+    }
 
     Screen::tick(input);
 
     // Allow selecting valid targets when selecting one’s own card
-    if (rgs::any_of(our_hand->children, [](auto& x){return x->selected;})) {
+    if (rgs::any_of(our_hand->children, [](auto& x) { return x->selected; })) {
         auto selected_card = dynamic_cast<Card*>(selected_element);
         our_selected_card = selected_card;
         Assert(selected_element, "The card should have been selected");
         for (auto& p : other_players) {
             std::vector<CardId> other_word;
-            for (auto &c: p.word->children) {
+            for (auto& c : p.word->children) {
                 other_word.push_back(c->get_id());
             }
-            for (auto [i, c] : p.word->children | vws::enumerate ) {
+            for (auto [i, c] : p.word->children | vws::enumerate) {
                 if (validation::ValidatePlaySoundCard(selected_card->get_id(), other_word, i) == validation::PlaySoundCardValidationResult::Valid)
                     c->selectable = true;
             }
@@ -377,8 +377,8 @@ void GameScreen::tick(InputSystem& input) {
     }
 
     // If the current selected card is in another player’s word, send the action
-    for(auto& p : other_players) {
-        if (rgs::any_of(p.word->children, [](auto& x){return x->selected;})) {
+    for (auto& p : other_players) {
+        if (rgs::any_of(p.word->children, [](auto& x) { return x->selected; })) {
             // TODO send action to player
             auto selected_card = dynamic_cast<Card*>(selected_element);
             Log("Targetting oponent {}’s {} with {}", p.name, CardDatabase[+our_selected_card->get_id()].name, CardDatabase[+selected_card->get_id()].name);
@@ -386,7 +386,6 @@ void GameScreen::tick(InputSystem& input) {
             selected_element->unselect();
         }
     }
-
 
     // Preview any card that the user is hovering over.
     auto c = dynamic_cast<Card*>(hovered_element);
@@ -400,19 +399,17 @@ void GameScreen::tick(InputSystem& input) {
 
 void GameScreen::start_turn() {
     our_turn = true;
-    for (auto& c: our_hand->children) {
+    for (auto& c : our_hand->children) {
         c->selectable = true;
     }
 }
 
-void GameScreen::end_turn(){
+void GameScreen::end_turn() {
     our_turn = false;
-    for (auto& c: our_hand->children) {
-        c->selectable =false;
+    for (auto& c : our_hand->children) {
+        c->selectable = false;
     }
 }
-
-
 
 // =============================================================================
 //  Game Screen - Packet Handlers
@@ -450,7 +447,6 @@ void Client::handle(sc::StartTurn) {
     Assert(current_screen == &game_screen, "StartTurn should only happen after StartGame");
     game_screen.start_turn();
     Log("TODO: Handle StartTurn");
-
 }
 
 void Client::handle(sc::EndTurn) {
