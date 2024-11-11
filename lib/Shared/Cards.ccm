@@ -9,7 +9,6 @@ import pr.utils;
 export namespace pr {
 enum struct CardId : u16 {
     // Consonants
-    // TODO what about voicing
     // clang-format off
 
     $$ConsonantStart,

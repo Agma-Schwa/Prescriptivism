@@ -289,7 +289,7 @@ void WordChoiceScreen::tick(InputSystem& input) {
 
         // If the selected card was clicked, deselect it.
         else if (selected.value() == idx) {
-            it->get()->selected = false;
+            it->get()->unselect();
             selected = std::nullopt;
         }
 
@@ -297,7 +297,7 @@ void WordChoiceScreen::tick(InputSystem& input) {
         else {
             cards->needs_refresh = true;
             std::iter_swap(cards->children.begin() + selected.value(), it);
-            it->get()->selected = false; // Deselect *after* swapping.
+            it->get()->unselect(); // Deselect *after* swapping.
             selected = std::nullopt;
         }
     }
@@ -309,16 +309,92 @@ void WordChoiceScreen::tick(InputSystem& input) {
 GameScreen::GameScreen(Client& c) : client(c) {
 }
 
-void GameScreen::enter(packets::sc::StartGame sg) {
+auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
+    Assert(c);
+    auto cg = dynamic_cast<CardGroup*>(c->parent);
+    if (not cg) return nullptr;
+    auto p = player_map.find(cg);
+    if (p == player_map.end()) return nullptr;
+    return p->second;
+}
+
+void GameScreen::ResetOpponentWords() {
+    for (auto& p : other_players) {
+        p.word->selectable = false;
+        p.word->display_state = Card::DisplayState::Default;
+    }
+}
+
+void GameScreen::TickSelection() {
+    if (not selected_element) return;
+    auto card = dynamic_cast<Card*>(selected_element);
+    Assert(card, "Currently, only cards are selectable");
+
+    // We selected one of our own cards. Make it so we can now select
+    // other player’s cards. Unselect the card manually in that case
+    // since we don’t want to clear the 'selected' property.
+    if (card->parent == our_hand) {
+        // We selected the same card again; unselect it this time.
+        if (card == our_selected_card) {
+            ResetOpponentWords();
+            our_selected_card = nullptr;
+            card->unselect();
+            return;
+        }
+
+        // Unselect the previously selected card, set the current selected
+        // element of the screen to null, and save it as our selected card;
+        if (our_selected_card) our_selected_card->unselect();
+        our_selected_card = card;
+
+        // Do not unselect this card as we want to keep it selected.
+        selected_element = nullptr;
+
+        // Make other player’s cards selectable if we can play this card on it.
+        for (auto& p : other_players) {
+            auto cards = p.cards();
+            for (auto [i, c] : p.word->children | vws::enumerate) {
+                auto v = validation::ValidatePlaySoundCard(our_selected_card->id, cards, i);
+                c->selectable = v == validation::PlaySoundCardValidationResult::Valid;
+                c->display_state = c->selectable ? Card::DisplayState::Default : Card::DisplayState::Inactive;
+            }
+        }
+        return;
+    }
+
+    // Otherwise, we selected another player’s card. We should never get here
+    // if we didn’t previously select one of our cards.
+    Assert(our_selected_card, "We should have selected one of our cards");
+    auto owner = PlayerForCardInWord(card);
+    Assert(owner, "Selected card without owner?");
+
+    // Make opponents’ cards non-selectable again.
+    // TODO: We’ll need to amend this once we allow selecting multiple cards.
+    ResetOpponentWords();
+
+    Log(
+        "Targeting opponent {}’s {} with {}",
+        owner->name,
+        CardDatabase[+card->id].name,
+        CardDatabase[+our_selected_card->id].name
+    );
+
+    // TODO: Send action to server.
+    selected_element->unselect();
+    our_selected_card->unselect();
+    our_selected_card = nullptr;
+}
+
+void GameScreen::enter(sc::StartGame sg) {
     DeleteAllChildren();
 
     other_players.clear();
     other_words = &Create<Group<>>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
         if (i == sg.player_id) {
-            player_id = sg.player_id;
+            us = Player("You", sg.player_id);
+            us.word = &Create<CardGroup>(Position(), p.word);
             our_hand = &Create<CardGroup>(Position(), sg.hand);
-            our_word = &Create<CardGroup>(Position(), p.word);
             our_hand->scale = Card::Hand;
             continue;
         }
@@ -328,6 +404,12 @@ void GameScreen::enter(packets::sc::StartGame sg) {
         op.word->scale = Card::OtherPlayer;
     }
 
+    // Build the player map *after* creating all the players, since they
+    // might move while in the loop above.
+    player_map.clear();
+    player_map[us.word] = &us;
+    for (auto& p : other_players) player_map[p.word] = &p;
+
     // The preview must be created at the end so it’s drawn
     // above everything else.
     preview = &Create<Card>(Position::VCenter(-100));
@@ -335,23 +417,26 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     preview->hoverable = false;
     preview->scale = Card::Preview;
 
+    // Finally, ‘end’ our turn to reset everything.
+    end_turn();
     client.enter_screen(*this);
 }
 
 void GameScreen::on_refresh(Renderer&) {
     our_hand->pos = Position::HCenter(50).anchor_to(Anchor::Center);
-    our_word->pos = Position::HCenter(400);
+    us.word->pos = Position::HCenter(400);
     other_words->pos = Position::HCenter(-100);
     other_words->max_gap = 100;
 }
 
 void GameScreen::tick(InputSystem& input) {
-    /*if (client.server_connexion.disconnected) {
+    if (client.server_connexion.disconnected) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
         return;
-    }*/
+    }
 
     Screen::tick(input);
+    TickSelection();
 
     // Preview any card that the user is hovering over.
     auto c = dynamic_cast<Card*>(hovered_element);
@@ -361,6 +446,40 @@ void GameScreen::tick(InputSystem& input) {
     } else {
         preview->visible = false;
     }
+}
+
+void GameScreen::start_turn() {
+    our_turn = true;
+    for (auto& c : our_hand->children) {
+        // Power cards are always usable for now.
+        // TODO: Some power cards may not always have valid targets; check for that.
+        if (CardDatabase[+c->id].is_power()) {
+            c->display_state = Card::DisplayState::Default;
+            c->selectable = true;
+            continue;
+        }
+
+        // For sound cards, check if there are any sounds we can play them on.
+        for (auto& p : other_players) {
+            auto w = p.cards();
+            for (usz i = 0; i < w.size(); i++) {
+                auto v = validation::ValidatePlaySoundCard(c->id, w, i);
+                if (v == validation::PlaySoundCardValidationResult::Valid) {
+                    c->display_state = Card::DisplayState::Default;
+                    c->selectable = true;
+                    goto next_card;
+                }
+            }
+        }
+    next_card:;
+    }
+}
+
+void GameScreen::end_turn() {
+    our_turn = false;
+    our_hand->selectable = false;
+    our_hand->display_state = Card::DisplayState::Inactive;
+    ResetOpponentWords();
 }
 
 // =============================================================================
@@ -376,6 +495,7 @@ void Client::handle(sc::Disconnect packet) {
             case Reason::InvalidPacket: return "Disconnected: Client sent invalid packet";
             case Reason::UsernameInUse: return "Disconnected: User name already in use";
             case Reason::WrongPassword: return "Disconnected: Invalid Password";
+            case Reason::UnexpectedPacket: return "Disconnected: Unexpected Packet";
             default: return "Disconnected: <<<Invalid>>>";
         }
     }();
@@ -395,11 +515,13 @@ void Client::handle(sc::Draw dr) {
 }
 
 void Client::handle(sc::StartTurn) {
-    Log("TODO: Handle StartTurn");
+    Assert(current_screen == &game_screen, "StartTurn should only happen after StartGame");
+    game_screen.start_turn();
 }
 
 void Client::handle(sc::EndTurn) {
-    Log("TODO: Handle EndTurn");
+    Assert(current_screen == &game_screen, "StartTurn should only happen after StartGame");
+    game_screen.end_turn();
 }
 
 void Client::handle(sc::StartGame sg) {
@@ -428,6 +550,7 @@ void Client::TickNetworking() {
 //  API
 // =============================================================================
 Client::Client(Renderer r) : renderer(std::move(r)) {
+    /*
     std::array pi{
         sc::StartGame::PlayerInfo{constants::Word{CardId::C_b, CardId::V_a, CardId::V_e, CardId::C_b, CardId::C_b, CardId::C_b}, "Player"},
         sc::StartGame::PlayerInfo{constants::Word{CardId::C_d, CardId::V_y, CardId::C_d, CardId::C_d, CardId::V_i, CardId::C_d}, "Player"}
@@ -436,6 +559,8 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
     // For testing.
     sc::StartGame sg{pi, {CardId::P_SpellingReform, CardId::P_Chomsky, CardId::V_u}, 0};
     game_screen.enter(sg);
+    */
+    enter_screen(menu_screen);
 }
 
 void Client::Run() {

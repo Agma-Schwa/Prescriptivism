@@ -4,6 +4,7 @@ module;
 #include <functional>
 #include <memory>
 #include <pr/Packets.hh>
+#include <ranges>
 #include <thread>
 export module pr.client;
 
@@ -109,6 +110,8 @@ public:
 //  In-game Screens
 // =============================================================================
 class pr::client::Player {
+    LIBBASE_MOVE_ONLY(Player);
+
     /// The server-side player id.
     Readonly(u8, id);
 
@@ -119,7 +122,15 @@ public:
     /// The current word of this player.
     CardGroup* word{};
 
-    explicit Player(std::string name, u8 id) : _id{id}, _name{name} {}
+    /// Get the player’s word as a list of card ids.
+    auto cards() -> std::vector<CardId> {
+        return word->children                                //
+             | vws::transform([](auto& c) { return c->id; }) //
+             | rgs::to<std::vector>();
+    }
+
+    explicit Player() = default;
+    explicit Player(std::string name, u8 id) : _id{id}, _name{std::move(name)} {}
 };
 
 /// This screen renders the actual game.
@@ -129,26 +140,40 @@ class pr::client::GameScreen : public Screen {
     /// The other players in the game.
     std::vector<Player> other_players;
 
-    /// Our own word.
-    CardGroup* our_word;
+    /// Map from card groups to their players.
+    std::unordered_map<CardGroup*, Player*> player_map;
+
+    /// Our player object.
+    Player us;
 
     /// The cards in our hand.
-    CardGroup* our_hand;
+    CardGroup* our_hand{};
 
     /// The words of other players.
-    Group<>* other_words;
+    Group<>* other_words{};
 
     /// The card widget used to preview a card.
-    Card* preview;
+    Card* preview{};
 
-    /// Our player id.
-    u8 player_id;
+    /// True if it is our turn
+    bool our_turn{false};
+
+    /// The last card that was selected by the player
+    Card* our_selected_card{};
 
 public:
     explicit GameScreen(Client& c);
     void enter(packets::sc::StartGame sg);
+    void end_turn();
     void on_refresh(Renderer& r) override;
+    void start_turn();
     void tick(InputSystem& input) override;
+
+private:
+    /// Return the player that owns this card in their word.
+    auto PlayerForCardInWord(Card* c) -> Player*;
+    void ResetOpponentWords();
+    void TickSelection();
 };
 
 // =============================================================================

@@ -188,6 +188,9 @@ protected:
     }
 
 public:
+    /// Unselect the element
+    void unselect();
+
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
 
@@ -201,6 +204,9 @@ public:
         hovered = true;
         return this;
     }
+
+    /// Get the widget’s parent screen
+    auto parent_screen() -> Screen&;
 
     /// Recompute bounding box etc.
     virtual void refresh(Renderer&) {}
@@ -289,6 +295,8 @@ public:
     auto visible() {
         return children | vws::filter([](auto& e) { return e->visible; });
     }
+
+    friend void Widget::unselect();
 };
 
 /// Label that supports reflowing text automatically.
@@ -480,6 +488,16 @@ public:
         NumScales
     };
 
+    enum struct DisplayState : u8 {
+        /// Used for most cards.
+        Default,
+
+        /// A card that can not be interacted with, e.g. because it’s not
+        /// our turn, because there are no valid targets, or because it has
+        /// no valid targets.
+        Inactive,
+    };
+
     static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
     static constexpr u16 Padding[NumScales] = {1, 2, 4, 6};
 
@@ -508,6 +526,8 @@ private:
     Image image;
 
 public:
+    DisplayState display_state = DisplayState::Default;
+
     Card(Element* parent, Position pos);
 
     void draw(Renderer& r) override;
@@ -520,6 +540,9 @@ class pr::client::Group : public Widget
     /// The maximum gap size; 0 means no gap; set to a large value
     /// (e.g. INT_MAX) to use equal gaps.
     Property(i32, max_gap, 10);
+
+    /// Write-only property to make the group selectable.
+    Writeonly(bool, selectable);
 
 public:
     Group(Element* parent, Position pos) : Widget(parent, pos) {}
@@ -541,6 +564,9 @@ class pr::client::CardGroup : public Group<Card> {
     /// Whether the group should scale to the next available
     /// card size if possible.
     Property(bool, autoscale, false);
+
+    /// Write-only property to set the display state.
+    Writeonly(Card::DisplayState, display_state);
 
 public:
     static constexpr i32 CardGaps[Scale::NumScales]{5, 10, 20};
@@ -626,6 +652,11 @@ void pr::client::Group<WidgetType>::set_max_gap(i32 new_value) {
     if (new_value == _max_gap) return;
     _max_gap = new_value;
     needs_refresh = true;
+}
+
+template <typename WidgetType>
+void pr::client::Group<WidgetType>::set_selectable(bool new_value) {
+    for (auto& c : this->children) c->selectable = new_value;
 }
 
 template <>

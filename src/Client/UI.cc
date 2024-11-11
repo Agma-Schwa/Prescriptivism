@@ -681,20 +681,16 @@ Card::Card(
 }
 
 void Card::draw(Renderer& r) {
-    auto sz = CardSize[scale];
-    auto at = pos.relative(parent->bounding_box, sz);
-
-    r.draw_rect(at, sz, outline_colour.lighten(.1f), BorderRadius[scale]);
+    r.draw_rect(bounding_box, outline_colour.lighten(.1f), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
-        at,
-        sz,
+        bounding_box,
         CardGroup::CardGaps[scale] / 2,
         Colour{50, 50, 200, 255},
         BorderRadius[scale]
     );
 
     r.draw_outline_rect(
-        AABB{at, sz}.shrink(Border[scale].wd, Border[scale].ht),
+        bounding_box.shrink(Border[scale].wd, Border[scale].ht),
         Size{Border[scale]},
         outline_colour,
         BorderRadius[scale]
@@ -720,6 +716,13 @@ void Card::draw(Renderer& r) {
         {5 * offs, offs},
         Colour::Black
     );*/
+
+    // Draw a white rectangle on top of this card if it is inactive.
+    if (display_state == DisplayState::Inactive) r.draw_rect(
+        bounding_box,
+        Colour{255, 255, 255, 200},
+        BorderRadius[scale]
+    );
 }
 
 void Card::refresh(Renderer& r) {
@@ -869,9 +872,32 @@ void CardGroup::add(CardId c) {
     needs_refresh = true;
 }
 
+void CardGroup::set_display_state(Card::DisplayState new_value) {
+    for (auto& c : children) c->display_state = new_value;
+}
+
 TRIVIAL_CACHING_SETTER(CardGroup, bool, autoscale);
 TRIVIAL_CACHING_SETTER(CardGroup, i32, max_width);
 TRIVIAL_CACHING_SETTER(CardGroup, Scale, scale);
+
+auto Widget::parent_screen() -> Screen& {
+    Element* e = parent;
+    for (;;) {
+        if (auto screen = dynamic_cast<Screen*>(e)) return *screen;
+        auto widget = dynamic_cast<Widget*>(e);
+        Assert(widget, "Widget without parent screen");
+        e = widget->parent;
+    }
+}
+
+void Widget::unselect() {
+    auto& parent = parent_screen();
+    if (selected) {
+        selected = false;
+        if (parent.selected_element == this)
+            parent.selected_element = nullptr;
+    }
+}
 
 // =============================================================================
 //  Input Handler.
@@ -968,7 +994,7 @@ void Screen::tick(InputSystem& input) {
     hovered_element = nullptr;
 
     // Deselect the currently selected element if there was a click.
-    if (input.mouse.left) selected_element = nullptr;
+    if (input.mouse.left and selected_element) selected_element->unselect();
 
     // Tick each child.
     for (auto& e : visible()) {
@@ -984,8 +1010,8 @@ void Screen::tick(InputSystem& input) {
             // If, additionally, we had a click, select the element and fire the
             // event handler.
             if (input.mouse.left and hovered_element) {
-                if (e->selectable) selected_element = e.get();
-                e->event_click(input);
+                if (hovered_element->selectable) selected_element = hovered_element;
+                hovered_element->event_click(input);
             }
         }
     }
