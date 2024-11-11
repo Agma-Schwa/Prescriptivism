@@ -444,6 +444,9 @@ void GameScreen::tick(InputSystem& input) {
     if (c) {
         preview->visible = true;
         preview->id = c->id;
+
+        // Refresh the card now to prevent weird rendering artefacts.
+        if (preview->needs_refresh) preview->refresh(client.renderer);
     } else {
         preview->visible = false;
     }
