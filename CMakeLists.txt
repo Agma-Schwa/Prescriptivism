@@ -126,6 +126,17 @@ FetchContent_Declare(glm
 FetchContent_MakeAvailable(base sdl3 webp glbinding freetype harfbuzz glm)
 
 ## ============================================================================
+##  Tools
+## ============================================================================
+add_executable(runner tools/DevRunner.cc)
+target_link_libraries(runner PRIVATE options libbase)
+set_target_properties(runner PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    OUTPUT_NAME "start"
+)
+
+
+## ============================================================================
 ##  Shared
 ## ============================================================================
 file(GLOB_RECURSE common_sources src/Shared/*.cc)
