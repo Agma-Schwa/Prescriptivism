@@ -118,7 +118,6 @@ class pr::client::Player {
     /// The player name.
     Readonly(std::string, name);
 
-
 public:
     /// The current word of this player.
     CardGroup* word{};

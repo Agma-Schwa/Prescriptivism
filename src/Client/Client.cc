@@ -396,7 +396,6 @@ void GameScreen::enter(sc::StartGame sg) {
             us.word = &Create<CardGroup>(Position(), p.word);
             our_hand = &Create<CardGroup>(Position(), sg.hand);
             our_hand->scale = Card::Hand;
-            player_map[us.word] = &us;
             continue;
         }
 
@@ -408,6 +407,7 @@ void GameScreen::enter(sc::StartGame sg) {
     // Build the player map *after* creating all the players, since they
     // might move while in the loop above.
     player_map.clear();
+    player_map[us.word] = &us;
     for (auto& p : other_players) player_map[p.word] = &p;
 
     // The preview must be created at the end so it’s drawn

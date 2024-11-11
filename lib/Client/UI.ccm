@@ -492,8 +492,9 @@ public:
         /// Used for most cards.
         Default,
 
-        /// A card in hand that can not be interacted with, either because it’s
-        /// not our turn, or because there are no valid targets.
+        /// A card that can not be interacted with, e.g. because it’s not
+        /// our turn, because there are no valid targets, or because it has
+        /// no valid targets.
         Inactive,
     };
 
