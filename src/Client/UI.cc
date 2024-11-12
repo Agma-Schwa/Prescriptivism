@@ -340,6 +340,40 @@ auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
 // =============================================================================
 //  Elements
 // =============================================================================
+
+/// Compute the absolute coordinates for positioning
+/// text in the center of a box. The box must be in
+/// absolute coordinates.
+auto CenterTextInBox(
+    Renderer& r,
+    const ShapedText& text,
+    i32 box_height,
+    AABB absolute_box
+) -> xy {
+    f32 ascender = r.font_for_text(text).strut_split().first;
+    f32 strut = r.font_for_text(text).strut();
+    Size sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
+
+    // Bail out if we don’t have enough space.
+    if (strut > box_height) return Position::Center().relative(absolute_box, sz);
+
+    // This calculation ‘centers’ text in the box at the baseline.
+    //
+    // For correct vertical centering, the ascender of the font determines
+    // the distance from the *top* of the box, assuming the box height is
+    // equal to the combined strut of the font.
+    //
+    // Since our text boxes include padding, we need to add half the remaining
+    // space between the box height and font strut to the ascender to get the
+    // total distance from the top.
+    //
+    // See also:
+    //    https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
+    //    https://web.archive.org/web/20241112215935/https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
+    f32 top_offs = ascender + (box_height - strut) / 2;
+    return Position::HCenter(-i32(top_offs)).relative(absolute_box, sz);
+}
+
 void Button::draw(Renderer& r) {
     r.draw_rect(rbox(), hovered ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
@@ -348,15 +382,23 @@ void Button::draw(Renderer& r) {
 void Label::draw(Renderer& r) {
     auto& shaped = text.shaped(r);
     auto parent_box = parent->bounding_box;
-    auto position = auto{pos}.voffset(i32(shaped.depth)).relative( //
-        parent_box,
-        shaped.size()
-    );
+    xy position;
+
+    if (fixed_height != 0) {
+        position = CenterTextInBox(r, shaped, fixed_height, rbox());
+    } else {
+        position = auto{pos}.voffset(i32(shaped.depth)).relative(parent_box, shaped.size());
+    }
 
     r.draw_text(shaped, position, colour);
 }
 
 void Label::refresh(Renderer& r) {
+    defer {
+        auto sz = text.shaped(r).size();
+        UpdateBoundingBox(Size{sz.wd, std::max(sz.ht, fixed_height)});
+    };
+
     if (not reflow) return;
     text.reflow(r, std::min(max_width, parent->bounding_box.width()));
 }
@@ -366,6 +408,7 @@ void Label::set_font_size(FontSize new_value) { text.font_size = new_value; }
 
 TRIVIAL_CACHING_SETTER(Label, bool, reflow);
 TRIVIAL_CACHING_SETTER(Label, i32, max_width);
+TRIVIAL_CACHING_SETTER(Label, i32, fixed_height);
 
 TextBox::TextBox(
     Element* parent,
@@ -389,24 +432,7 @@ void TextBox::UpdateText(ShapedText new_text) {
 }
 
 auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
-    // This calculation ‘centers’ text in the box at the baseline.
-    //
-    // For correct vertical centering, the ascender of the font determines
-    // the distance from the *top* of the box, assuming the box height is
-    // equal to the combined strut of the font.
-    //
-    // Since our text boxes include padding, we need to add half the remaining
-    // space between the box height and font strut to the ascender to get the
-    // total distance from the top.
-    //
-    // See also:
-    //    https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
-    //    https://web.archive.org/web/20241112215935/https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
-    f32 ascender = r.font_for_text(text).strut_split().first;
-    f32 strut = r.font_for_text(text).strut();
-    f32 top_offs = ascender + (bounding_box.height() - strut) / 2;
-    Size sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
-    return Position::HCenter(-i32(top_offs)).relative(rbox(), sz);
+    return CenterTextInBox(r, text, bounding_box.height(), rbox());
 }
 
 void TextBox::draw(Renderer& r) {
@@ -775,6 +801,9 @@ void Card::refresh(Renderer& r) {
     description.font_size = (power ? PowerDescriptionSizes : SoundDescriptionSizes)[scale];
     description.max_width = CardSize[scale].wd - 2 * Padding[scale] - 2 * Border[scale].wd;
     name.max_width = description.max_width;
+
+    // Center the middle text.
+    middle.fixed_height = CardSize[scale].ht;
 
     // Handle power-card-specific formatting.
     if (power) {

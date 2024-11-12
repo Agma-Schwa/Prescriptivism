@@ -302,13 +302,29 @@ public:
 /// Label that supports reflowing text automatically.
 class pr::client::Label : public Widget {
     Text text;
+
+    /// Whether the text should reflow onto multiple lines if it
+    /// exceeds a maximum width.
     Property(bool, reflow, false);
+
+    /// The maximum width of this text.
     Property(i32, max_width, std::numeric_limits<i32>::max());
+
+    /// If set, the text will be centered vertically at the baseline
+    /// within this height.
+    Property(i32, fixed_height, 0);
+
+    /// Whether the text is empty.
     ComputedReadonly(bool, empty, text.empty());
+
+    /// The font size of the text.
     ComputedProperty(FontSize, font_size, text.font_size);
+
+    /// The alignment of the text.
     ComputedProperty(TextAlign, align, text.align);
 
 public:
+    /// The colour of the label.
     Colour colour = Colour::White;
 
     explicit Label(Element* parent, Position pos) : Widget(parent, pos) {}
