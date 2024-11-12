@@ -407,7 +407,7 @@ public:
         Element* parent,
         ShapedText label,
         Position pos,
-        i32 padding = 10,
+        i32 padding = 0,
         i32 min_wd = 125,
         i32 min_ht = 0
     ) : TextBox(parent, std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {}
@@ -442,7 +442,7 @@ public:
         ShapedText placeholder,
         FontSize size = FontSize::Medium,
         TextStyle style = TextStyle::Regular,
-        i32 padding = 10,
+        i32 padding = 0,
         bool hide_text = false,
         i32 min_wd = 250,
         i32 min_ht = 0
