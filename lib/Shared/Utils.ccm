@@ -2,9 +2,11 @@ module;
 #include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <chrono>
+#include <cstdarg>
 #include <format>
 #include <functional>
 #include <print>
+#include <string>
 #include <thread>
 export module pr.utils;
 export import base;
@@ -14,6 +16,9 @@ using namespace base;
 
 struct Profile;
 struct ZTermString;
+
+template <typename T>
+struct Debug;
 
 template <typename T, auto deleter>
 class Handle;
@@ -26,6 +31,12 @@ class Thread;
 
 void CloseLoggingThread();
 
+struct SilenceLog {
+    LIBBASE_IMMOVABLE(SilenceLog);
+    SilenceLog();
+    ~SilenceLog();
+};
+
 template <typename... Args>
 void Log(std::format_string<Args...> fmt, Args&&... args);
 } // namespace pr
@@ -33,6 +44,14 @@ void Log(std::format_string<Args...> fmt, Args&&... args);
 namespace pr {
 void LogImpl(std::string);
 }
+
+template <typename T>
+struct pr::Debug {
+    T* value;
+    Debug(T* t) : value(t) {}
+    Debug(T& t) : value(&t) {}
+    Debug(T&& t) : value(&t) {}
+};
 
 template <typename T, auto deleter>
 class pr::Handle {
@@ -199,3 +218,29 @@ template <typename... Args>
 void pr::Log(std::format_string<Args...> fmt, Args&&... args) {
     pr::LogImpl(std::format(fmt, std::forward<Args>(args)...));
 }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+template <typename T>
+struct std::formatter<pr::Debug<T>> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(pr::Debug<T> t, FormatContext& ctx) const {
+        std::string s;
+
+        auto Formatter = [&](const char* fmt, ...) {
+            va_list ap;
+            va_start(ap, fmt);
+            auto sz = std::vsnprintf(nullptr, 0, fmt, ap);
+            va_end(ap);
+
+            s.resize(s.size() + sz + 1);
+            va_start(ap, fmt);
+            std::vsnprintf(s.data() + s.size() - sz - 1, sz + 1, fmt, ap);
+            va_end(ap);
+        };
+
+        __builtin_dump_struct(t.value, Formatter);
+        return std::formatter<std::string>::format(s, ctx);
+    }
+};
+#pragma clang diagnostic pop

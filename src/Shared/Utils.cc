@@ -16,6 +16,7 @@ std::mutex LoggerMutex;
 std::condition_variable LoggerCV;
 std::queue<std::pair<chr::system_clock::time_point, std::string>> LoggerQueue;
 std::once_flag LoggerInitialised;
+std::atomic_bool Enabled = true;
 std::jthread LoggerThread([](std::stop_token tok) {
     std::atexit([] {
         LoggerThread.request_stop();
@@ -30,6 +31,7 @@ std::jthread LoggerThread([](std::stop_token tok) {
         auto [time, msg] = std::move(LoggerQueue.front());
         LoggerQueue.pop();
         lock.unlock();
+        if (not Enabled) continue;
 
         std::tm now_tm;
         std::time_t now_c = chr::system_clock::to_time_t(time);
@@ -52,3 +54,12 @@ void pr::LogImpl(std::string msg) {
     LoggerQueue.emplace(now, std::move(msg));
     LoggerCV.notify_one();
 }
+
+SilenceLog::SilenceLog() {
+    Enabled = false;
+}
+
+SilenceLog::~SilenceLog() {
+    Enabled = true;
+}
+
