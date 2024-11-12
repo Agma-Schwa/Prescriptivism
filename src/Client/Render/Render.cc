@@ -16,6 +16,7 @@ module;
 // Include order matters here!
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include <freetype/tttables.h>
 
 #include <mutex>
 #include <stop_token>
@@ -178,16 +179,17 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     hb_font = f;
     hb_ft_font_set_funcs(hb_font.get());
 
-    // Compute the font strut.
-    //
-    // Freetype tends to give us stupid nonsense metrics that make no
-    // sense whatsoever, so ignore them and just do it the dumb way.
-    FT_Load_Char(face, 'l', FT_LOAD_RENDER);
-    strut_asc = face->glyph->bitmap.rows;
-    FT_Load_Char(face, 'x', FT_LOAD_RENDER);
-    u32 base = face->glyph->bitmap.rows;
-    FT_Load_Char(face, 'q', FT_LOAD_RENDER);
-    strut_desc = face->glyph->bitmap.rows - base;
+    // According to the OpenType standard, the typographic ascender
+    // and descender should be retrieved from the OS/2 table; other
+    // 'ascender' and 'descender' fields may contain garbage.
+    auto table = static_cast<TT_OS2*>(FT_Get_Sfnt_Table(ft_face, FT_SFNT_OS2));
+    if (table) {
+        strut_asc = table->sTypoAscender / em * size;
+        strut_desc = -table->sTypoDescender / em * size;
+    } else {
+        strut_asc = ft_face->ascender / em * size;
+        strut_desc = -ft_face->descender / em * size;
+    }
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {

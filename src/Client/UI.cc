@@ -288,6 +288,7 @@ using power_card_database::PowerCardDatabase;
 // This only takes a renderer to ensure that it is called
 // after the renderer has been initialised.
 void client::InitialiseUI(Renderer&) {
+    SilenceLog _;
     for (auto& p : PowerCardDatabase) {
         p.image.init(DrawableTexture::LoadFromFile(fs::Path{"assets/Cards"} / p.image_path));
     }
@@ -388,7 +389,24 @@ void TextBox::UpdateText(ShapedText new_text) {
 }
 
 auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
-    return Position::Center().relative(rbox(), Size{text.width, f32(r.font_for_text(text).strut_split().first)});
+    // This calculation ‘centers’ text in the box at the baseline.
+    //
+    // For correct vertical centering, the ascender of the font determines
+    // the distance from the *top* of the box, assuming the box height is
+    // equal to the combined strut of the font.
+    //
+    // Since our text boxes include padding, we need to add half the remaining
+    // space between the box height and font strut to the ascender to get the
+    // total distance from the top.
+    //
+    // See also:
+    //    https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
+    //    https://web.archive.org/web/20241112215935/https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
+    f32 ascender = r.font_for_text(text).strut_split().first;
+    f32 strut = r.font_for_text(text).strut();
+    f32 top_offs = ascender + (bounding_box.height() - strut) / 2;
+    Size sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
+    return Position::HCenter(-i32(top_offs)).relative(rbox(), sz);
 }
 
 void TextBox::draw(Renderer& r) {

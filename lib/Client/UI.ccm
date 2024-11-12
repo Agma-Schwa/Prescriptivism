@@ -409,7 +409,6 @@ class pr::client::TextEdit : public TextBox {
         i32 end;
     };
 
-    std::u32string text;
     std::vector<ShapedText::Cluster> clusters;
     FontSize size;
     TextStyle style;
@@ -420,6 +419,7 @@ class pr::client::TextEdit : public TextBox {
     Selection sel{};
 
 public:
+    std::u32string text;
     TextEdit(
         Element* parent,
         Position pos,
