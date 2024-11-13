@@ -799,6 +799,7 @@ void Card::refresh(Renderer& r) {
         name.refresh(r);
         middle.refresh(r);
         description.refresh(r);
+        image.refresh(r);
     };
 
     // If the window was resized, we don’t need to update the
