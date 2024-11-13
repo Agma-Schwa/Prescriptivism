@@ -205,6 +205,7 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 
     // Create dummy cards; we’ll initialise and position them later.
     for (usz i = 0; i < constants::StartingWordSize; i++) cards->add(CardId(i));
+    cards->selectable = true;
 
     auto& submit = Create<Button>(
         c.renderer.make_text("Submit", FontSize::Medium),
@@ -258,6 +259,7 @@ void WordChoiceScreen::SendWord() {
 }
 
 void WordChoiceScreen::enter(const constants::Word& word) {
+    selected = nullptr;
     original_word = word;
     for (auto [w, c] : vws::zip(word, cards->cards())) c.id = w;
     client.enter_screen(*this);
@@ -271,37 +273,21 @@ void WordChoiceScreen::tick(InputSystem& input) {
     defer { Screen::tick(input); };
 
     // Implement card swapping.
-    // FIXME: Do this properly.
-    /*if (input.mouse.left and cards->bounding_box.contains(input.mouse.pos)) {
-        auto it = rgs::find_if(
-            cards->children,
-            [&](auto& c) { return c->bounding_box.contains(input.mouse.pos); }
-        );
-
-        // We didn’t click on any card.
-        if (it == cards->children.end()) return;
-
-        // If no card is selected, select it.
-        u32 idx = u32(it - cards->children.begin());
-        if (not selected) {
-            it->get()->selected = true;
-            selected = idx;
-        }
-
+    if (selected_element and cards->contains(selected_element)) {
         // If the selected card was clicked, deselect it.
-        else if (selected.value() == idx) {
-            it->get()->unselect();
-            selected = std::nullopt;
-        }
+        if (selected_element == selected) selected_element->unselect();
 
-        // Otherwise, swap the two and deselect.
+        // If no card was selected, remember it.
+        else if (not selected) selected = static_cast<Card*>(std::exchange(selected_element, nullptr));
+
+        // Otherwise, swap the cards and unselect both.
         else {
-            cards->needs_refresh = true;
-            std::iter_swap(cards->children.begin() + selected.value(), it);
-            it->get()->unselect(); // Deselect *after* swapping.
-            selected = std::nullopt;
+            cards->swap(selected, selected_element);
+            selected->unselect();
+            selected_element->unselect();
+            selected = nullptr;
         }
-    }*/
+    }
 }
 
 // =============================================================================

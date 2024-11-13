@@ -1021,6 +1021,14 @@ void Group::refresh(Renderer& r) {
     for (auto& c : ch) c.refresh(r);
 }
 
+void Group::swap(Widget* a, Widget* b) {
+    auto ita = rgs::find_if(widgets, [&](auto& w) { return w.get() == a; });
+    auto itb = rgs::find_if(widgets, [&](auto& w) { return w.get() == b; });
+    Assert(ita != widgets.end() and itb != widgets.end(), "Widget not found in group?");
+    std::iter_swap(ita, itb);
+    needs_refresh = true;
+}
+
 void Group::set_max_gap(i32 new_value) {
     if (new_value == _max_gap) return;
     _max_gap = new_value;

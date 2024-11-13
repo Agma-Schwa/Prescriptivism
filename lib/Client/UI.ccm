@@ -587,6 +587,12 @@ public:
         return ref;
     }
 
+    /// Check if this group contains an element.
+    auto contains(Widget* c) -> bool { return c->parent == this; }
+
+    /// Swap two elements of the group.
+    void swap(Widget* a, Widget* b);
+
     void draw(Renderer& r) override;
     auto hovered_child(InputSystem&) -> Widget* override;
     void refresh(Renderer&) override;

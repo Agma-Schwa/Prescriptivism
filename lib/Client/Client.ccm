@@ -94,7 +94,7 @@ class pr::client::WordChoiceScreen : public Screen {
     Client& client;
     CardGroup* cards;
     constants::Word original_word;
-    std::optional<u32> selected;
+    Card* selected = nullptr;
 
     void SendWord();
 
