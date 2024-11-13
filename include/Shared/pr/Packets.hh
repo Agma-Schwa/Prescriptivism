@@ -2,18 +2,20 @@
 #define PRESCRIPTIVISM_PACKETS_HH
 
 #define COMMON_PACKETS(X) \
-    X(Disconnect)\
+    X(Disconnect)         \
     X(WordChoice)
 
-#define SC_PACKETS(X) \
+#define SC_PACKETS(X)   \
     X(HeartbeatRequest) \
-    X(StartTurn) \
-    X(EndTurn) \
-    X(Draw) \
-    X(StartGame)
+    X(StartTurn)        \
+    X(EndTurn)          \
+    X(Draw)             \
+    X(StartGame)        \
+    X(AddSoundToStack)
 
-#define CS_PACKETS(X) \
+#define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
-    X(Login)
+    X(Login)             \
+    X(PlaySoundCard)
 
-#endif //PRESCRIPTIVISM_PACKETS_HH
+#endif // PRESCRIPTIVISM_PACKETS_HH

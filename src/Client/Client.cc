@@ -222,7 +222,7 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 void WordChoiceScreen::SendWord() {
     using enum validation::InitialWordValidationResult;
     constants::Word a;
-    for (auto [a, c] : vws::zip(a, cards->children)) a = c->id;
+    for (auto [a, c] : vws::zip(a, cards->cards())) a = c.id;
 
     // Validate the word; if it is valid, submit it.
     if (validation::ValidateInitialWord(a, original_word) == Valid) {
@@ -259,7 +259,7 @@ void WordChoiceScreen::SendWord() {
 
 void WordChoiceScreen::enter(const constants::Word& word) {
     original_word = word;
-    for (auto [w, c] : vws::zip(word, cards->children)) c->id = w;
+    for (auto [w, c] : vws::zip(word, cards->cards())) c.id = w;
     client.enter_screen(*this);
 }
 
@@ -271,7 +271,8 @@ void WordChoiceScreen::tick(InputSystem& input) {
     defer { Screen::tick(input); };
 
     // Implement card swapping.
-    if (input.mouse.left and cards->bounding_box.contains(input.mouse.pos)) {
+    // FIXME: Do this properly.
+    /*if (input.mouse.left and cards->bounding_box.contains(input.mouse.pos)) {
         auto it = rgs::find_if(
             cards->children,
             [&](auto& c) { return c->bounding_box.contains(input.mouse.pos); }
@@ -300,13 +301,20 @@ void WordChoiceScreen::tick(InputSystem& input) {
             it->get()->unselect(); // Deselect *after* swapping.
             selected = std::nullopt;
         }
-    }
+    }*/
 }
 
 // =============================================================================
 //  Game Screen
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
+}
+
+auto GameScreen::PlayerById(PlayerId id) -> Player& {
+    if (id == us.id) return us;
+    auto p = rgs::find(other_players, id, &Player::get_id);
+    Assert(p != other_players.end(), "Player {} not found?", id);
+    return *p;
 }
 
 auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
@@ -353,10 +361,10 @@ void GameScreen::TickSelection() {
         // Make other player’s cards selectable if we can play this card on it.
         for (auto& p : other_players) {
             auto cards = p.cards();
-            for (auto [i, c] : p.word->children | vws::enumerate) {
+            for (auto [i, c] : p.word->cards() | vws::enumerate) {
                 auto v = validation::ValidatePlaySoundCard(our_selected_card->id, cards, i);
-                c->selectable = v == validation::PlaySoundCardValidationResult::Valid;
-                c->display_state = c->selectable ? Card::DisplayState::Default : Card::DisplayState::Inactive;
+                c.selectable = v == validation::PlaySoundCardValidationResult::Valid;
+                c.display_state = c.selectable ? Card::DisplayState::Default : Card::DisplayState::Inactive;
             }
         }
         return;
@@ -371,7 +379,6 @@ void GameScreen::TickSelection() {
     // Make opponents’ cards non-selectable again.
     // TODO: We’ll need to amend this once we allow selecting multiple cards.
     ResetOpponentWords();
-
     Log(
         "Targeting opponent {}’s {} with {}",
         owner->name,
@@ -379,17 +386,34 @@ void GameScreen::TickSelection() {
         CardDatabase[+our_selected_card->id].name
     );
 
-    // TODO: Send action to server.
+    // Tell the server about this.
+    auto card_in_hand_index = our_hand->index_of(our_selected_card);
+    auto selected_card_index = owner->word->index_of(card);
+    Assert(card_in_hand_index.has_value(), "Could not find card in hand?");
+    Assert(selected_card_index.has_value(), "Could not find card in word?");
+    client.server_connexion.send(cs::PlaySoundCard{
+        *card_in_hand_index,
+        owner->id,
+        *selected_card_index,
+    });
+
+    // Unselect the opponent’s card and remove the card from our hand. The
+    // server will send packets that do the res.
     selected_element->unselect();
-    our_selected_card->unselect();
+    our_selected_card->remove();
     our_selected_card = nullptr;
+}
+
+void GameScreen::add_card(PlayerId id, u32 stack_idx, CardId card) {
+    auto& player = PlayerById(id);
+    player.word->cards()[stack_idx].id = card;
 }
 
 void GameScreen::enter(sc::StartGame sg) {
     DeleteAllChildren();
 
     other_players.clear();
-    other_words = &Create<Group<>>(Position());
+    other_words = &Create<Group>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
         if (i == sg.player_id) {
             us = Player("You", sg.player_id);
@@ -401,7 +425,7 @@ void GameScreen::enter(sc::StartGame sg) {
         }
 
         auto& op = other_players.emplace_back(std::move(p.name), u8(i));
-        op.word = &other_words->Create<CardGroup>(Position(), p.word);
+        op.word = &other_words->create<CardGroup>(Position(), p.word);
         op.word->scale = Card::OtherPlayer;
     }
 
@@ -454,12 +478,12 @@ void GameScreen::tick(InputSystem& input) {
 
 void GameScreen::start_turn() {
     our_turn = true;
-    for (auto& c : our_hand->children) {
+    for (auto& c : our_hand->cards()) {
         // Power cards are always usable for now.
         // TODO: Some power cards may not always have valid targets; check for that.
-        if (CardDatabase[+c->id].is_power()) {
-            c->display_state = Card::DisplayState::Default;
-            c->selectable = true;
+        if (CardDatabase[+c.id].is_power()) {
+            c.display_state = Card::DisplayState::Default;
+            c.selectable = true;
             continue;
         }
 
@@ -467,10 +491,10 @@ void GameScreen::start_turn() {
         for (auto& p : other_players) {
             auto w = p.cards();
             for (usz i = 0; i < w.size(); i++) {
-                auto v = validation::ValidatePlaySoundCard(c->id, w, i);
+                auto v = validation::ValidatePlaySoundCard(c.id, w, i);
                 if (v == validation::PlaySoundCardValidationResult::Valid) {
-                    c->display_state = Card::DisplayState::Default;
-                    c->selectable = true;
+                    c.display_state = Card::DisplayState::Default;
+                    c.selectable = true;
                     goto next_card;
                 }
             }
@@ -530,6 +554,10 @@ void Client::handle(sc::EndTurn) {
 
 void Client::handle(sc::StartGame sg) {
     game_screen.enter(std::move(sg));
+}
+
+void Client::handle(sc::AddSoundToStack add) {
+    game_screen.add_card(add.player, add.stack_index, add.card);
 }
 
 void Client::TickNetworking() {

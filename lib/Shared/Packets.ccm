@@ -14,6 +14,11 @@ import pr.tcp;
 
 using IDType = base::u8;
 
+export namespace pr {
+using PlayerId = u8;
+
+}
+
 // =============================================================================
 //  Common Packet API
 // =============================================================================
@@ -147,7 +152,7 @@ DefinePacket(StartGame) {
     Ctor(StartGame)(
         std::array<PlayerInfo, constants::PlayersPerGame> words,
         std::vector<CardId> hand,
-        u8 player
+        PlayerId player
     ) : player_data(words),
         hand(hand),
         player_id(player) {}
@@ -161,7 +166,25 @@ DefinePacket(StartGame) {
     std::vector<CardId> hand;
 
     /// ID of the player that this is sent to.
-    u8 player_id;
+    PlayerId player_id;
+};
+
+DefinePacket(AddSoundToStack) {
+    Ctor(AddSoundToStack)(PlayerId player, u32 stack_index, CardId card)
+        : player(player),
+          stack_index(stack_index),
+          card(card) {}
+
+    Serialisable(player, stack_index, card);
+
+    /// The player whose word we’re adding the sound to.
+    PlayerId player;
+
+    /// The index of the stack we’re adding the sound to.
+    u32 stack_index;
+
+    /// The card we’re adding.
+    CardId card;
 };
 } // namespace pr::packets::sc
 
@@ -186,6 +209,25 @@ DefinePacket(Login) {
 
     std::string name;
     std::string password;
+};
+
+DefinePacket(PlaySoundCard) {
+    Ctor(PlaySoundCard)(u32 card_index, PlayerId player, u32 target_card_index)
+        : card_index(card_index),
+          player(player),
+          target_card_index(target_card_index) {}
+
+    Serialisable(card_index, player, target_card_index);
+
+    /// The index of the card in hand to play.
+    u32 card_index;
+
+    /// The player whose word this card is played on.
+    PlayerId player;
+
+    /// The index of the card on the player’s word on which
+    /// this one is played.
+    u32 target_card_index;
 };
 } // namespace pr::packets::cs
 

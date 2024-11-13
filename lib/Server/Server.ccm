@@ -6,6 +6,7 @@ module;
 #include <memory>
 #include <pr/Packets.hh>
 #include <random>
+#include <ranges>
 #include <vector>
 export module pr.server;
 import pr.tcp;
@@ -27,10 +28,11 @@ using DisconnectReason = packets::sc::Disconnect::Reason;
 
 class pr::server::Card {
     LIBBASE_MOVE_ONLY(Card);
-    Readonly(CardId, id);
+    ComputedReadonly(const CardData&, data, CardDatabase[+id]);
 
 public:
-    Card(CardId t) : _id(t) {}
+    CardId id;
+    Card(CardId t) : id(t) {}
 };
 
 class pr::server::Player {
@@ -64,6 +66,11 @@ public:
     Player(net::TCPConnexion client_connexion, std::string name)
         : client_connexion(std::move(client_connexion)),
           name(std::move(name)) {}
+
+    /// Get the player’s word as a list of card ids.
+    auto cards() -> std::vector<CardId> {
+        return word | vws::transform(&Card::id) | rgs::to<std::vector>();
+    }
 
     /// Send a packet to the player.
     template <typename T>
@@ -135,6 +142,11 @@ private:
 
     bool AllWordsSubmitted() {
         return rgs::all_of(players, [](auto& x) { return x->submitted_word; });
+    }
+
+    template <typename T>
+    void Broadcast(const T& packet) {
+        for (auto& p : players) p->send(packet);
     }
 
     void Draw(Player& p, usz count = 1);

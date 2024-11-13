@@ -30,6 +30,7 @@ add_library(options INTERFACE)
 target_compile_options(options INTERFACE
     -fms-extensions
     -fdeclspec
+     -ftemplate-backtrace-limit=0
 
     ## Warnings.
     -Wall -Wextra     # Enable ‘all’ warnings.

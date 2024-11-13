@@ -911,8 +911,16 @@ void Card::set_id(CardId ct) {
 
 TRIVIAL_CACHING_SETTER(Card, Scale, scale, needs_full_refresh = true)
 
+void CardGroup::add(CardId c) {
+    auto card = std::make_unique<Card>(this, Position());
+    card->id = c;
+    widgets.push_back(std::move(card));
+    needs_refresh = true;
+}
+
 void CardGroup::refresh(Renderer& r) {
-    if (children.empty()) return;
+    auto ch = cards();
+    if (ch.empty()) return;
 
     // If we’re allowed to scale up, determine the maximum scale that works.
     Scale s;
@@ -920,7 +928,7 @@ void CardGroup::refresh(Renderer& r) {
     if (autoscale) {
         s = Scale(Scale::NumScales - 1);
         while (s != scale) {
-            auto wd = i32(children.size() * Card::CardSize[s].wd + (children.size() - 1) * CardGaps[s]);
+            auto wd = i32(ch.size() * Card::CardSize[s].wd + (ch.size() - 1) * CardGaps[s]);
             if (wd < width) break;
             s = Scale(s - 1);
         }
@@ -928,17 +936,99 @@ void CardGroup::refresh(Renderer& r) {
         s = scale;
     }
 
-    for (auto& c : children) c->scale = s;
+    for (auto& c : ch) c.scale = s;
     Group::refresh(r);
 }
 
-void CardGroup::add(CardId c) {
-    Create<Card>(Position()).id = c;
+void CardGroup::set_display_state(Card::DisplayState new_value) {
+    for (auto& c : cards()) c.display_state = new_value;
+}
+
+void Group::draw(Renderer& r) {
+    for (auto& c : visible_elements()) c.draw(r);
+}
+
+auto Group::hovered_child(InputSystem& input) -> Widget* {
+    auto Get = [&]<typename T>(T&& range) -> Widget* {
+        for (auto& c : std::forward<T>(range)) {
+            if (c.bounding_box.contains(input.mouse.pos)) {
+                auto child = c.hovered_child(input);
+                if (child) return child;
+            }
+        }
+
+        // The group itself is a proxy widget that cannot be hovered.
+        return nullptr;
+    };
+
+    // If two children overlap, we pick the first in the list, unless
+    // the maximum gap is negative (which means that the widgets may
+    // overlap with widgets on the right being above), in which case
+    // we pick the last one.
+    return max_gap < 0 ? Get(children() | vws::reverse) : Get(children());
+}
+
+void Group::refresh(Renderer& r) {
+    auto ch = children();
+    if (ch.empty()) return;
+
+    // Reset our bounding box to our parent’s before refreshing the
+    // children; otherwise, nested groups can get stuck at a smaller
+    // size: the child group will base its width around the parent’s
+    // which in turn is based on the width of the children; what should
+    // happen instead is that groups propagate the parent size downward
+    // and adjust to their actual size after the children have been
+    // positioned.
+    SetBoundingBox(parent->bounding_box);
+
+    // Refresh each element to make sure their sizes are up-to-date
+    // and compute the total width of all elements.
+    i32 total_width = 0;
+    for (auto& c : ch) {
+        c.refresh(r);
+        total_width += c.bounding_box.size().wd;
+
+        // If the gap is *negative*, i.e. we’re supposed to overlap
+        // elements, factor it into the calculation.
+        if (max_gap < 0) total_width += max_gap;
+    }
+
+    // Compute gap size.
+    auto parent_wd = parent->bounding_box.width();
+    i32 gap = 0;
+    if (total_width < parent_wd and ch.size() > 1) {
+        gap = std::min(
+            max_gap,
+            i32((parent_wd - total_width) / (ch.size() - 1))
+        );
+    } else if (max_gap < 0) {
+        gap = max_gap;
+    }
+
+    // Position the children.
+    i32 x = 0;
+    for (auto& c : ch) {
+        c.pos = Position::VCenter(x);
+        x += c.bounding_box.width() + gap;
+    }
+
+    // Update our bounding box.
+    auto ht = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.size().ht; }));
+    auto sz = Size{x - gap, ht};
+    SetBoundingBox(AABB{pos.relative(parent->bounding_box, sz), sz});
+
+    // And refresh the children again now that we know where everything is.
+    for (auto& c : ch) c.refresh(r);
+}
+
+void Group::set_max_gap(i32 new_value) {
+    if (new_value == _max_gap) return;
+    _max_gap = new_value;
     needs_refresh = true;
 }
 
-void CardGroup::set_display_state(Card::DisplayState new_value) {
-    for (auto& c : children) c->display_state = new_value;
+void Group::set_selectable(bool new_value) {
+    for (auto& c : children()) c.selectable = new_value;
 }
 
 TRIVIAL_CACHING_SETTER(CardGroup, bool, autoscale);
@@ -955,6 +1045,19 @@ auto Widget::parent_screen() -> Screen& {
     }
 }
 
+void Widget::remove() {
+    unselect();
+
+    // Erase it from the parent.
+    auto wh = dynamic_cast<WidgetHolder*>(parent);
+    Assert(wh, "Attempting to delete widget that is not in a group or screen?");
+    auto erased = std::erase_if(wh->widgets, [&](auto& w) { return w.get() == this; });
+    Assert(erased, "Widget not found in parent group?");
+
+    // Refresh the parent since it may need to adjust to having one element fewer.
+    if (auto w = dynamic_cast<Widget*>(parent)) w->needs_refresh = true;
+}
+
 void Widget::unselect() {
     auto& parent = parent_screen();
     if (selected) {
@@ -962,6 +1065,12 @@ void Widget::unselect() {
         if (parent.selected_element == this)
             parent.selected_element = nullptr;
     }
+}
+
+auto WidgetHolder::index_of(Widget* c) -> std::optional<u32> {
+    auto it = rgs::find(widgets, c, &std::unique_ptr<Widget>::get);
+    if (it == widgets.end()) return std::nullopt;
+    return u32(it - widgets.begin());
 }
 
 // =============================================================================
@@ -1019,12 +1128,12 @@ void InputSystem::update_selection(bool is_element_selected) {
 void Screen::DeleteAllChildren() {
     selected_element = nullptr;
     hovered_element = nullptr;
-    children.clear();
+    widgets.clear();
 }
 
 void Screen::draw(Renderer& r) {
     r.set_cursor(Cursor::Default);
-    for (auto& e : visible()) e->draw(r);
+    for (auto& e : visible_elements()) e.draw(r);
 }
 
 void Screen::refresh(Renderer& r) {
@@ -1034,10 +1143,10 @@ void Screen::refresh(Renderer& r) {
     // Size hasn’t changed. Still update any elements that
     // requested a refresh. Also ignore visibility here.
     if (prev_size == r.size()) {
-        for (auto& e : children) {
-            if (e->needs_refresh) {
-                e->needs_refresh = false;
-                e->refresh(r);
+        for (auto& e : children()) {
+            if (e.needs_refresh) {
+                e.needs_refresh = false;
+                e.refresh(r);
             }
         }
 
@@ -1047,10 +1156,10 @@ void Screen::refresh(Renderer& r) {
     // Refresh every visible element, and every element that
     // requested a refresh.
     prev_size = r.size();
-    for (auto& e : children) {
-        if (e->visible or e->needs_refresh) {
-            e->needs_refresh = false;
-            e->refresh(r);
+    for (auto& e : children()) {
+        if (e.visible or e.needs_refresh) {
+            e.needs_refresh = false;
+            e.refresh(r);
         }
     }
 }
@@ -1062,15 +1171,15 @@ void Screen::tick(InputSystem& input) {
     if (input.mouse.left and selected_element) selected_element->unselect();
 
     // Tick each child.
-    for (auto& e : visible()) {
+    for (auto& e : visible_elements()) {
         // First, reset all of the child’s properties so we can
         // recompute them.
-        e->reset_properties();
+        e.reset_properties();
 
         // If the cursor is within the element’s bounds, ask it which of its
         // subelements is being hovered over.
-        if (e->hoverable and e->bounding_box.contains(input.mouse.pos)) {
-            hovered_element = e->hovered_child(input);
+        if (e.hoverable and e.bounding_box.contains(input.mouse.pos)) {
+            hovered_element = e.hovered_child(input);
 
             // If, additionally, we had a click, select the element and fire the
             // event handler.

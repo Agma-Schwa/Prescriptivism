@@ -20,6 +20,7 @@ using namespace pr::server;
 // Constants
 // ============================================================================
 constexpr usz PlayersNeeded = pr::constants::PlayersPerGame;
+using enum DisconnectReason;
 
 // ============================================================================
 // Helpers
@@ -78,7 +79,7 @@ bool Server::accept(net::TCPConnexion& connexion) {
     // Make sure we’re not full yet.
     auto connected_players = rgs::distance(players | vws::filter([](auto& p) { return p->connected; }));
     if (connected_players + pending_connexions.size() == PlayersNeeded) {
-        connexion.send(packets::sc::Disconnect{DisconnectReason::ServerFull});
+        connexion.send(packets::sc::Disconnect{ServerFull});
         return false;
     }
 
@@ -93,7 +94,7 @@ void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buf) {
         // If there was an error, close the connexion.
         if (not res) {
             Log("Packet error while processing {}: {}", client.address, res.error());
-            return Kick(client, DisconnectReason::InvalidPacket);
+            return Kick(client, InvalidPacket);
         }
 
         // And stop if the packet was incomplete.
@@ -115,7 +116,7 @@ void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
 void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
     // Player has already submitted a word.
     if (not player_map.contains(client) or player_map[client]->submitted_word) {
-        Kick(client, DisconnectReason::UnexpectedPacket);
+        Kick(client, UnexpectedPacket);
         return;
     }
 
@@ -123,7 +124,7 @@ void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
     constants::Word original;
     for (auto [i, c] : player_map[client]->word | vws::enumerate) original[i] = c.id;
     if (validation::ValidateInitialWord(wc.word, original) != validation::InitialWordValidationResult::Valid) {
-        Kick(client, DisconnectReason::InvalidPacket);
+        Kick(client, InvalidPacket);
         return;
     }
 
@@ -137,7 +138,7 @@ void Server::handle(net::TCPConnexion& client, cs::HeartbeatResponse res) {
     Log("Received heartbeat response from client {}", res.seq_no);
 }
 
-void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
+void Server::handle(net::TCPConnexion& client, cs::Login login) {
     Log("Login: name = {}, password = {}", login.name, login.password);
 
     // Mark this as no longer pending and also check whether it was
@@ -146,13 +147,10 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     auto erased = std::erase_if(pending_connexions, [&](auto& x) {
         return client == x.conn;
     });
-    if (erased != 1) return Kick(client, DisconnectReason::InvalidPacket);
+    if (erased != 1) return Kick(client, InvalidPacket);
 
     // Check that the password matches.
-    if (login.password != password) {
-        Kick(client, DisconnectReason::WrongPassword);
-        return;
-    }
+    if (login.password != password) return Kick(client, WrongPassword);
 
     // Try to match this connexion to an existing player.
     for (auto& p : players) {
@@ -161,8 +159,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
             // already connected.
             if (p->connected) {
                 Log("{} is already connected", login.name);
-                Kick(client, DisconnectReason::UsernameInUse);
-                return;
+                return Kick(client, UsernameInUse);
             }
 
             Log("Player {} logging back in", login.name);
@@ -183,6 +180,44 @@ void Server::handle(net::TCPConnexion& client, packets::cs::Login login) {
     players.push_back(std::make_unique<Player>(client, std::move(login.name)));
     player_map[client] = players.back().get();
     if (players.size() == PlayersNeeded) SetUpGame();
+}
+
+void Server::handle(net::TCPConnexion& client, cs::PlaySoundCard c) {
+    auto& p = player_map[client];
+
+    // Check that the player is the current player.
+    if (p->id != current_player) return Kick(client, UnexpectedPacket);
+
+    // Check that the card indices are valid.
+    auto& target_player = players[c.player];
+    if (
+        c.card_index >= p->hand.size() or
+        c.target_card_index >= target_player->word.size()
+    ) return Kick(client, InvalidPacket);
+
+    // Check that the card is actually a sound card.
+    auto& card = p->hand[c.card_index];
+    if (not card.data.is_sound()) return Kick(client, InvalidPacket);
+
+    // Check that the target card is a valid target.
+    auto target_word = target_player->cards();
+    if (
+        validation::ValidatePlaySoundCard(card.id, target_word, c.target_card_index) !=
+        validation::PlaySoundCardValidationResult::Valid
+    ) return Kick(client, InvalidPacket);
+
+    // Add the sound to the player’s word.
+    // TODO: Sound stacks.
+    // TODO: Check if the sound stack is full.
+    // TODO: Special effects when playing a sound.
+    // TODO: Check for locks.
+    // TODO: The cursed i+2*j -> j change.
+    target_player->word[c.target_card_index].id = card.id;
+    Broadcast(sc::AddSoundToStack{c.player, c.target_card_index, card.id});
+
+    // Remove the card from the player’s hand and end their turn.
+    p->hand.erase(p->hand.begin() + c.card_index);
+    NextPlayer();
 }
 
 // =============================================================================
@@ -235,7 +270,7 @@ void Server::SendGameState(Player& p) {
     // Send each player their hand and id.
     p.send(sc::StartGame{
         player_infos,
-        p.hand | vws::transform(&Card::get_id) | rgs::to<std::vector>(),
+        p.hand | vws::transform(&Card::id) | rgs::to<std::vector>(),
         u8(p.id),
     });
 }

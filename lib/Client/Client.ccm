@@ -6,6 +6,7 @@ module;
 #include <pr/Packets.hh>
 #include <ranges>
 #include <thread>
+#include <vector>
 export module pr.client;
 
 import pr.utils;
@@ -124,9 +125,7 @@ public:
 
     /// Get the player’s word as a list of card ids.
     auto cards() -> std::vector<CardId> {
-        return word->children                                //
-             | vws::transform([](auto& c) { return c->id; }) //
-             | rgs::to<std::vector>();
+        return word->cards() | vws::transform(&Card::get_id) | rgs::to<std::vector>();
     }
 
     explicit Player() = default;
@@ -150,7 +149,7 @@ class pr::client::GameScreen : public Screen {
     CardGroup* our_hand{};
 
     /// The words of other players.
-    Group<>* other_words{};
+    Group* other_words{};
 
     /// The card widget used to preview a card.
     Card* preview{};
@@ -163,6 +162,7 @@ class pr::client::GameScreen : public Screen {
 
 public:
     explicit GameScreen(Client& c);
+    void add_card(PlayerId id, u32 stack_idx, CardId card);
     void enter(packets::sc::StartGame sg);
     void end_turn();
     void on_refresh(Renderer& r) override;
@@ -170,8 +170,8 @@ public:
     void tick(InputSystem& input) override;
 
 private:
-    /// Return the player that owns this card in their word.
-    auto PlayerForCardInWord(Card* c) -> Player*;
+    auto PlayerById(PlayerId id) -> Player&;
+    auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
     void ResetOpponentWords();
     void TickSelection();
 };
