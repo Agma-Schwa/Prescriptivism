@@ -359,13 +359,26 @@ auto CenterTextInBox(
 
     // This calculation ‘centers’ text in the box at the baseline.
     //
-    // For correct vertical centering, the ascender of the font determines
-    // the distance from the *top* of the box, assuming the box height is
-    // equal to the combined strut of the font.
+    // To center text in a box whose size is equal to the font strut
+    // (i.e. ascender + descender), one of the following, equivalent
+    // conditions must be met:
     //
-    // Since our text boxes include padding, we need to add half the remaining
-    // space between the box height and font strut to the ascender to get the
-    // total distance from the top.
+    //   1. The distance from the top of the box must equal the ascender.
+    //   2. The distance from the bottom of the box must equal the descender.
+    //
+    // Observe that these two are equivalent if the box size matches the
+    // font strut exactly (e.g. if the ascender is 7, the descender 3, and
+    // the box size thus 10, placing text 7 from the top is equivalent to
+    // placing it 3 from the bottom.
+    //
+    // Since this achieves centering, it follows that any extra space added
+    // to the box (i.e. if the box is larger than the font strut) must be
+    // distributed equally at the top and bottom of the box in order to
+    // maintain the centering.
+    //
+    // Thus, the top offset is given by the ascender of the font (condition
+    // 1 above) plus half the extra space in the box, which is exactly
+    // (box_height - strut) / 2.
     //
     // See also:
     //    https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
