@@ -388,7 +388,7 @@ auto CenterTextInBox(
 }
 
 void Button::draw(Renderer& r) {
-    r.draw_rect(rbox(), hovered ? HoverButtonColour : DefaultButtonColour);
+    r.draw_rect(abox(), hovered ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
 
@@ -398,7 +398,7 @@ void Label::draw(Renderer& r) {
     xy position;
 
     if (fixed_height != 0) {
-        position = CenterTextInBox(r, shaped, fixed_height, rbox());
+        position = CenterTextInBox(r, shaped, fixed_height, abox());
     } else {
         position = auto{pos}.voffset(i32(shaped.depth)).relative(parent_box, shaped.size());
     }
@@ -445,7 +445,7 @@ void TextBox::UpdateText(ShapedText new_text) {
 }
 
 auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
-    return CenterTextInBox(r, text, bounding_box.height(), rbox());
+    return CenterTextInBox(r, text, bounding_box.height(), abox());
 }
 
 void TextBox::draw(Renderer& r) {
@@ -469,7 +469,7 @@ void TextBox::refresh(Renderer& r) {
         std::max({min_ht, i32(label.height + label.depth), strut}) + 2 * padding,
     };
 
-    SetBoundingBox(rpos(), sz);
+    SetBoundingBox(apos(), sz);
 }
 
 void TextEdit::draw(Renderer& r) {
@@ -566,7 +566,7 @@ void TextEdit::draw(Renderer& r) {
 
     if (hovered) r.set_cursor(Cursor::IBeam);
 
-    r.draw_rect(rbox(), selected ? HoverButtonColour : DefaultButtonColour);
+    r.draw_rect(abox(), selected ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
 
@@ -704,7 +704,7 @@ void Throbber::draw(Renderer& r) {
 }
 
 void Image::draw(Renderer& r) {
-    if (texture) r.draw_texture_sized(*texture, rbox());
+    if (texture) r.draw_texture_sized(*texture, abox());
 }
 
 void Image::UpdateDimensions() {

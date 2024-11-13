@@ -188,8 +188,11 @@ protected:
     }
 
 public:
-    /// Unselect the element
-    void unselect();
+    /// Calculate the absolute bounding box in screen coordinates.
+    auto abox() -> AABB { return {apos(), bounding_box.size()}; }
+
+    /// Calculate the absolute position in screen coordinates.
+    auto apos() -> xy { return pos.relative(parent->bounding_box, bounding_box.size()); }
 
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
@@ -217,13 +220,8 @@ public:
         selected = false;
     }
 
-    /// Calculate bounding box relative to the parent.
-    auto rbox() -> AABB { return {rpos(), bounding_box.size()}; }
-
-    /// Calculate position relative to the parent using our size.
-    auto rpos() -> xy {
-        return pos.relative(parent->bounding_box, bounding_box.size());
-    }
+    /// Unselect the element
+    void unselect();
 };
 
 template <typename WidgetType>
