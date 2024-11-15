@@ -16,6 +16,9 @@ import pr.validation;
 
 using namespace pr;
 using namespace pr::server;
+namespace sc = packets::sc;
+namespace cs = packets::cs;
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -68,12 +71,19 @@ void Server::Tick() {
     server.update_connexions();
 
     // Start the game if we have enough connected players.
-    //
-    // This check is here because it needs to be invoked in at least
-    // two places: when we receive the last word and all players are
-    // connected, or when a player reconnects after we have received
-    // all words.
-    MaybeStartGame();
+    // Start the game iff all players are connected and all words have been received.
+    if (
+        state == State::WaitingForWords and
+        AllPlayersConnected() and
+        AllWordsSubmitted()
+    ) {
+        state = State::Running;
+
+        // Send each player’s word to every player and tell the first
+        // player to start their turn.
+        for (auto& p : players) SendGameState(*p);
+        player().send(sc::StartTurn{});
+    }
 }
 
 bool Server::accept(net::TCPConnexion& connexion) {
@@ -106,9 +116,6 @@ void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buf) {
 // =============================================================================
 //  Packet Handlers
 // =============================================================================
-namespace sc = packets::sc;
-namespace cs = packets::cs;
-
 void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
     Log("Client {} disconnected", client.address);
     client.disconnect();
@@ -168,9 +175,17 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
             player_map[client] = p.get();
 
             // Get the player up to date with the current game state.
-            if (set_up and not p->submitted_word) p->send(sc::WordChoice{BuildWordArray(p->word)});
-            if (started) SendGameState(*p);
-            if (current_player == p->id) p->send(sc::StartTurn{});
+            switch (state) {
+                case State::WaitingForPlayerRegistration: break;
+                case State::WaitingForWords:
+                    if (not p->submitted_word) p->send(sc::WordChoice{BuildWordArray(p->word)});
+                    break;
+
+                case State::Running:
+                    SendGameState(*p);
+                    if (current_player == p->id) p->send(sc::StartTurn{});
+                    break;
+            }
             return;
         }
     }
@@ -233,22 +248,6 @@ void Server::Draw(Player& p, usz count) {
     }
 }
 
-void Server::MaybeStartGame() {
-    // Start the game iff all players are connected and all words have been received.
-    if (
-        started or
-        not set_up or
-        not AllPlayersConnected() or
-        not AllWordsSubmitted()
-    ) return;
-    started = true;
-
-    // Send each player’s word to every player and tell the first
-    // player to start their turn.
-    for (auto& p : players) SendGameState(*p);
-    player().send(sc::StartTurn{});
-}
-
 void Server::NextPlayer() {
     // TODO: Can a player somehow have more than 7 cards in hand?
     if (player().hand.size() < HandSize) Draw(player(), HandSize - player().hand.size());
@@ -278,7 +277,8 @@ void Server::SendGameState(Player& p) {
 }
 
 void Server::SetUpGame() {
-    set_up = true;
+    Assert(state == State::WaitingForPlayerRegistration);
+    state = State::WaitingForWords;
 
     // Consonants.
     auto AddCards = [&](std::span<const CardData> s) {

@@ -86,6 +86,17 @@ class pr::server::Server : net::TCPServerCallbacks {
         chr::steady_clock::time_point established;
     };
 
+    enum struct State {
+        // We are waiting for enough players to join for the first time.
+        WaitingForPlayerRegistration,
+
+        // We are waiting for players to submit their words.
+        WaitingForWords,
+
+        // The game is running.
+        Running,
+    };
+
     /// TCP server that manages client connexions.
     net::TCPServer server;
 
@@ -112,13 +123,7 @@ class pr::server::Server : net::TCPServerCallbacks {
     std::vector<Card> deck;
     std::vector<Card> discard{};
 
-    /// Whether the game has been set up, i.e. the players are locked
-    /// in, and words have been generated.
-    bool set_up = false;
-
-    /// Whether the game has started, i.e. whether all players have
-    /// been assigned words, etc.
-    bool started = false;
+    State state = State::WaitingForPlayerRegistration;
 
 public:
     /// Create and start the server.
@@ -150,7 +155,6 @@ private:
     }
 
     void Draw(Player& p, usz count = 1);
-    void MaybeStartGame();
     void NextPlayer();
     void SendGameState(Player& p);
     void SetUpGame();
