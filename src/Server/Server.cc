@@ -20,6 +20,7 @@ using namespace pr::server;
 // Constants
 // ============================================================================
 constexpr usz PlayersNeeded = pr::constants::PlayersPerGame;
+constexpr usz HandSize = 7;
 using enum DisconnectReason;
 
 // ============================================================================
@@ -249,8 +250,9 @@ void Server::MaybeStartGame() {
 }
 
 void Server::NextPlayer() {
+    // TODO: Can a player somehow have more than 7 cards in hand?
+    if (player().hand.size() < HandSize) Draw(player(), HandSize - player().hand.size());
     player().send(sc::EndTurn{});
-    // TODO fill back player deck to 7 cards
     current_player = (current_player + 1) % players.size();
     player().send(sc::StartTurn{});
 }
@@ -317,16 +319,15 @@ void Server::SetUpGame() {
     AddCards(CardDatabasePowers);
 
     // Draw each player’s hand, but don’t send the cards yet.
-    static constexpr usz StartingHandSize = 7;
     rgs::shuffle(deck, rng);
     for (auto& p : players) {
-        Assert(deck.size() > StartingHandSize, "Somehow out of cards?");
+        Assert(deck.size() > HandSize, "Somehow out of cards?");
         p->hand.insert(
             p->hand.end(),
-            std::make_move_iterator(deck.end() - StartingHandSize),
+            std::make_move_iterator(deck.end() - HandSize),
             std::make_move_iterator(deck.end())
         );
-        deck.erase(deck.end() - StartingHandSize, deck.end());
+        deck.erase(deck.end() - HandSize, deck.end());
     }
     rgs::shuffle(players, rng);
 

@@ -109,6 +109,10 @@ void GameScreen::add_card(PlayerId id, u32 stack_idx, CardId card) {
     player.word->stacks()[stack_idx].push(card);
 }
 
+void GameScreen::add_card_to_hand(CardId id) {
+    our_hand->add_stack(id);
+}
+
 void GameScreen::enter(packets::sc::StartGame sg) {
     DeleteAllChildren();
 

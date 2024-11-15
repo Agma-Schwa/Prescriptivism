@@ -316,7 +316,7 @@ void Client::handle(sc::WordChoice wc) {
 }
 
 void Client::handle(sc::Draw dr) {
-    Log("Recieved card: {}", stream(CardDatabase[+dr.card].name).replace("\n", " "));
+    game_screen.add_card_to_hand(dr.card);
 }
 
 void Client::handle(sc::StartTurn) {
