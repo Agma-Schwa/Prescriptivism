@@ -200,12 +200,8 @@ WaitingScreen::WaitingScreen(Client& c) {
 }
 
 WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
-    cards = &Create<CardGroup>(Position::Center().anchor_to(Anchor::Center));
+    cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->autoscale = true;
-
-    // Create dummy cards; we’ll initialise and position them later.
-    for (usz i = 0; i < constants::StartingWordSize; i++) cards->add(CardId(i));
-    cards->selectable = true;
 
     auto& submit = Create<Button>(
         c.renderer.make_text("Submit", FontSize::Medium),
@@ -223,7 +219,7 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 void WordChoiceScreen::SendWord() {
     using enum validation::InitialWordValidationResult;
     constants::Word a;
-    for (auto [a, c] : vws::zip(a, cards->cards())) a = c.id;
+    for (auto [a, c] : vws::zip(a, cards->top_cards())) a = c.id;
 
     // Validate the word; if it is valid, submit it.
     if (validation::ValidateInitialWord(a, original_word) == Valid) {
@@ -261,7 +257,9 @@ void WordChoiceScreen::SendWord() {
 void WordChoiceScreen::enter(const constants::Word& word) {
     selected = nullptr;
     original_word = word;
-    for (auto [w, c] : vws::zip(word, cards->cards())) c.id = w;
+    cards->clear();
+    for (auto s : word) cards->add_stack(s);
+    cards->make_selectable();
     client.enter_screen(*this);
 }
 
@@ -271,22 +269,21 @@ void WordChoiceScreen::on_refresh(Renderer& r) {
 
 void WordChoiceScreen::tick(InputSystem& input) {
     defer { Screen::tick(input); };
+    if (not selected_element) return;
+    Assert(dynamic_cast<CardStacks::Stack*>(selected_element), "This screen should only contain cards?");
 
-    // Implement card swapping.
-    if (selected_element and cards->contains(selected_element)) {
-        // If the selected card was clicked, deselect it.
-        if (selected_element == selected) selected_element->unselect();
+    // If the selected card was clicked, deselect it.
+    if (selected_element == selected) selected_element->unselect();
 
-        // If no card was selected, remember it.
-        else if (not selected) selected = static_cast<Card*>(std::exchange(selected_element, nullptr));
+    // If no card was selected, remember it.
+    else if (not selected) selected = static_cast<CardStacks::Stack*>(std::exchange(selected_element, nullptr));
 
-        // Otherwise, swap the cards and unselect both.
-        else {
-            cards->swap(selected, selected_element);
-            selected->unselect();
-            selected_element->unselect();
-            selected = nullptr;
-        }
+    // Otherwise, swap the cards and unselect both.
+    else {
+        cards->swap(selected, selected_element);
+        selected->unselect();
+        selected_element->unselect();
+        selected = nullptr;
     }
 }
 

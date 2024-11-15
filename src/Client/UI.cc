@@ -741,7 +741,7 @@ void Card::draw(Renderer& r) {
     r.draw_rect(bounding_box, outline_colour.lighten(.1f), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
         bounding_box,
-        CardGroup::CardGaps[scale] / 2,
+        CardStacks::CardGaps[scale] / 2,
         Colour{50, 50, 200, 255},
         BorderRadius[scale]
     );
@@ -911,15 +911,60 @@ void Card::set_id(CardId ct) {
 
 TRIVIAL_CACHING_SETTER(Card, Scale, scale, needs_full_refresh = true)
 
-void CardGroup::add(CardId c) {
-    auto card = std::make_unique<Card>(this, Position());
-    card->id = c;
-    widgets.push_back(std::move(card));
-    needs_refresh = true;
+void CardStacks::Stack::draw(Renderer& r) {
+    Group::draw(r);
+    if (selected) {
+        Assert(not widgets.empty(), "Selected empty stack?");
+        auto& c = cards().front();
+        r.draw_outline_rect(
+            bounding_box,
+            CardGaps[c.scale] / 2,
+            Colour{50, 50, 200, 255},
+            Card::BorderRadius[c.scale]
+        );
+    }
 }
 
-void CardGroup::refresh(Renderer& r) {
-    auto ch = cards();
+void CardStacks::Stack::push(CardId card) {
+    auto& c = create<Card>(Position());
+    c.id = card;
+    c.scale = scale;
+}
+
+void CardStacks::Stack::refresh(Renderer& r) {
+    for (auto& c : cards()) c.scale = scale;
+    max_gap = -Card::CardSize[scale].ht + 2 * Card::Border[scale].ht;
+    Group::refresh(r);
+}
+
+TRIVIAL_CACHING_SETTER(
+    CardStacks::Stack,
+    Scale,
+    scale
+)
+
+void CardStacks::Stack::set_display_state(Card::DisplayState new_value) {
+    for (auto& c : cards()) c.display_state = new_value;
+}
+
+void CardStacks::add_stack(CardId c) {
+    auto& card = create<Stack>(Position()).create<Card>(Position());
+    card.id = c;
+}
+
+auto CardStacks::selected_child(InputSystem& input) -> Widget* {
+    auto card = Group::selected_child(input);
+    if (not card) return nullptr;
+    switch (selection_mode) {
+        case SelectionMode::Stack: return static_cast<Stack*>(card->parent);
+        case SelectionMode::Card: return card;
+        case SelectionMode::Top: return &static_cast<Stack*>(card->parent)->top;
+    }
+    Unreachable();
+}
+
+void CardStacks::refresh(Renderer& r) {
+    auto ch = stacks();
     if (ch.empty()) return;
 
     // If we’re allowed to scale up, determine the maximum scale that works.
@@ -940,19 +985,16 @@ void CardGroup::refresh(Renderer& r) {
     Group::refresh(r);
 }
 
-void CardGroup::set_display_state(Card::DisplayState new_value) {
-    for (auto& c : cards()) c.display_state = new_value;
+void CardStacks::set_display_state(Card::DisplayState new_value) {
+    for (auto& c : stacks()) c.display_state = new_value;
 }
 
-void Group::draw(Renderer& r) {
-    for (auto& c : visible_elements()) c.draw(r);
-}
-
-auto Group::hovered_child(InputSystem& input) -> Widget* {
+template <typename Callable>
+auto Group::HoverSelectHelper(InputSystem& input, Callable callable) -> Widget* {
     auto Get = [&]<typename T>(T&& range) -> Widget* {
         for (auto& c : std::forward<T>(range)) {
             if (c.bounding_box.contains(input.mouse.pos)) {
-                auto child = c.hovered_child(input);
+                auto child = std::invoke(callable, c);
                 if (child) return child;
             }
         }
@@ -966,6 +1008,19 @@ auto Group::hovered_child(InputSystem& input) -> Widget* {
     // overlap with widgets on the right being above), in which case
     // we pick the last one.
     return max_gap < 0 ? Get(children() | vws::reverse) : Get(children());
+}
+
+void Group::clear() {
+    for (auto& w : widgets) w->unselect();
+    widgets.clear();
+}
+
+void Group::draw(Renderer& r) {
+    for (auto& c : visible_elements()) c.draw(r);
+}
+
+auto Group::hovered_child(InputSystem& input) -> Widget* {
+    return HoverSelectHelper(input, [&](Widget& c) { return c.hovered_child(input); });
 }
 
 void Group::refresh(Renderer& r) {
@@ -983,42 +1038,47 @@ void Group::refresh(Renderer& r) {
 
     // Refresh each element to make sure their sizes are up-to-date
     // and compute the total width of all elements.
-    i32 total_width = 0;
+    Axis a = vertical ? Axis::Y : Axis::X;
+    i32 total_extent = 0;
     for (auto& c : ch) {
         c.refresh(r);
-        total_width += c.bounding_box.size().wd;
+        total_extent += c.bounding_box.extent(a);
 
         // If the gap is *negative*, i.e. we’re supposed to overlap
         // elements, factor it into the calculation.
-        if (max_gap < 0) total_width += max_gap;
+        if (max_gap < 0) total_extent += max_gap;
     }
 
     // Compute gap size.
-    auto parent_wd = parent->bounding_box.width();
+    auto parent_extent = parent->bounding_box.extent(a);
     i32 gap = 0;
-    if (total_width < parent_wd and ch.size() > 1) {
+    if (total_extent < parent_extent and ch.size() > 1) {
         gap = std::min(
             max_gap,
-            i32((parent_wd - total_width) / (ch.size() - 1))
+            i32((parent_extent - total_extent) / (ch.size() - 1))
         );
     } else if (max_gap < 0) {
         gap = max_gap;
     }
 
     // Position the children.
-    i32 x = 0;
+    i32 offset = 0;
     for (auto& c : ch) {
-        c.pos = Position::VCenter(x);
-        x += c.bounding_box.width() + gap;
+        c.pos = Position(flip(a), alignment, offset);
+        offset += c.bounding_box.extent(a) + gap;
     }
 
     // Update our bounding box.
-    auto ht = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.size().ht; }));
-    auto sz = Size{x - gap, ht};
-    SetBoundingBox(AABB{pos.relative(parent->bounding_box, sz), sz});
+    auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.extent(flip(a)); }));
+    auto sz = Size{a, offset - gap, max};
+    SetBoundingBox(pos.relative(parent->bounding_box, sz), sz);
 
     // And refresh the children again now that we know where everything is.
     for (auto& c : ch) c.refresh(r);
+}
+
+auto Group::selected_child(InputSystem& input) -> Widget* {
+    return HoverSelectHelper(input, [&](Widget& c) { return c.selected_child(input); });
 }
 
 void Group::swap(Widget* a, Widget* b) {
@@ -1029,41 +1089,27 @@ void Group::swap(Widget* a, Widget* b) {
     needs_refresh = true;
 }
 
-void Group::set_max_gap(i32 new_value) {
-    if (new_value == _max_gap) return;
-    _max_gap = new_value;
-    needs_refresh = true;
+TRIVIAL_CACHING_SETTER(Group, i32, max_gap);
+TRIVIAL_CACHING_SETTER(Group, bool, vertical);
+TRIVIAL_CACHING_SETTER(Group, i32, alignment);
+
+void Group::make_selectable(bool new_value) {
+    for (auto& c : children()) {
+        if (auto g = c.cast<Group>()) g->make_selectable(new_value);
+        c.selectable = new_value;
+    }
 }
 
-void Group::set_selectable(bool new_value) {
-    for (auto& c : children()) c.selectable = new_value;
-}
-
-TRIVIAL_CACHING_SETTER(CardGroup, bool, autoscale);
-TRIVIAL_CACHING_SETTER(CardGroup, i32, max_width);
-TRIVIAL_CACHING_SETTER(CardGroup, Scale, scale);
+TRIVIAL_CACHING_SETTER(CardStacks, bool, autoscale);
+TRIVIAL_CACHING_SETTER(CardStacks, i32, max_width);
+TRIVIAL_CACHING_SETTER(CardStacks, Scale, scale);
 
 auto Widget::parent_screen() -> Screen& {
     Element* e = parent;
     for (;;) {
-        if (auto screen = dynamic_cast<Screen*>(e)) return *screen;
-        auto widget = dynamic_cast<Widget*>(e);
-        Assert(widget, "Widget without parent screen");
-        e = widget->parent;
+        if (auto screen = e->cast<Screen>()) return *screen;
+        e = e->as<Widget>().parent;
     }
-}
-
-void Widget::remove() {
-    unselect();
-
-    // Erase it from the parent.
-    auto wh = dynamic_cast<WidgetHolder*>(parent);
-    Assert(wh, "Attempting to delete widget that is not in a group or screen?");
-    auto erased = std::erase_if(wh->widgets, [&](auto& w) { return w.get() == this; });
-    Assert(erased, "Widget not found in parent group?");
-
-    // Refresh the parent since it may need to adjust to having one element fewer.
-    if (auto w = dynamic_cast<Widget*>(parent)) w->needs_refresh = true;
 }
 
 void Widget::unselect() {
@@ -1075,10 +1121,30 @@ void Widget::unselect() {
     }
 }
 
-auto WidgetHolder::index_of(Widget* c) -> std::optional<u32> {
-    auto it = rgs::find(widgets, c, &std::unique_ptr<Widget>::get);
+void Widget::set_needs_refresh(bool new_value) {
+    // Do NOT cache this since we need to propagate changes to our
+    // parent, and that may not have been done yet because this may
+    // have already been set before we were assigned a parent if this
+    // is a new object.
+    _needs_refresh = new_value;
+
+    // Groups care about this because they need to recompute the
+    // positions of their children.
+    if (auto g = parent->cast<Group>())
+        g->needs_refresh = true;
+}
+
+auto WidgetHolder::index_of(Widget& c) -> std::optional<u32> {
+    auto it = rgs::find(widgets, &c, &std::unique_ptr<Widget>::get);
     if (it == widgets.end()) return std::nullopt;
     return u32(it - widgets.begin());
+}
+
+void WidgetHolder::remove(Widget& w) {
+    w.unselect();
+    auto erased = std::erase_if(widgets, [&](auto& c) { return c.get() == &w; });
+    Assert(erased == 1, "Attempted to remove non-direct child?");
+    if (auto g = dynamic_cast<Widget*>(this)) g->needs_refresh = true;
 }
 
 // =============================================================================
@@ -1182,27 +1248,37 @@ void Screen::tick(InputSystem& input) {
     for (auto& e : visible_elements()) {
         // First, reset all of the child’s properties so we can
         // recompute them.
-        e.reset_properties();
+        e.hovered = false;
 
         // If the cursor is within the element’s bounds, ask it which of its
-        // subelements is being hovered over.
-        if (e.hoverable and e.bounding_box.contains(input.mouse.pos)) {
+        // subelements is being hovered over, and which was selected if we had
+        // a click.
+        if (e.bounding_box.contains(input.mouse.pos)) {
             hovered_element = e.hovered_child(input);
 
-            // If, additionally, we had a click, select the element and fire the
-            // event handler.
-            if (input.mouse.left and hovered_element) {
-                if (hovered_element->selectable) selected_element = hovered_element;
-                hovered_element->event_click(input);
+            // If there was a click, attempt to select an element.
+            if (input.mouse.left) {
+                auto target = hovered_element;
+                selected_element = e.selected_child(input);
+
+                // If we could select an element, mark it as selected and set
+                // it as the target for the click instead.
+                if (selected_element) {
+                    selected_element->selected = true;
+                    target = selected_element;
+                }
+
+                // In any case, dispatch the click.
+                if (target) {
+                    target->event_click(input);
+                    input.mouse.left = false; // Avoid clicking on more than one element.
+                }
             }
         }
     }
 
-    // Mark the selected element as selected once more.
-    if (selected_element) {
-        selected_element->selected = true;
-        selected_element->event_input(input);
-    }
+    // Send any input to the selected element if there is one.
+    if (selected_element) selected_element->event_input(input);
 
     // In any case, tell the input system whether we have a
     // selected element.

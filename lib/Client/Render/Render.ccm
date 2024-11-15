@@ -215,6 +215,11 @@ struct pr::client::AABB {
     /// Check if this box contains a point.
     [[nodiscard]] auto contains(xy) const -> bool;
 
+    /// Get the extent along an axis.
+    [[nodiscard]] constexpr auto extent(Axis a) const -> i32 {
+        return a == Axis::X ? width() : height();
+    }
+
     /// Grow the box.
     [[nodiscard]] constexpr auto grow(i32 amount) const -> AABB { return grow(amount, amount); }
     [[nodiscard]] constexpr auto grow(i32 x, i32 y) const -> AABB {

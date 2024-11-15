@@ -28,7 +28,7 @@ class Throbber;
 class Image;
 class Card;
 class Widget;
-class CardGroup;
+class CardStacks;
 class Group;
 
 enum class Anchor : u8;
@@ -78,11 +78,16 @@ struct pr::client::Position {
     constexpr Position() = default;
     constexpr Position(xy base, Anchor a = Anchor::Default) : base(base), anchor(a) {}
     constexpr Position(i32 x, i32 y, Anchor a = Anchor::Default) : base(x, y), anchor(a) {}
+    constexpr Position(Axis a, i32 axis_value, i32 other, Anchor anchor = Anchor::Default)
+        : base(a == Axis::X ? axis_value : other, a == Axis::Y ? axis_value : other), anchor(anchor) {}
 
     /// Create a position that is centered horizontally or vertically.
     static constexpr auto HCenter(i32 y, Anchor a = Anchor::Default) -> Position { return {Centered, y, a}; }
     static constexpr auto VCenter(i32 x, Anchor a = Anchor::Default) -> Position { return {x, Centered, a}; }
     static constexpr auto Center(Anchor a = Anchor::Default) -> Position { return {Centered, Centered, a}; }
+    static constexpr auto Center(Axis a, i32 other, Anchor anchor = Anchor::Default) -> Position {
+        return a == Axis::X ? HCenter(other, anchor) : VCenter(other, anchor);
+    }
 
     /// Create a position from another position, but center it.
     static constexpr auto Center(Position pos) -> Position { return HCenter(VCenter(pos)); }
@@ -159,6 +164,22 @@ protected:
 public:
     virtual ~Element() = default;
 
+    /// Cast this to a certain type, asserting on failure.
+    template <std::derived_from<Element> T>
+    auto as() -> T& {
+        auto ptr = cast<T>();
+        Assert(ptr, "Failed to cast widget to desired type!");
+        return *ptr;
+    }
+
+    /// Cast this to a certain type, returning nullptr on failure.
+    template <std::derived_from<Element> T>
+    auto cast() -> T* { return dynamic_cast<T*>(this); }
+
+    /// Check if a widget has a certain type.
+    template <std::derived_from<Element>... Ts>
+    bool is() { return (dynamic_cast<Ts*>(this) or ...); }
+
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
 };
@@ -168,13 +189,14 @@ class pr::client::Widget : public Element {
     LIBBASE_IMMOVABLE(Widget);
     Readonly(Element*, parent);
 
+    Property(bool, needs_refresh, false);
+
 public:
-    bool hovered       : 1 = false; ///< Element is being hovered.
-    bool hoverable     : 1 = true;  ///< Element can be hovered over.
-    bool selectable    : 1 = false; ///< Element can be selected.
-    bool selected      : 1 = false; ///< Element is selected.
-    bool visible       : 1 = true;  ///< Element is rendered, ticked, and interactable.
-    bool needs_refresh : 1 = false; ///< Element requested a refresh.
+    bool hovered    : 1 = false; ///< Element is being hovered.
+    bool hoverable  : 1 = true;  ///< Element can be hovered over.
+    bool selectable : 1 = false; ///< Element can be selected.
+    bool selected   : 1 = false; ///< Element is selected.
+    bool visible    : 1 = true;  ///< Element is rendered, ticked, and interactable.
 
     /// Position of the widget.
     Position pos;
@@ -198,6 +220,17 @@ public:
     /// Event handler for when a selected element is given text input.
     virtual void event_input(InputSystem&) {}
 
+    /// Check whether an element is a parent of this widget.
+    bool has_parent(Element* other) {
+        auto p = parent;
+        for (;;) {
+            if (p == other) return true;
+            auto w = p->cast<Widget>();
+            if (not w) return false;
+            p = w->parent;
+        }
+    }
+
     /// Determine which of our children is being hovered, if any. Widgets
     /// that don’t have children can just return themselves.
     virtual auto hovered_child(InputSystem&) -> Widget* {
@@ -212,19 +245,11 @@ public:
     /// Recompute bounding box etc.
     virtual void refresh(Renderer&) {}
 
-    /// Delete this widget.
-    ///
-    /// This only applies to references to the widget within the UI; any
-    /// external references must be cleaned up manually.
-    ///
-    /// Calling this on a widget that is not in a group or screen is not
-    /// allowed and will crash.
-    void remove();
-
-    /// Reset properties at the start of a tick.
-    void reset_properties() {
-        hovered = false;
-        selected = false;
+    /// Determine which of our children is being selected, if any. Widgets
+    /// that don’t have children can just return themselves.
+    virtual auto selected_child(InputSystem&) -> Widget* {
+        if (not selectable) return nullptr;
+        return this;
     }
 
     /// Unselect the element
@@ -232,26 +257,30 @@ public:
 };
 
 class pr::client::WidgetHolder {
-    friend void Widget::remove();
-
 protected:
     /// List of children.
     std::vector<std::unique_ptr<Widget>> widgets;
 
 public:
+    virtual ~WidgetHolder() = default;
+
     /// Iterate over the children of this element.
+    template <typename CastTo = Widget>
     auto children() {
         /// Transform views can’t be nested, so do this the dumb way.
-        return widgets | vws::transform([](auto& w) -> Widget& { return *w; });
+        return widgets | vws::transform([](auto& w) -> CastTo& { return static_cast<CastTo&>(*w); });
     }
+
+    /// Get a widget by index.
+    auto index_of(Widget& c) -> std::optional<u32>;
+
+    /// Remove a widget. This asserts if the widget is not in the list.
+    void remove(Widget& w);
 
     /// Get all visible elements.
     auto visible_elements() {
         return children() | vws::filter([](auto& e) { return e.visible; });
     }
-
-    /// Get a widget by index.
-    auto index_of(Widget* c) -> std::optional<u32>;
 };
 
 /// A screen that displays elements and controls user
@@ -537,6 +566,7 @@ public:
     // that makes vertical lines appear thinner than horizontal lines, so we
     // compensate for that here, by making the X border wider than the Y border.
     static constexpr Size Border[NumScales] = {{5, 4}, {9, 8}, {17, 16}, {25, 24}};
+    static constexpr i32 BorderRadius[NumScales] = {5, 10, 20, 30};
 
 private:
     static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge, FontSize::Title};
@@ -544,7 +574,6 @@ private:
     static constexpr FontSize SoundDescriptionSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Large, FontSize::Huge};
     static constexpr FontSize PowerDescriptionSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Intermediate, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title, FontSize::Gargantuan};
-    static constexpr i32 BorderRadius[NumScales] = {5, 10, 20, 30};
 
     Property(CardId, id, CardId::$$Count);
     Property(Scale, scale, Field);
@@ -572,8 +601,13 @@ class pr::client::Group : public Widget
     /// (e.g. INT_MAX) to use equal gaps.
     Property(i32, max_gap, 10);
 
-    /// Write-only property to make the group selectable.
-    Writeonly(bool, selectable);
+    /// Whether the elements of this group should be laid out vertically.
+    Property(bool, vertical, false);
+
+    /// The positioning of the children within this element on the
+    /// primary axis (i.e. the layout direction). By default, elements
+    /// are centered on the axis on which they are laid out.
+    Property(i32, alignment, Position::Centered);
 
 public:
     Group(Element* parent, Position pos) : Widget(parent, pos) {}
@@ -581,14 +615,20 @@ public:
     /// Create an element with this as its parent.
     template <std::derived_from<Widget> El, typename... Args>
     auto create(Args&&... args) -> El& {
-        auto el = std::make_unique<El>(this, std::forward<Args>(args)...);
-        auto& ref = *el;
-        widgets.push_back(std::move(el));
-        return ref;
+        auto el = new El(this, std::forward<Args>(args)...);
+        widgets.emplace_back(el);
+        needs_refresh = true;
+        return *el;
     }
+
+    /// Remove all children from this group.
+    void clear();
 
     /// Check if this group contains an element.
     auto contains(Widget* c) -> bool { return c->parent == this; }
+
+    /// Make all children of this group selectable.
+    void make_selectable(bool sel = true);
 
     /// Swap two elements of the group.
     void swap(Widget* a, Widget* b);
@@ -596,11 +636,50 @@ public:
     void draw(Renderer& r) override;
     auto hovered_child(InputSystem&) -> Widget* override;
     void refresh(Renderer&) override;
+    auto selected_child(InputSystem&) -> Widget* override;
+
+private:
+    template <typename Callable>
+    auto HoverSelectHelper(InputSystem& input, Callable c) -> Widget*;
 };
 
-class pr::client::CardGroup : public Group {
+/// A group of widgets, each of which are a stack of cards
+/// positioned on top of each other.
+class pr::client::CardStacks final : public Group {
     using Scale = Card::Scale;
 
+public:
+    enum struct SelectionMode : u8 {
+        Stack, ///< Select an entire stack.
+        Card,  ///< Select individual cards in a stack.
+        Top,   ///< Select the topmost card in each stack.
+    };
+
+    class Stack final : public Group {
+        friend CardStacks;
+        friend Group;
+
+        Property(Scale, scale, Scale::Field);
+        Writeonly(Card::DisplayState, display_state);
+        ComputedReadonly(CardStacks&, parent, Widget::get_parent()->as<CardStacks>());
+        ComputedReadonly(Card&, top, static_cast<Card&>(*widgets.back()));
+
+        Stack(Element* parent, Position pos) : Group(parent, pos) {
+            vertical = true;
+        }
+
+    public:
+        auto cards() { return children<Card>(); }
+        auto index_of(Card& c) -> std::optional<u32> { return Group::index_of(c); }
+        void push(CardId card);
+
+        void draw(Renderer& r) override;
+        void refresh(Renderer&) override;
+    };
+
+    static constexpr i32 CardGaps[Scale::NumScales]{5, 10, 20};
+
+private:
     /// The scale that is set for all cards in the group.
     Property(Scale, scale, Scale::Field);
 
@@ -611,28 +690,44 @@ class pr::client::CardGroup : public Group {
     /// card size if possible.
     Property(bool, autoscale, false);
 
-    /// Write-only property to set the display state.
-    Writeonly(Card::DisplayState, display_state);
-
 public:
-    static constexpr i32 CardGaps[Scale::NumScales]{5, 10, 20};
+    /// How the group should handle selections.
+    SelectionMode selection_mode = SelectionMode::Stack;
 
-    CardGroup(Element* parent, Position pos) : CardGroup(parent, pos, {}) {}
-    CardGroup(Element* parent, Position pos, std::span<CardId> cards) : Group(parent, pos) {
-        for (auto c : cards) add(c);
+    CardStacks(Element* parent, Position pos) : CardStacks(parent, pos, {}) {}
+    CardStacks(Element* parent, Position pos, std::span<CardId> cards) : Group(parent, pos) {
+        for (auto c : cards) add_stack(c);
     }
 
-    void add(CardId c);
-    auto cards() {
+    /// Add a stack of cards containing a single card with the given Id.
+    void add_stack(CardId c);
+
+    /// Get a stack by index.
+    ///
+    /// This has the same behaviour as Group::index_of(), except that it
+    /// only allows passing in stacks.
+    auto index_of(Stack& c) -> std::optional<u32> { return Group::index_of(c); }
+
+    /// Get a range of all the topmost cards in each stack.
+    auto top_cards() {
         // FIXME: 'transform' should really take a lambda here, but that is currently
         // impossible because of a Clang bug: https://github.com/llvm/llvm-project/issues/116087
-        return children() | vws::transform(Lambda_cards);
+        return children() | vws::transform(Lambda_topmost);
     }
 
+    /// Set the display state for all children.
+    void set_display_state(Card::DisplayState state);
+
+    /// Get the card stacks in this group.
+    auto stacks() { return children<Stack>(); }
+
+    auto selected_child(InputSystem&) -> Widget* override;
     void refresh(Renderer&) override;
 
 private:
-    static auto Lambda_cards(Widget& c) -> Card& { return static_cast<Card&>(c); }
+    static auto Lambda_topmost(Widget& c) -> Card& {
+        return static_cast<Stack&>(c).children<Card>().front();
+    }
 };
 
 template <>

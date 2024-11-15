@@ -18,8 +18,6 @@ using namespace pr;
 using namespace pr::client;
 
 export namespace pr::client {
-enum class VertexLayout : u8;
-
 struct Size;
 
 class DrawableTexture;
@@ -36,6 +34,11 @@ using glm::vec1;
 using glm::vec2;
 using glm::vec3;
 using glm::vec4;
+
+enum class Axis : u8;
+enum class VertexLayout : u8;
+
+Axis flip(Axis a);
 } // namespace pr::client
 
 template <typename T, std::size_t n>
@@ -69,6 +72,15 @@ enum class client::VertexLayout : u8 {
     PositionTexture4D, /// vec4f position(xy)+texture(zw)
 };
 
+enum class client::Axis : u8 {
+    X,
+    Y,
+};
+
+Axis client::flip(Axis a) {
+    return a == Axis::X ? Axis::Y : Axis::X;
+}
+
 struct pr::client::Size {
     PR_SERIALISE(wd, ht);
 
@@ -80,6 +92,9 @@ struct pr::client::Size {
     constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
     constexpr Size(f32 wd, f32 ht) : wd(i32(wd)), ht(i32(ht)) {}
     constexpr Size(u32 wd, u32 ht) : wd(i32(wd)), ht(i32(ht)) {}
+    constexpr Size(Axis a, i32 axis_value, i32 other)
+        : wd(a == Axis::X ? axis_value : other),
+          ht(a == Axis::Y ? axis_value : other) {}
 
     // Compute the area of this size.
     constexpr auto area() const -> i32 { return wd * ht; }

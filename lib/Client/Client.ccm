@@ -92,9 +92,9 @@ public:
 
 class pr::client::WordChoiceScreen : public Screen {
     Client& client;
-    CardGroup* cards;
+    CardStacks* cards;
     constants::Word original_word;
-    Card* selected = nullptr;
+    CardStacks::Stack* selected = nullptr;
 
     void SendWord();
 
@@ -121,11 +121,11 @@ class pr::client::Player {
 
 public:
     /// The current word of this player.
-    CardGroup* word{};
+    CardStacks* word{};
 
     /// Get the player’s word as a list of card ids.
     auto cards() -> std::vector<CardId> {
-        return word->cards() | vws::transform(&Card::get_id) | rgs::to<std::vector>();
+        return word->top_cards() | vws::transform(&Card::get_id) | rgs::to<std::vector>();
     }
 
     explicit Player() = default;
@@ -140,13 +140,13 @@ class pr::client::GameScreen : public Screen {
     std::vector<Player> other_players;
 
     /// Map from card groups to their players.
-    std::unordered_map<CardGroup*, Player*> player_map;
+    std::unordered_map<CardStacks*, Player*> player_map;
 
     /// Our player object.
     Player us;
 
     /// The cards in our hand.
-    CardGroup* our_hand{};
+    CardStacks* our_hand{};
 
     /// The words of other players.
     Group* other_words{};
