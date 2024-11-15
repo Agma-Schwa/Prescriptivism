@@ -10,7 +10,7 @@ using namespace pr;
 using namespace pr::client;
 
 // =============================================================================
-//  Game Screen
+// Helpers
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
 }
@@ -38,52 +38,60 @@ void GameScreen::ResetOpponentWords() {
     }
 }
 
-void GameScreen::TickSelection() {
+// =============================================================================
+//  Game Logic
+// =============================================================================
+void GameScreen::ClearSelection() {
+    state = State::NoSelection;
+    ResetOpponentWords();
+    our_selected_card = nullptr;
+    selected_element->unselect();
+}
+
+void GameScreen::TickNoSelection() {
     if (not selected_element) return;
+    Assert(not our_selected_card, "Should not be here if a card was previously selected");
+    Assert(selected_element->has_parent(our_hand), "How did we select someone else’s card here?");
+    our_selected_card = &selected_element->as<Card>();
 
-    // We selected one of our own cards. Make it so we can now select
-    // other player’s cards. Unselect the card manually in that case
-    // since we don’t want to clear the 'selected' property.
+    // Clear the selected element pointer of the screen so we can select a new card.
+    selected_element = nullptr;
+
+    // TODO: Depending on what card is selected, we may want to change
+    // what we can select here.
+    state = State::SingleTarget;
+
+    // Make other player’s cards selectable if we can play this card on it.
+    for (auto& p : other_players) {
+        auto cards = p.cards();
+        for (auto [i, c] : p.word->stacks() | vws::enumerate) {
+            auto v = validation::ValidatePlaySoundCard(our_selected_card->id, cards, i);
+            bool valid = v == validation::PlaySoundCardValidationResult::Valid;
+            c.make_selectable(valid);
+            c.display_state = valid ? Card::DisplayState::Default : Card::DisplayState::Inactive;
+        }
+    }
+}
+
+void GameScreen::TickNotOurTurn() {}
+
+void GameScreen::TickSingleTarget() {
+    if (not selected_element) return;
+    Assert(our_selected_card, "We should have selected one of our cards");
+
+    // We selected one of our own cards while we already had one selected.
     if (selected_element->has_parent(our_hand)) {
-        // We selected the same card again; unselect it this time.
-        if (selected_element == our_selected_card) {
-            ResetOpponentWords();
-            our_selected_card = nullptr;
-            selected_element->unselect();
-            return;
-        }
-
-        // Unselect the previously selected card, set the current selected
-        // element of the screen to null, and save it as our selected card;
-        if (our_selected_card) our_selected_card->unselect();
-        our_selected_card = &selected_element->as<Card>();
-
-        // Do not unselect this card as we want to keep it selected.
-        selected_element = nullptr;
-
-        // Make other player’s cards selectable if we can play this card on it.
-        for (auto& p : other_players) {
-            auto cards = p.cards();
-            for (auto [i, c] : p.word->stacks() | vws::enumerate) {
-                auto v = validation::ValidatePlaySoundCard(our_selected_card->id, cards, i);
-                bool valid = v == validation::PlaySoundCardValidationResult::Valid;
-                c.make_selectable(valid);
-                c.display_state = valid ? Card::DisplayState::Default : Card::DisplayState::Inactive;
-            }
-        }
-        return;
+        if (selected_element == our_selected_card) return ClearSelection();
+        our_selected_card->unselect();
+        our_selected_card = nullptr;
+        return TickNoSelection();
     }
 
     // Otherwise, we selected another player’s card. We should never get here
     // if we didn’t previously select one of our cards.
-    Assert(our_selected_card, "We should have selected one of our cards");
     auto& stack = selected_element->as<CardStacks::Stack>();
     auto owner = player_map.at(&stack.parent);
     Assert(owner, "Selected card without owner?");
-
-    // Make opponents’ cards non-selectable again.
-    // TODO: We’ll need to amend this once we allow selecting multiple cards.
-    ResetOpponentWords();
 
     // Tell the server about this.
     auto& our_stack = our_selected_card->parent->as<CardStacks::Stack>();
@@ -97,13 +105,14 @@ void GameScreen::TickSelection() {
         *selected_card_index,
     });
 
-    // Unselect the opponent’s card and remove the card from our hand. The
-    // server will send packets that do the res.
-    selected_element->unselect();
+    // Remove the card we played.
     our_hand->remove(our_stack);
-    our_selected_card = nullptr;
+    ClearSelection();
 }
 
+// =============================================================================
+//  API
+// =============================================================================
 void GameScreen::add_card(PlayerId id, u32 stack_idx, CardId card) {
     auto& player = PlayerById(id);
     player.word->stacks()[stack_idx].push(card);
@@ -175,7 +184,11 @@ void GameScreen::tick(InputSystem& input) {
     }
 
     Screen::tick(input);
-    TickSelection();
+    switch (state) {
+        case State::NoSelection: TickNoSelection(); break;
+        case State::NotOurTurn: TickNotOurTurn(); break;
+        case State::SingleTarget: TickSingleTarget(); break;
+    }
 
     // Preview any card that the user is hovering over.
     auto c = dynamic_cast<Card*>(hovered_element);
@@ -191,7 +204,7 @@ void GameScreen::tick(InputSystem& input) {
 }
 
 void GameScreen::start_turn() {
-    our_turn = true;
+    state = State::NoSelection;
     for (auto& c : our_hand->top_cards()) {
         // Power cards are always usable for now.
         // TODO: Some power cards may not always have valid targets; check for that.
@@ -218,7 +231,7 @@ void GameScreen::start_turn() {
 }
 
 void GameScreen::end_turn() {
-    our_turn = false;
+    state = State::NotOurTurn;
     our_hand->make_selectable(false);
     our_hand->set_display_state(Card::DisplayState::Inactive);
     ResetOpponentWords();

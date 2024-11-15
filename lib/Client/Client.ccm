@@ -134,6 +134,20 @@ public:
 
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
+    enum struct State {
+        /// The starting state. Nothing is selected.
+        NoSelection,
+
+        /// It is not our turn. User interaction is passed.
+        NotOurTurn,
+
+        /// A card in hand is selected, and we are waiting for
+        /// the user to select a target for it.
+        ///
+        /// 'our_selected_card' holds the selected sound card.
+        SingleTarget,
+    };
+
     Client& client;
 
     /// The other players in the game.
@@ -154,11 +168,11 @@ class pr::client::GameScreen : public Screen {
     /// The card widget used to preview a card.
     Card* preview{};
 
-    /// True if it is our turn
-    bool our_turn{false};
-
     /// The last card that was selected by the player
     Card* our_selected_card{};
+
+    /// The current game state.
+    State state = State::NotOurTurn;
 
 public:
     explicit GameScreen(Client& c);
@@ -174,7 +188,12 @@ private:
     auto PlayerById(PlayerId id) -> Player&;
     auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
     void ResetOpponentWords();
-    void TickSelection();
+
+    void ClearSelection();
+
+    void TickNoSelection();
+    void TickNotOurTurn();
+    void TickSingleTarget();
 };
 
 // =============================================================================
