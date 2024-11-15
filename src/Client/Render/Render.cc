@@ -926,6 +926,15 @@ void Renderer::draw_texture(
     tex.draw_vertices();
 }
 
+void Renderer::draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale) {
+    use(image_shader);
+    image_shader.uniform("position", pos.vec());
+    tex.bind();
+    VertexArrays vao{VertexLayout::PositionTexture4D};
+    vao.add_buffer(tex.create_vertices_scaled(scale), GL_TRIANGLE_STRIP);
+    vao.draw_vertices();
+}
+
 void Renderer::draw_texture_sized(const DrawableTexture& tex, AABB box) {
     use(image_shader);
     image_shader.uniform("position", box.origin().vec());

@@ -259,9 +259,13 @@ namespace pr::client {
 using power_card_database::PowerCardDatabase;
 }
 
+/// The texture used to indicate that a stack is locked.
+LateInit<DrawableTexture> LockedTexture;
+
 // This only takes a renderer to ensure that it is called
 // after the renderer has been initialised.
 void client::InitialiseUI(Renderer&) {
+    LockedTexture.init(DrawableTexture::LoadFromFile("assets/locked.webp"));
     SilenceLog _;
     for (auto& p : PowerCardDatabase) {
         p.image.init(DrawableTexture::LoadFromFile(fs::Path{"assets/Cards"} / p.image_path));
@@ -473,6 +477,17 @@ void CardStacks::Stack::draw(Renderer& r) {
             CardGaps[c.scale] / 2,
             Colour{50, 50, 200, 255},
             Card::BorderRadius[c.scale]
+        );
+    }
+
+    if (locked) {
+        auto b = Card::Border[scale];
+        auto p = Card::Padding[scale];
+        auto sz = LockedTexture->size * Card::IconScale[scale];
+        r.draw_texture_scaled(
+            *LockedTexture,
+            Position{b.wd + p, b.ht + p}.relative(abox(), sz),
+            Card::IconScale[scale]
         );
     }
 }

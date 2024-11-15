@@ -12,8 +12,7 @@ using namespace pr::client;
 // =============================================================================
 // Helpers
 // =============================================================================
-GameScreen::GameScreen(Client& c) : client(c) {
-}
+GameScreen::GameScreen(Client& c) : client(c) {}
 
 auto GameScreen::PlayerById(PlayerId id) -> Player& {
     if (id == us.id) return us;

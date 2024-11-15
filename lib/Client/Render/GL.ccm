@@ -104,6 +104,9 @@ struct pr::client::Size {
 
 private:
     friend constexpr bool operator==(Size, Size) = default;
+    friend constexpr auto operator*(Size sz, f32 scale) -> Size {
+        return Size(sz.wd * scale, sz.ht * scale);
+    }
 };
 
 /// Helper to keep track of and delete OpenGL objects.
@@ -453,19 +456,12 @@ public:
 
     /// Create triangle strip texture vertices for a given size.
     auto create_vertices(Size size) const -> std::array<vec4, 4> {
-        // Scale uv coordinates to create tiling if the requested size is
-        // larger than the texture size.
-        f32 u = f32(size.wd) / width;
-        f32 v = f32(size.ht) / height;
+        return MakeVerts(size.wd, size.ht, f32(size.wd) / width, f32(size.ht) / height);
+    }
 
-        // Flip the texture uv coordinates upside-down since the origin
-        // is in the bottom-left corner, but that’s not how images work.
-        return {
-            vec4{0, 0, 0, v},
-            vec4{size.wd, 0, u, v},
-            vec4{0, size.ht, 0, 0},
-            vec4{size.wd, size.ht, u, 0},
-        };
+    /// Create triangle strip texture vertices for a given size.
+    auto create_vertices_scaled(f32 scale) const -> std::array<vec4, 4> {
+        return MakeVerts(f32(width) * scale, f32(height) * scale, 1, 1);
     }
 
     /// Load a texture from a file.
@@ -481,5 +477,15 @@ public:
     void draw_vertices() const {
         bind();
         vao.draw_vertices();
+    }
+
+private:
+    static auto MakeVerts(f32 wd, f32 ht, f32 u, f32 v) -> std::array<vec4, 4> {
+        return {
+            vec4{0, 0, 0, v},
+            vec4{wd, 0, u, v},
+            vec4{0, ht, 0, 0},
+            vec4{wd, ht, u, 0},
+        };
     }
 };

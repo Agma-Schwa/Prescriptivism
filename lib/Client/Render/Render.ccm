@@ -629,7 +629,18 @@ public:
     void draw_text(const Text& text, xy pos, Colour c = Colour::White);
 
     /// Draw a texture at a position in world coordinates.
+    ///
+    /// \see draw_texture_scaled(), draw_texture_sized()
     void draw_texture(const DrawableTexture& tex, xy pos);
+
+    /// Draw a texture at a position in world coordinates.
+    ///
+    /// If the texture is smaller than the requested size, the texture
+    /// will be scaled down. If the texture is larger than the requested
+    /// size, it will be stretched to fill the space instead.
+    ///
+    /// \see draw_texture(), draw_texture_sized()
+    void draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale);
 
     /// Draw a texture at a position in world coordinates.
     ///
@@ -638,6 +649,8 @@ public:
     ///
     /// If the texture is larger than the requested size, only part of
     /// the texture will be drawn.
+    ///
+    /// \see draw_texture(), draw_texture_scaled()
     void draw_texture_sized(const DrawableTexture& tex, AABB box);
 
     /// Get the font used to shape a text element.

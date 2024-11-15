@@ -328,6 +328,10 @@ void Server::SetUpGame() {
             std::make_move_iterator(deck.end())
         );
         deck.erase(deck.end() - HandSize, deck.end());
+
+        // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate a Spelling
+        // Reform into the player’s hand.
+        p->hand.emplace_back(CardId::P_SpellingReform);
     }
     rgs::shuffle(players, rng);
 

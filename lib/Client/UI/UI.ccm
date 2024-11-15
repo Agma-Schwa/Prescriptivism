@@ -567,6 +567,7 @@ public:
     // compensate for that here, by making the X border wider than the Y border.
     static constexpr Size Border[NumScales] = {{5, 4}, {9, 8}, {17, 16}, {25, 24}};
     static constexpr i32 BorderRadius[NumScales] = {5, 10, 20, 30};
+    static constexpr f32 IconScale[NumScales] = {.25f, .5f, 1.f, 2.f};
 
 private:
     static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge, FontSize::Title};
@@ -669,6 +670,9 @@ public:
         }
 
     public:
+        /// Whether this stack is locked.
+        bool locked = false;
+
         auto cards() { return children<Card>(); }
         auto index_of(Card& c) -> std::optional<u32> { return Group::index_of(c); }
         void push(CardId card);
