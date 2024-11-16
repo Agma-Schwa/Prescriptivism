@@ -33,6 +33,8 @@ class CardStacks;
 class Group;
 
 enum class Anchor : u8;
+enum class Selectable : u8;
+using Hoverable = Selectable;
 
 void InitialiseUI(Renderer& r);
 } // namespace pr::client
@@ -43,6 +45,10 @@ class TextBox;
 
 /// Container for widgets.
 class WidgetHolder;
+
+/// Result of hovering over or selecting a widget.
+struct SelectResult;
+using HoverResult = SelectResult;
 }
 
 /// An anchor point for positioning elements.
@@ -57,6 +63,38 @@ enum class pr::client::Anchor : base::u8 {
     NorthWest,
     Center,
     Default = SouthWest,
+};
+
+/// Selection or hover behaviour.
+enum class pr::client::Selectable : base::u8 {
+    /// Can be selected or hovered over.
+    Yes,
+
+    /// Cannot be selected or hovered over.
+    No,
+
+    /// As 'No', but does not elements below it from being selected.
+    Transparent,
+};
+
+struct pr::client::SelectResult {
+    /// If non-null, the widget that was hovered over or selected.
+    Widget* widget;
+
+    /// If true, we should not stop searching for widgets to hover
+    /// over or select, even if we didn’t find a widget.
+    bool transparent;
+
+private:
+    /// Should we keep searching for widgets to hover over or select?
+    ComputedProperty(bool, keep_searching, not widget and transparent);
+
+    SelectResult(Widget* w, bool t) : widget(w), transparent(t) {}
+
+public:
+    static auto No(Selectable s) { return SelectResult{nullptr, s == Selectable::Transparent}; }
+    static auto Yes(Widget* w) { return SelectResult{w, false}; }
+    static auto TakeIf(Widget* w, Selectable s) { return s == Selectable::Yes ? Yes(w) : No(s); }
 };
 
 /// A position of an element, which may be absolute or relative
@@ -193,11 +231,12 @@ class pr::client::Widget : public Element {
     Property(bool, needs_refresh, false);
 
 public:
-    bool hovered    : 1 = false; ///< Element is being hovered.
-    bool hoverable  : 1 = true;  ///< Element can be hovered over.
-    bool selectable : 1 = false; ///< Element can be selected.
-    bool selected   : 1 = false; ///< Element is selected.
-    bool visible    : 1 = true;  ///< Element is rendered, ticked, and interactable.
+    bool hovered  : 1 = false; ///< Element is being hovered.
+    bool selected : 1 = false; ///< Element is selected.
+    bool visible  : 1 = true;  ///< Element is rendered, ticked, and interactable.
+
+    Selectable selectable = Selectable::No;
+    Hoverable hoverable = Hoverable::Yes;
 
     /// Position of the widget.
     Position pos;
@@ -234,10 +273,9 @@ public:
 
     /// Determine which of our children is being hovered, if any. Widgets
     /// that don’t have children can just return themselves.
-    virtual auto hovered_child(InputSystem&) -> Widget* {
-        if (not hoverable) return nullptr;
-        hovered = true;
-        return this;
+    virtual auto hovered_child(InputSystem&) -> HoverResult {
+        if (hoverable == Hoverable::Yes) hovered = true;
+        return HoverResult::TakeIf(this, hoverable);
     }
 
     /// Get the widget’s parent screen
@@ -248,9 +286,8 @@ public:
 
     /// Determine which of our children is being selected, if any. Widgets
     /// that don’t have children can just return themselves.
-    virtual auto selected_child(InputSystem&) -> Widget* {
-        if (not selectable) return nullptr;
-        return this;
+    virtual auto selected_child(InputSystem&) -> SelectResult {
+        return SelectResult::TakeIf(this, selectable);
     }
 
     /// Unselect the element
@@ -456,9 +493,12 @@ public:
         i32 padding = 0,
         i32 min_wd = 125,
         i32 min_ht = 0
-    ) : TextBox(parent, std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {}
+    ) : TextBox(parent, std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {
+        selectable = Selectable::Yes;
+    }
 
     void event_click(InputSystem&) override {
+        unselect();
         if (on_click) on_click();
     }
 
@@ -496,7 +536,7 @@ public:
         size{size},
         style{style},
         hide_text{hide_text} {
-        selectable = true;
+        selectable = Selectable::Yes;
     }
 
     void draw(Renderer& r) override;
@@ -643,19 +683,22 @@ public:
     auto contains(Widget* c) -> bool { return c->parent == this; }
 
     /// Make all children of this group selectable.
-    void make_selectable(bool sel = true);
+    void make_selectable(Selectable new_value = Selectable::Yes);
 
     /// Swap two elements of the group.
     void swap(Widget* a, Widget* b);
 
     void draw(Renderer& r) override;
-    auto hovered_child(InputSystem&) -> Widget* override;
+    auto hovered_child(InputSystem&) -> HoverResult override;
     void refresh(Renderer&) override;
-    auto selected_child(InputSystem&) -> Widget* override;
+    auto selected_child(InputSystem&) -> SelectResult override;
 
 private:
-    template <typename Callable>
-    auto HoverSelectHelper(InputSystem& input, Callable c) -> Widget*;
+    auto HoverSelectHelper(
+        InputSystem& input,
+        auto (Widget::*accessor)(InputSystem&)->SelectResult,
+        Selectable Widget::* property
+    ) -> SelectResult;
 };
 
 /// A group of widgets, each of which are a stack of cards
@@ -760,7 +803,7 @@ public:
     /// Get the card stacks in this group.
     auto stacks() { return children<Stack>(); }
 
-    auto selected_child(InputSystem&) -> Widget* override;
+    auto selected_child(InputSystem&) -> SelectResult override;
     void refresh(Renderer&) override;
 
 private:

@@ -273,10 +273,14 @@ void WordChoiceScreen::tick(InputSystem& input) {
     Assert(dynamic_cast<CardStacks::Stack*>(selected_element), "This screen should only contain cards?");
 
     // If the selected card was clicked, deselect it.
-    if (selected_element == selected) selected_element->unselect();
+    if (selected_element == selected) {
+        selected_element->unselect();
+        selected = nullptr;
+    }
 
     // If no card was selected, remember it.
-    else if (not selected) selected = static_cast<CardStacks::Stack*>(std::exchange(selected_element, nullptr));
+    else if (not selected)
+        selected = static_cast<CardStacks::Stack*>(std::exchange(selected_element, nullptr));
 
     // Otherwise, swap the cards and unselect both.
     else {

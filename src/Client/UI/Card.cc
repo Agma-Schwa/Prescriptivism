@@ -532,15 +532,17 @@ void CardStacks::add_stack(CardId c) {
     card.id = c;
 }
 
-auto CardStacks::selected_child(InputSystem& input) -> Widget* {
-    auto card = Group::selected_child(input);
-    if (not card) return nullptr;
-    switch (selection_mode) {
-        case SelectionMode::Stack: return static_cast<Stack*>(card->parent);
-        case SelectionMode::Card: return card;
-        case SelectionMode::Top: return &static_cast<Stack*>(card->parent)->top;
-    }
-    Unreachable();
+auto CardStacks::selected_child(InputSystem& input) -> SelectResult {
+    auto res = Group::selected_child(input);
+    if (res.widget) res.widget = [&] -> Widget* {
+        switch (selection_mode) {
+            case SelectionMode::Stack: return &res.widget->parent->as<Stack>();
+            case SelectionMode::Card: return res.widget;
+            case SelectionMode::Top: return &res.widget->parent->as<Stack>().top;
+        }
+        Unreachable();
+    }();
+    return res;
 }
 
 void CardStacks::refresh(Renderer& r) {

@@ -42,7 +42,7 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
 
 void GameScreen::ResetOpponentWords() {
     for (auto& p : other_players) {
-        p.word->make_selectable(false);
+        p.word->make_selectable(Selectable::No);
         p.word->set_display_state(Card::Overlay::Default);
     }
 }
@@ -74,7 +74,7 @@ void GameScreen::TickNoSelection() {
     for (auto& p : other_players) {
         for (auto [i, s] : p.word->stacks() | vws::enumerate) {
             bool valid = CanPlaySoundCard(our_selected_card->id, *p.word, i);
-            s.make_selectable(valid);
+            s.make_selectable(valid ? Selectable::Yes : Selectable::No);
             s.overlay = valid ? Card::Overlay::Default : Card::Overlay::Inactive;
         }
     }
@@ -162,7 +162,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     // above everything else.
     preview = &Create<Card>(Position::VCenter(-100));
     preview->visible = false;
-    preview->hoverable = false;
+    preview->hoverable = Hoverable::Transparent;
     preview->scale = Card::Preview;
 
     // Finally, ‘end’ our turn to reset everything.
@@ -217,7 +217,7 @@ void GameScreen::start_turn() {
         // TODO: Some power cards may not always have valid targets; check for that.
         if (CardDatabase[+c.id].is_power()) {
             c.overlay = Card::Overlay::Default;
-            c.selectable = true;
+            c.selectable = Selectable::Yes;
             continue;
         }
 
@@ -226,7 +226,7 @@ void GameScreen::start_turn() {
             for (usz i = 0; i < p.word->children().size(); i++) {
                 if (CanPlaySoundCard(c.id, *p.word, i)) {
                     c.overlay = Card::Overlay::Default;
-                    c.selectable = true;
+                    c.selectable = Selectable::Yes;
                     goto next_card;
                 }
             }
@@ -237,7 +237,7 @@ void GameScreen::start_turn() {
 
 void GameScreen::end_turn() {
     state = State::NotOurTurn;
-    our_hand->make_selectable(false);
+    our_hand->make_selectable(Selectable::No);
     our_hand->set_display_state(Card::Overlay::Inactive);
     ResetOpponentWords();
 }

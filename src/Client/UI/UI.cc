@@ -118,18 +118,21 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture, UpdateDimensions());
 // =============================================================================
 //  Group
 // =============================================================================
-template <typename Callable>
-auto Group::HoverSelectHelper(InputSystem& input, Callable callable) -> Widget* {
-    auto Get = [&]<typename T>(T&& range) -> Widget* {
+auto Group::HoverSelectHelper(
+    InputSystem& input,
+    auto (Widget::*accessor)(InputSystem&)->SelectResult,
+    Selectable Widget::* property
+) -> SelectResult {
+    auto Get = [&]<typename T>(T&& range) -> SelectResult {
         for (auto& c : std::forward<T>(range)) {
             if (c.bounding_box.contains(input.mouse.pos)) {
-                auto child = std::invoke(callable, c);
-                if (child) return child;
+                auto res = (c.*accessor)(input);
+                if (not res.keep_searching) return res;
             }
         }
 
         // The group itself is a proxy widget that cannot be hovered.
-        return nullptr;
+        return SelectResult::No(this->*property);
     };
 
     // If two children overlap, we pick the first in the list, unless
@@ -148,8 +151,8 @@ void Group::draw(Renderer& r) {
     for (auto& c : visible_elements()) c.draw(r);
 }
 
-auto Group::hovered_child(InputSystem& input) -> Widget* {
-    return HoverSelectHelper(input, [&](Widget& c) { return c.hovered_child(input); });
+auto Group::hovered_child(InputSystem& input) -> SelectResult {
+    return HoverSelectHelper(input, &Widget::hovered_child, &Widget::hoverable);
 }
 
 void Group::refresh(Renderer& r) {
@@ -206,8 +209,8 @@ void Group::refresh(Renderer& r) {
     for (auto& c : ch) c.refresh(r);
 }
 
-auto Group::selected_child(InputSystem& input) -> Widget* {
-    return HoverSelectHelper(input, [&](Widget& c) { return c.selected_child(input); });
+auto Group::selected_child(InputSystem& input) -> SelectResult {
+    return HoverSelectHelper(input, &Widget::selected_child, &Widget::selectable);
 }
 
 void Group::swap(Widget* a, Widget* b) {
@@ -218,7 +221,7 @@ void Group::swap(Widget* a, Widget* b) {
     needs_refresh = true;
 }
 
-void Group::make_selectable(bool new_value) {
+void Group::make_selectable(Selectable new_value) {
     for (auto& c : children()) {
         if (auto g = c.cast<Group>()) g->make_selectable(new_value);
         c.selectable = new_value;
@@ -372,35 +375,33 @@ void Screen::tick(InputSystem& input) {
     // Deselect the currently selected element if there was a click.
     if (input.mouse.left and selected_element) selected_element->unselect();
 
-    // Tick each child.
+    // First, reset all children’s properties.
+    for (auto& e : visible_elements()) e.hovered = false;
+
+    // Then, find the hovered/selected element.
+    bool check_hover = true;
     for (auto& e : visible_elements()) {
-        // First, reset all of the child’s properties so we can
-        // recompute them.
-        e.hovered = false;
+        if (not check_hover and not input.mouse.left) break;
+        if (not e.bounding_box.contains(input.mouse.pos)) continue;
 
-        // If the cursor is within the element’s bounds, ask it which of its
-        // subelements is being hovered over, and which was selected if we had
-        // a click.
-        if (e.bounding_box.contains(input.mouse.pos)) {
-            hovered_element = e.hovered_child(input);
+        // Check if this element is being hovered over.
+        if (check_hover) {
+            auto res = e.hovered_child(input);
+            hovered_element = res.widget;
+            check_hover = res.keep_searching;
+        }
 
-            // If there was a click, attempt to select an element.
-            if (input.mouse.left) {
-                auto target = hovered_element;
-                selected_element = e.selected_child(input);
+        // If there was a click, attempt to select an element.
+        if (input.mouse.left) {
+            auto res = e.selected_child(input);
+            selected_element = res.widget;
+            defer { input.mouse.left = res.keep_searching; };
 
-                // If we could select an element, mark it as selected and set
-                // it as the target for the click instead.
-                if (selected_element) {
-                    selected_element->selected = true;
-                    target = selected_element;
-                }
-
-                // In any case, dispatch the click.
-                if (target) {
-                    target->event_click(input);
-                    input.mouse.left = false; // Avoid clicking on more than one element.
-                }
+            // If we could select an element, mark it as selected and set
+            // it as the target for the click instead.
+            if (selected_element) {
+                selected_element->selected = true;
+                selected_element->event_click(input);
             }
         }
     }
