@@ -216,9 +216,9 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySoundCard c) {
     if (not card.data.is_sound()) return Kick(client, InvalidPacket);
 
     // Check that the target card is a valid target.
-    auto target_word = target_player->cards();
+    // TODO: Server-side card stacks.
     if (
-        validation::ValidatePlaySoundCard(card.id, target_word, c.target_card_index) !=
+        validation::ValidatePlaySoundCard(card.id, target_player->word | vws::transform(&Card::id), c.target_card_index) !=
         validation::PlaySoundCardValidationResult::Valid
     ) return Kick(client, InvalidPacket);
 

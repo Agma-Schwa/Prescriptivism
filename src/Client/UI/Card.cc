@@ -11,6 +11,14 @@ using namespace pr;
 using namespace pr::client;
 
 // =============================================================================
+//  Constants
+// =============================================================================
+constexpr auto ConsonantColour = Colour::RGBA(0xfea3'aaff);
+constexpr auto VowelColour = Colour::RGBA(0xfad3'84ff);
+constexpr auto PowerColour = Colour::RGBA(0xb2ce'feff);
+constexpr auto UniquePowerColour = Colour::RGBA(0xd0bc'f3ff);
+
+// =============================================================================
 //  Card Data
 // =============================================================================
 struct PowerCardData {
@@ -291,7 +299,8 @@ Card::Card(
 }
 
 void Card::draw(Renderer& r) {
-    r.draw_rect(bounding_box, outline_colour.lighten(.1f), BorderRadius[scale]);
+    auto colour = variant == Variant::Regular ? outline_colour : outline_colour.darken(.2f);
+    r.draw_rect(bounding_box, colour.lighten(.1f), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
         bounding_box,
         CardStacks::CardGaps[scale] / 2,
@@ -302,7 +311,7 @@ void Card::draw(Renderer& r) {
     r.draw_outline_rect(
         bounding_box.shrink(Border[scale].wd, Border[scale].ht),
         Size{Border[scale]},
-        outline_colour,
+        colour,
         BorderRadius[scale]
     );
 
@@ -328,7 +337,7 @@ void Card::draw(Renderer& r) {
     }
 
     // Draw a white rectangle on top of this card if it is inactive.
-    if (display_state == DisplayState::Inactive) r.draw_rect(
+    if (overlay == Overlay::Inactive) r.draw_rect(
         bounding_box,
         Colour{255, 255, 255, 200},
         BorderRadius[scale]
@@ -418,7 +427,7 @@ void Card::set_id(CardId ct) {
 
     // Sound card properties.
     if (data.type == CardType::SoundCard) {
-        outline_colour = Colour::RGBA(data.is_consonant() ? 0xfea3'aaff : 0xfad3'84ff);
+        outline_colour = data.is_consonant() ? ConsonantColour : VowelColour;
         code.update_text(std::format( //
             "{}{}{}{}",
             data.is_consonant() ? 'P' : 'F',
@@ -444,7 +453,7 @@ void Card::set_id(CardId ct) {
     // Power card properties.
     else {
         auto& power = PowerCardDatabase[ct];
-        outline_colour = Colour::RGBA(data.count_in_deck == 1 ? 0xd0bc'f3ff : 0xb2ce'feff);
+        outline_colour = data.count_in_deck == 1 ? UniquePowerColour : PowerColour;
         name.update_text(std::string{data.name});
         code.update_text("");
         middle.update_text("");
@@ -496,6 +505,7 @@ void CardStacks::Stack::push(CardId card) {
     auto& c = create<Card>(Position());
     c.id = card;
     c.scale = scale;
+    if (full) c.variant = Card::Variant::FullStackTop;
 }
 
 void CardStacks::Stack::refresh(Renderer& r) {
@@ -510,8 +520,8 @@ TRIVIAL_CACHING_SETTER(
     scale
 )
 
-void CardStacks::Stack::set_display_state(Card::DisplayState new_value) {
-    for (auto& c : cards()) c.display_state = new_value;
+void CardStacks::Stack::set_overlay(Card::Overlay new_value) {
+    for (auto& c : cards()) c.overlay = new_value;
 }
 
 // =============================================================================
@@ -555,8 +565,8 @@ void CardStacks::refresh(Renderer& r) {
     Group::refresh(r);
 }
 
-void CardStacks::set_display_state(Card::DisplayState new_value) {
-    for (auto& c : stacks()) c.display_state = new_value;
+void CardStacks::set_display_state(Card::Overlay new_value) {
+    for (auto& c : stacks()) c.overlay = new_value;
 }
 
 TRIVIAL_CACHING_SETTER(CardStacks, bool, autoscale);

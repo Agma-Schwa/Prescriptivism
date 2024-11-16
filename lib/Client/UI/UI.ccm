@@ -13,6 +13,7 @@ export module pr.client.ui;
 import base.text;
 import pr.cards;
 import pr.utils;
+import pr.constants;
 import pr.client.render;
 import pr.client.render.gl;
 
@@ -541,6 +542,7 @@ private:
 
 class pr::client::Card : public Widget {
 public:
+    /// The scale of the card; this determines how large it is.
     enum Scale : u8 {
         OtherPlayer,
         Field,
@@ -549,7 +551,9 @@ public:
         NumScales
     };
 
-    enum struct DisplayState : u8 {
+    /// This handles overlay effects, such as greying it out or adding
+    /// a white overlay.
+    enum struct Overlay : u8 {
         /// Used for most cards.
         Default,
 
@@ -557,6 +561,15 @@ public:
         /// our turn, because there are no valid targets, or because it has
         /// no valid targets.
         Inactive,
+    };
+
+    /// Card variants that are used in specific circumstances.
+    enum struct Variant : u8 {
+        /// Used for most cards.
+        Regular,
+
+        /// Used for the topmost card in a full stack.
+        FullStackTop,
     };
 
     static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
@@ -588,7 +601,8 @@ private:
     Image image;
 
 public:
-    DisplayState display_state = DisplayState::Default;
+    Overlay overlay = Overlay::Default;
+    Variant variant = Variant::Regular;
 
     Card(Element* parent, Position pos);
 
@@ -660,10 +674,20 @@ public:
         friend CardStacks;
         friend Group;
 
+        /// The common scale of all cards in this stack.
         Property(Scale, scale, Scale::Field);
-        Writeonly(Card::DisplayState, display_state);
+
+        /// Set the overlay for all cards of this stack.
+        Writeonly(Card::Overlay, overlay);
+
+        /// Get the parent stacks.
         ComputedReadonly(CardStacks&, parent, Widget::get_parent()->as<CardStacks>());
+
+        /// Get the topmost card.
         ComputedReadonly(Card&, top, static_cast<Card&>(*widgets.back()));
+
+        /// Whether this stack is full.
+        ComputedReadonly(bool, full, widgets.size() == constants::MaxSoundStackSize);
 
         Stack(Element* parent, Position pos) : Group(parent, pos) {
             vertical = true;
@@ -672,6 +696,12 @@ public:
     public:
         /// Whether this stack is locked.
         bool locked = false;
+
+        /// Get the Id of a card in this stack.
+        auto operator[](usz i) -> CardId {
+            Assert(i < widgets.size(), "Index out of bounds!");
+            return static_cast<Card&>(*widgets[i]).id;
+        }
 
         auto cards() { return children<Card>(); }
         auto index_of(Card& c) -> std::optional<u32> { return Group::index_of(c); }
@@ -703,8 +733,17 @@ public:
         for (auto c : cards) add_stack(c);
     }
 
+    /// Get a stack in this stack group.
+    auto operator[](usz i) -> Stack& {
+        Assert(i < widgets.size(), "Index out of bounds!");
+        return static_cast<Stack&>(*widgets[i]);
+    }
+
     /// Add a stack of cards containing a single card with the given Id.
     void add_stack(CardId c);
+
+    /// Get a range containing the Ids of all topmost cards in each stack.
+    auto ids() { return children<Stack>() | vws::transform(Lambda_ids); }
 
     /// Get a stack by index.
     ///
@@ -713,14 +752,10 @@ public:
     auto index_of(Stack& c) -> std::optional<u32> { return Group::index_of(c); }
 
     /// Get a range of all the topmost cards in each stack.
-    auto top_cards() {
-        // FIXME: 'transform' should really take a lambda here, but that is currently
-        // impossible because of a Clang bug: https://github.com/llvm/llvm-project/issues/116087
-        return children() | vws::transform(Lambda_topmost);
-    }
+    auto top_cards() { return children() | vws::transform(Lambda_topmost); }
 
     /// Set the display state for all children.
-    void set_display_state(Card::DisplayState state);
+    void set_display_state(Card::Overlay state);
 
     /// Get the card stacks in this group.
     auto stacks() { return children<Stack>(); }
@@ -729,9 +764,10 @@ public:
     void refresh(Renderer&) override;
 
 private:
-    static auto Lambda_topmost(Widget& c) -> Card& {
-        return static_cast<Stack&>(c).top;
-    }
+    // FIXME: these should really be lambdas, but that is currently
+    // impossible because of a Clang bug: https://github.com/llvm/llvm-project/issues/116087
+    static auto Lambda_ids(Widget& c) -> CardId { return static_cast<Stack&>(c).top.id; }
+    static auto Lambda_topmost(Widget& c) -> Card& { return static_cast<Stack&>(c).top; }
 };
 
 template <>

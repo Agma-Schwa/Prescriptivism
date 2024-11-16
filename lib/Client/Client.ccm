@@ -123,11 +123,6 @@ public:
     /// The current word of this player.
     CardStacks* word{};
 
-    /// Get the player’s word as a list of card ids.
-    auto cards() -> std::vector<CardId> {
-        return word->top_cards() | vws::transform(&Card::get_id) | rgs::to<std::vector>();
-    }
-
     explicit Player() = default;
     explicit Player(std::string name, u8 id) : _id{id}, _name{std::move(name)} {}
 };

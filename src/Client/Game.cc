@@ -10,6 +10,16 @@ using namespace pr;
 using namespace pr::client;
 
 // =============================================================================
+// Validation Helpers
+// =============================================================================
+bool CanPlaySoundCard(CardId card, CardStacks& on, usz at) {
+    // TODO: Handle evolutions that require an extra card.
+    if (on[at].full) return false;
+    auto res = validation::ValidatePlaySoundCard(card, on.ids(), at);
+    return res == validation::PlaySoundCardValidationResult::Valid;
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {}
@@ -33,7 +43,7 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
 void GameScreen::ResetOpponentWords() {
     for (auto& p : other_players) {
         p.word->make_selectable(false);
-        p.word->set_display_state(Card::DisplayState::Default);
+        p.word->set_display_state(Card::Overlay::Default);
     }
 }
 
@@ -62,12 +72,10 @@ void GameScreen::TickNoSelection() {
 
     // Make other player’s cards selectable if we can play this card on it.
     for (auto& p : other_players) {
-        auto cards = p.cards();
-        for (auto [i, c] : p.word->stacks() | vws::enumerate) {
-            auto v = validation::ValidatePlaySoundCard(our_selected_card->id, cards, i);
-            bool valid = v == validation::PlaySoundCardValidationResult::Valid;
-            c.make_selectable(valid);
-            c.display_state = valid ? Card::DisplayState::Default : Card::DisplayState::Inactive;
+        for (auto [i, s] : p.word->stacks() | vws::enumerate) {
+            bool valid = CanPlaySoundCard(our_selected_card->id, *p.word, i);
+            s.make_selectable(valid);
+            s.overlay = valid ? Card::Overlay::Default : Card::Overlay::Inactive;
         }
     }
 }
@@ -208,18 +216,16 @@ void GameScreen::start_turn() {
         // Power cards are always usable for now.
         // TODO: Some power cards may not always have valid targets; check for that.
         if (CardDatabase[+c.id].is_power()) {
-            c.display_state = Card::DisplayState::Default;
+            c.overlay = Card::Overlay::Default;
             c.selectable = true;
             continue;
         }
 
         // For sound cards, check if there are any sounds we can play them on.
         for (auto& p : other_players) {
-            auto w = p.cards();
-            for (usz i = 0; i < w.size(); i++) {
-                auto v = validation::ValidatePlaySoundCard(c.id, w, i);
-                if (v == validation::PlaySoundCardValidationResult::Valid) {
-                    c.display_state = Card::DisplayState::Default;
+            for (usz i = 0; i < p.word->children().size(); i++) {
+                if (CanPlaySoundCard(c.id, *p.word, i)) {
+                    c.overlay = Card::Overlay::Default;
                     c.selectable = true;
                     goto next_card;
                 }
@@ -232,6 +238,6 @@ void GameScreen::start_turn() {
 void GameScreen::end_turn() {
     state = State::NotOurTurn;
     our_hand->make_selectable(false);
-    our_hand->set_display_state(Card::DisplayState::Inactive);
+    our_hand->set_display_state(Card::Overlay::Inactive);
     ResetOpponentWords();
 }
