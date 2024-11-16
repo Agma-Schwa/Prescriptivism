@@ -29,11 +29,8 @@ using enum DisconnectReason;
 // ============================================================================
 // Helpers
 // ============================================================================
-auto BuildWordArray(std::span<const Card> card_range) -> constants::Word {
-    Assert(rgs::distance(card_range) == constants::StartingWordSize, "Invalid word size");
-    constants::Word w;
-    for (auto [i, el] : card_range | vws::enumerate) w[i] = el.id;
-    return w;
+auto BuildWordArray(const Word& w) {
+    return w.stacks | vws::transform(&Stack::get_top);
 }
 
 // =============================================================================
@@ -130,15 +127,16 @@ void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
 
     // Word is invalid.
     constants::Word original;
-    for (auto [i, c] : player_map[client]->word | vws::enumerate) original[i] = c.id;
+    auto& p = player_map[client];
+    for (auto [i, s] : p->word.stacks | vws::enumerate) original[i] = s.top;
     if (validation::ValidateInitialWord(wc.word, original) != validation::InitialWordValidationResult::Valid) {
         Kick(client, InvalidPacket);
         return;
     }
 
     // Word is valid. Mark it as submitted.
-    for (auto [i, c] : wc.word | vws::enumerate) player_map[client]->word[i] = Card{c};
-    player_map[client]->submitted_word = true;
+    for (auto [i, c] : wc.word | vws::enumerate) p->word.stacks[i].cards[0].id = c;
+    p->submitted_word = true;
     Log("Client gave back word");
 }
 
@@ -178,7 +176,7 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
             switch (state) {
                 case State::WaitingForPlayerRegistration: break;
                 case State::WaitingForWords:
-                    if (not p->submitted_word) p->send(sc::WordChoice{BuildWordArray(p->word)});
+                    if (not p->submitted_word) p->send(sc::WordChoice{p->word.ids()});
                     break;
 
                 case State::Running:
@@ -208,27 +206,28 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySoundCard c) {
     auto& target_player = players[c.player];
     if (
         c.card_index >= p->hand.size() or
-        c.target_card_index >= target_player->word.size()
+        c.target_card_index >= target_player->word.stacks.size()
     ) return Kick(client, InvalidPacket);
 
     // Check that the card is actually a sound card.
     auto& card = p->hand[c.card_index];
     if (not card.data.is_sound()) return Kick(client, InvalidPacket);
 
+    // Check that the stack it’s being played on isn’t full.
+    auto& s = target_player->word.stacks[c.target_card_index];
+    if (s.full) return Kick(client, InvalidPacket);
+
     // Check that the target card is a valid target.
-    // TODO: Server-side card stacks.
     if (
-        validation::ValidatePlaySoundCard(card.id, target_player->word | vws::transform(&Card::id), c.target_card_index) !=
+        validation::ValidatePlaySoundCard(card.id, target_player->word.ids(), c.target_card_index) !=
         validation::PlaySoundCardValidationResult::Valid
     ) return Kick(client, InvalidPacket);
 
     // Add the sound to the player’s word.
-    // TODO: Sound stacks.
-    // TODO: Check if the sound stack is full.
     // TODO: Special effects when playing a sound.
     // TODO: Check for locks.
     // TODO: The cursed i+2*j -> j change.
-    target_player->word[c.target_card_index].id = card.id;
+    s.push(Card{card.id});
     Broadcast(sc::AddSoundToStack{c.player, c.target_card_index, card.id});
 
     // Remove the card from the player’s hand and end their turn.
@@ -264,8 +263,8 @@ void Server::SendGameState(Player& p) {
     std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
     for (auto [i, p] : players | vws::enumerate) {
         player_infos[i].name = p->name;
-        for (auto [j, c] : p->word | vws::enumerate)
-            player_infos[i].word[j] = c.id;
+        for (auto [j, c] : p->word.stacks | vws::enumerate)
+            player_infos[i].word[j] = c.top;
     }
 
     // Send each player their hand and id.
@@ -303,11 +302,11 @@ void Server::SetUpGame() {
     for (auto& p : players) {
         for (u8 i = 0; i < 3; ++i) {
             // Add consonant.
-            p->word.push_back(std::move(deck.front()));
+            p->word.add_stack(std::move(deck.front()));
             deck.erase(deck.begin());
 
             // Add vowel.
-            p->word.push_back(std::move(deck.back()));
+            p->word.add_stack(std::move(deck.back()));
             deck.pop_back();
         }
 

@@ -7,6 +7,6 @@ import pr.cards;
 export namespace pr::constants {
 constexpr usz StartingWordSize = 6;
 constexpr usz PlayersPerGame = 2;
-constexpr usz MaxSoundStackSize = 2;
+constexpr usz MaxSoundStackSize = 7;
 using Word = std::array<CardId, StartingWordSize>;
 }

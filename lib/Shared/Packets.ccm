@@ -105,7 +105,11 @@ DefinePacket(Disconnect) {
 };
 
 DefinePacket(WordChoice) {
-    Ctor(WordChoice)(constants::Word word) : word{word} {}
+    Ctor(WordChoice)(const auto& word) {
+        Assert(word.size() == constants::StartingWordSize, "Invalid word size");
+        rgs::copy(word, this->word.begin());
+    }
+
     Serialisable(word);
 
     constants::Word word;

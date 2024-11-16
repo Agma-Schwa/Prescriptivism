@@ -1,5 +1,6 @@
 module;
 #include <algorithm>
+#include <base/Assert.hh>
 #include <base/Macros.hh>
 #include <chrono>
 #include <map>
@@ -15,11 +16,14 @@ import base;
 import pr.utils;
 import pr.packets;
 import pr.cards;
+import pr.constants;
 
 export namespace pr::server {
-class Server;
 class Card;
 class Player;
+class Server;
+class Stack;
+class Word;
 }
 
 namespace pr::server {
@@ -32,7 +36,35 @@ class pr::server::Card {
 
 public:
     CardId id;
-    Card(CardId t) : id(t) {}
+    explicit Card(CardId t) : id(t) {}
+};
+
+class pr::server::Stack {
+    ComputedReadonly(CardId, top, cards.back().id);
+    ComputedReadonly(bool, full, cards.size() == constants::MaxSoundStackSize);
+
+public:
+    std::vector<Card> cards;
+
+    /// Get the nth card id in the stack.
+    auto operator[](usz n) -> CardId {
+        Assert(n < cards.size());
+        return cards[n].id;
+    }
+
+    /// Add a card to the stack.
+    void push(Card card) { cards.push_back(std::move(card)); }
+};
+
+class pr::server::Word {
+public:
+    std::vector<Stack> stacks;
+
+    /// Add a stack to the word.
+    void add_stack(Card c) { stacks.emplace_back().push(std::move(c)); }
+
+    /// Get the card ids of the topmost card in each stack.
+    auto ids() const { return stacks | vws::transform(&Stack::get_top); }
 };
 
 class pr::server::Player {
@@ -54,7 +86,7 @@ public:
     std::vector<Card> hand;
 
     /// The player’s word
-    std::vector<Card> word;
+    Word word;
 
     /// The player submitted their word
     bool submitted_word = false;
@@ -66,11 +98,6 @@ public:
     Player(net::TCPConnexion client_connexion, std::string name)
         : client_connexion(std::move(client_connexion)),
           name(std::move(name)) {}
-
-    /// Get the player’s word as a list of card ids.
-    auto cards() -> std::vector<CardId> {
-        return word | vws::transform(&Card::id) | rgs::to<std::vector>();
-    }
 
     /// Send a packet to the player.
     template <typename T>

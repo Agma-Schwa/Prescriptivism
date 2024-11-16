@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
     // Do not rebuild ourselves as that may cause a crash.
     std::system("cmake --build out -- PrescriptivismServer Prescriptivism");
 
-    if (fork() == 0) {
+    if ((argc < 2 or std::string_view{argv[1]} != "-c") and fork() == 0) {
         execl(
             "./PrescriptivismServer",
             "PrescriptivismServer",
