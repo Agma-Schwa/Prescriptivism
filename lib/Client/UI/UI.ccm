@@ -814,20 +814,6 @@ public:
     void refresh(Renderer&) override;
 
 private:
-    struct Validator {
-        const CardStacks& cs;
-
-        auto operator[](usz i) const -> CardId { return cs.stacks()[i].top.id; }
-        auto size() const -> usz { return cs.stacks().size(); }
-        bool stack_is_locked(usz i) const { return cs.stacks()[i].locked; }
-        bool stack_is_full(usz i) const { return cs.stacks()[i].full; }
-    };
-
-public:
-    /// Get a wrapper object that can interact with the validator.
-    auto validator() const -> Validator { return {*this}; }
-
-private:
     // FIXME: these should really be lambdas, but that is currently
     // impossible because of a Clang bug: https://github.com/llvm/llvm-project/issues/116087
     static auto Lambda_ids(Widget& c) -> CardId { return static_cast<Stack&>(c).top.id; }

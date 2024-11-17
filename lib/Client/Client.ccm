@@ -130,6 +130,9 @@ public:
 
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
+    struct Validator;
+    friend Validator;
+
     enum struct State {
         /// The starting state. Nothing is selected.
         NoSelection,
@@ -204,6 +207,7 @@ private:
     void TickNoSelection();
     void TickNotOurTurn();
     void TickSingleTarget();
+    auto ValidatorFor(Player& p) -> Validator;
 };
 
 // =============================================================================

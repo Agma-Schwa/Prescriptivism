@@ -29,8 +29,23 @@ using enum DisconnectReason;
 // ============================================================================
 // Helpers
 // ============================================================================
+struct Server::Validator {
+    const Player& p;
+    PlayerId acting_player;
+
+    auto operator[](usz i) const -> CardId { return p.word.stacks[i].top; }
+    bool is_own_word() const { return acting_player == p.id; }
+    auto size() const -> usz { return p.word.stacks.size(); }
+    bool stack_is_locked(usz i) const { return p.word.stacks[i].locked; }
+    bool stack_is_full(usz i) const { return p.word.stacks[i].full; }
+};
+
 auto BuildWordArray(const Word& w) {
     return w.stacks | vws::transform(&Stack::get_top);
+}
+
+auto Server::ValidatorFor(Player& p) -> Validator {
+    return Validator{p, current_player};
 }
 
 // =============================================================================
@@ -211,6 +226,12 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
         c.target_stack_index >= target_player->word.stacks.size()
     ) return Kick(client, InvalidPacket);
 
+    // Now that we have checked that all indices are valid and that it’s
+    // this player’s turn, validate the action itself. Any code below this
+    // MUST be handled in the validation namespace to make sure the client
+    // can perform the exact same checks as the server so we don’t allow a
+    // player to take an invalid action.
+    //
     // The card is a sound card.
     auto& card = p->hand[c.card_index];
     if (card.id.is_sound()) return HandlePlaySoundCard(
@@ -224,15 +245,11 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
     switch (card.id.value) {
         default: Kick(client, InvalidPacket); break;
         case CardIdValue::P_SpellingReform: {
-            // Check that the target word belongs to the player.
-            if (c.player != p->id) return Kick(client, InvalidPacket);
-
-            // Check that the target stack isn’t already locked.
-            auto& s = target_player->word.stacks[c.target_stack_index];
-            if (s.locked) return Kick(client, InvalidPacket);
+            if (not validation::ValidateSpellingReform(ValidatorFor(*p), c.target_stack_index))
+                return Kick(client, InvalidPacket);
 
             // Lock the stack.
-            s.locked = true;
+            target_player->word.stacks[c.target_stack_index].locked = true;
             Broadcast(sc::StackLockChanged{target_player->id, c.target_stack_index, true});
             p->remove(card);
             NextPlayer();
@@ -251,12 +268,9 @@ void Server::HandlePlaySoundCard(
 ) {
     auto& p = player_map[client];
 
-    // Check that the card is actually a sound card.
-    if (not card.id.is_sound()) return Kick(client, InvalidPacket);
-
     // Perform validation.
     if (
-        validation::ValidatePlaySoundCard(card.id, target_player.word.validator(), target_index) !=
+        validation::ValidatePlaySoundCard(card.id, ValidatorFor(target_player), target_index) !=
         validation::PlaySoundCardValidationResult::Valid
     ) return Kick(client, InvalidPacket);
 

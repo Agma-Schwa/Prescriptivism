@@ -23,8 +23,9 @@ enum struct PlaySoundCardValidationResult {
 /// Concept that denotes anything that is a valid ‘word’ to be
 /// used as an input for most validation functions.
 template <typename T>
-concept CardList = requires (const T& t, usz idx) {
+concept WordValidator = requires (const T& t, usz idx) {
     { t[idx] } -> std::convertible_to<CardId>;
+    { t.is_own_word() } -> std::convertible_to<bool>;
     { t.stack_is_locked(idx) } -> std::convertible_to<bool>;
     { t.stack_is_full(idx) } -> std::convertible_to<bool>;
     { t.size() } -> std::convertible_to<usz>;
@@ -32,7 +33,7 @@ concept CardList = requires (const T& t, usz idx) {
 
 auto ValidateInitialWord(constants::Word word, constants::Word original) -> InitialWordValidationResult;
 
-template <CardList T>
+template <WordValidator T>
 auto ValidatePlaySoundCard(CardId played, const T& on, usz at) -> PlaySoundCardValidationResult {
     using enum PlaySoundCardValidationResult;
 
@@ -61,5 +62,13 @@ auto ValidatePlaySoundCard(CardId played, const T& on, usz at) -> PlaySoundCardV
 
     // Otherwise, no.
     return Invalid;
+}
+
+/// Returns whether the spelling reform is valid.
+template <WordValidator T>
+bool ValidateSpellingReform(const T& on, usz at) {
+    // We can only play spelling reforms on our own word, or
+    // on a word that is already locked.
+    return on.is_own_word() and not on.stack_is_locked(at);
 }
 }

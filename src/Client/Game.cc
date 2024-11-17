@@ -12,8 +12,22 @@ using namespace pr;
 using namespace pr::client;
 
 // =============================================================================
-// Validation Helpers
+// Validation
 // =============================================================================
+struct GameScreen::Validator {
+    const Player& cs;
+    PlayerId us;
+
+    auto operator[](usz i) const -> CardId { return cs.word->stacks()[i].top.id; }
+    bool is_own_word() const { return us == cs.id; }
+    auto size() const -> usz { return cs.word->stacks().size(); }
+    bool stack_is_locked(usz i) const { return cs.word->stacks()[i].locked; }
+    bool stack_is_full(usz i) const { return cs.word->stacks()[i].full; }
+};
+
+auto GameScreen::ValidatorFor(Player& p) -> Validator {
+    return Validator{p, us.id};
+}
 
 // =============================================================================
 // Helpers
@@ -46,24 +60,11 @@ void GameScreen::ResetWords(
 }
 
 auto GameScreen::Targets(Card& c) -> std::generator<Target> {
-    [[maybe_unused]] auto YieldAll = [&] -> std::generator<Target> {
-        for (auto p : all_players)
-            for (auto& s : p->word->stacks())
-                for (auto& card : s.cards())
-                    co_yield Target{s, card};
-    };
-
-    auto YieldOurs = [&] -> std::generator<Target> {
-        for (auto& s : us.word->stacks())
-            for (auto& card : s.cards())
-                co_yield Target{s, card};
-    };
-
     if (c.id.is_sound()) {
         for (auto p : all_players) {
             for (auto [i, s] : p->word->stacks() | vws::enumerate) {
                 // TODO: Handle evolutions that require an extra card.
-                auto res = validation::ValidatePlaySoundCard(c.id, p->word->validator(), i);
+                auto res = validation::ValidatePlaySoundCard(c.id, ValidatorFor(*p), i);
                 bool valid = res == validation::PlaySoundCardValidationResult::Valid;
                 if (valid) co_yield Target{s, s.cards()[i]};
             }
@@ -73,7 +74,12 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
 
     switch (c.id.value) {
         default: break;
-        case CardIdValue::P_SpellingReform: co_yield rgs::elements_of(YieldOurs());
+        case CardIdValue::P_SpellingReform: {
+            auto v = ValidatorFor(us);
+            for (auto [i, s] : us.word->stacks() | vws::enumerate)
+                if (validation::ValidateSpellingReform(v, i))
+                    co_yield Target{s, s.top};
+        } break;
     }
 }
 
