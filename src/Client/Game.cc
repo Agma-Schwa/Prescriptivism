@@ -117,6 +117,9 @@ void GameScreen::Pass() {
     ClearSelection(state == State::Passing ? State::NoSelection : State::Passing);
 
     // Update the button to cancel the passing action if pressed again.
+    // TODO: In addition to changing the button’s state, also display a permanent
+    //       message to the user (either above their hand or their word) along the
+    //       lines of ‘Select a card in your hand to discard’.
     pass->update_text(client.renderer.make_text(
         state == State::Passing ? "Cancel"sv : "Pass"sv,
         FontSize::Medium
