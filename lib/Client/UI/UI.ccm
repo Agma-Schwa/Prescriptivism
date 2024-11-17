@@ -672,6 +672,15 @@ public:
     void refresh(Renderer&) override;
 };
 
+/// A group of widgets, arranged horizontally or vertically.
+///
+/// Besides holding and aligning widgets, a group is also the only
+/// widget whose children can be accessed, altered, and removed from
+/// the outside.
+///
+/// The children of any other widget MUST NOT be altered from outside
+/// that widget, as only it knows how to deal with changes to it (e.g.
+/// refreshing, drawing, etc.).
 class pr::client::Group : public Widget
     , public WidgetHolder {
     /// The maximum gap size; 0 means no gap; set to a large value
