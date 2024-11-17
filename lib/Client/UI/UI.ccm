@@ -6,6 +6,7 @@ module;
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <pr/Utils.hh>
 #include <ranges>
 #include <SDL3/SDL.h>
 export module pr.client.ui;
@@ -49,7 +50,7 @@ class WidgetHolder;
 /// Result of hovering over or selecting a widget.
 struct SelectResult;
 using HoverResult = SelectResult;
-}
+} // namespace pr::client
 
 /// An anchor point for positioning elements.
 enum class pr::client::Anchor : base::u8 {
@@ -304,9 +305,9 @@ public:
 
     /// Iterate over the children of this element.
     template <typename CastTo = Widget>
-    auto children() {
-        /// Transform views can’t be nested, so do this the dumb way.
-        return widgets | vws::transform([](auto& w) -> CastTo& { return static_cast<CastTo&>(*w); });
+    auto children(this auto&& self) {
+        return std::forward_like<decltype(self)>(self.widgets) //
+             | vws::transform([](auto& w) -> CastTo& { return static_cast<CastTo&>(*w); });
     }
 
     /// Get a widget by index.
@@ -752,6 +753,10 @@ public:
 
         void draw(Renderer& r) override;
         void refresh(Renderer&) override;
+
+        /// Validation API.
+        bool stack_is_locked() const { return locked; }
+        bool stack_is_full() const { return full; }
     };
 
     static constexpr i32 CardGaps[Scale::NumScales]{5, 10, 20};
@@ -801,10 +806,26 @@ public:
     void set_display_state(Card::Overlay state);
 
     /// Get the card stacks in this group.
-    auto stacks() { return children<Stack>(); }
+    auto stacks(this auto&& self) {
+        return FWD(self).template children<Stack>();
+    }
 
     auto selected_child(InputSystem&) -> SelectResult override;
     void refresh(Renderer&) override;
+
+private:
+    struct Validator {
+        const CardStacks& cs;
+
+        auto operator[](usz i) const -> CardId { return cs.stacks()[i].top.id; }
+        auto size() const -> usz { return cs.stacks().size(); }
+        bool stack_is_locked(usz i) const { return cs.stacks()[i].locked; }
+        bool stack_is_full(usz i) const { return cs.stacks()[i].full; }
+    };
+
+public:
+    /// Get a wrapper object that can interact with the validator.
+    auto validator() const -> Validator { return {*this}; }
 
 private:
     // FIXME: these should really be lambdas, but that is currently

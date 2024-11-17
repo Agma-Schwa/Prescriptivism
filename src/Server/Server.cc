@@ -254,13 +254,9 @@ void Server::HandlePlaySoundCard(
     // Check that the card is actually a sound card.
     if (not card.id.is_sound()) return Kick(client, InvalidPacket);
 
-    // Check that the stack it’s being played on isn’t full.
-    auto& s = target_player.word.stacks[target_index];
-    if (s.full) return Kick(client, InvalidPacket);
-
-    // Check that the target card is a valid target.
+    // Perform validation.
     if (
-        validation::ValidatePlaySoundCard(card.id, target_player.word.ids(), target_index) !=
+        validation::ValidatePlaySoundCard(card.id, target_player.word.validator(), target_index) !=
         validation::PlaySoundCardValidationResult::Valid
     ) return Kick(client, InvalidPacket);
 
@@ -268,7 +264,7 @@ void Server::HandlePlaySoundCard(
     // TODO: Special effects when playing a sound.
     // TODO: Check for locks.
     // TODO: The cursed i+2*j -> j change.
-    s.push(Card{card.id});
+    target_player.word.stacks[target_index].push(Card{card.id});
     Broadcast(sc::AddSoundToStack{target_player.id, target_index, card.id});
 
     // Remove the card from the player’s hand and end their turn.

@@ -63,8 +63,7 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
         for (auto p : all_players) {
             for (auto [i, s] : p->word->stacks() | vws::enumerate) {
                 // TODO: Handle evolutions that require an extra card.
-                if (s.full) continue;
-                auto res = validation::ValidatePlaySoundCard(c.id, p->word->ids(), i);
+                auto res = validation::ValidatePlaySoundCard(c.id, p->word->validator(), i);
                 bool valid = res == validation::PlaySoundCardValidationResult::Valid;
                 if (valid) co_yield Target{s, s.cards()[i]};
             }

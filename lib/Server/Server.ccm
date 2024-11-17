@@ -60,6 +60,15 @@ public:
 };
 
 class pr::server::Word {
+    struct Validator {
+        const Word& w;
+
+        auto operator[](usz i) const -> CardId { return w.stacks[i].top; }
+        auto size() const -> usz { return w.stacks.size(); }
+        bool stack_is_locked(usz i) const { return w.stacks[i].locked; }
+        bool stack_is_full(usz i) const { return w.stacks[i].full; }
+    };
+
 public:
     std::vector<Stack> stacks;
 
@@ -68,6 +77,9 @@ public:
 
     /// Get the card ids of the topmost card in each stack.
     auto ids() const { return stacks | vws::transform(&Stack::get_top); }
+
+    /// Get a wrapper object that can interact with the validator.
+    auto validator() const -> Validator { return {*this}; }
 };
 
 class pr::server::Player {

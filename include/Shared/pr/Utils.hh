@@ -5,5 +5,6 @@
     void serialise(::pr::ser::Writer& buf) const { buf(__VA_ARGS__); } \
     void deserialise(::pr::ser::Reader& buf) { buf(__VA_ARGS__); }
 
+#define FWD(x) std::forward<decltype(x)>(x)
 
 #endif //PRESCRIPTIVISM_SHARED_UTILS_HH

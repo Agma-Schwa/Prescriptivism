@@ -25,6 +25,9 @@ enum struct PlaySoundCardValidationResult {
 template <typename T>
 concept CardList = requires (const T& t, usz idx) {
     { t[idx] } -> std::convertible_to<CardId>;
+    { t.stack_is_locked(idx) } -> std::convertible_to<bool>;
+    { t.stack_is_full(idx) } -> std::convertible_to<bool>;
+    { t.size() } -> std::convertible_to<usz>;
 };
 
 auto ValidateInitialWord(constants::Word word, constants::Word original) -> InitialWordValidationResult;
@@ -32,6 +35,10 @@ auto ValidateInitialWord(constants::Word word, constants::Word original) -> Init
 template <CardList T>
 auto ValidatePlaySoundCard(CardId played, const T& on, usz at) -> PlaySoundCardValidationResult {
     using enum PlaySoundCardValidationResult;
+
+    // If the stack is locked or full, we can’t play a card on it.
+    // TODO: Handle the many ways of unlocking a card.
+    if (on.stack_is_locked(at) or on.stack_is_full(at)) return Invalid;
 
     // Is this played on a /h/ or a /ə/ and the played sound is adjacent?
     if (
