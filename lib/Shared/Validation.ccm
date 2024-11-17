@@ -67,8 +67,8 @@ auto ValidatePlaySoundCard(CardId played, const T& on, usz at) -> PlaySoundCardV
 /// Returns whether the spelling reform is valid.
 template <WordValidator T>
 bool ValidateP_SpellingReform(const T& on, usz at) {
-    // We can only play spelling reforms on our own word, or
-    // on a word that is already locked.
+    // We can only play spelling reforms on our own word
+    // on a stack that is not already locked.
     return on.is_own_word() and not on.stack_is_locked(at);
 }
 }
