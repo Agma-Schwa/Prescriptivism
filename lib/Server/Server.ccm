@@ -46,6 +46,9 @@ class pr::server::Stack {
 public:
     std::vector<Card> cards;
 
+    /// Stack is locked by a spelling reform.
+    bool locked = false;
+
     /// Get the nth card id in the stack.
     auto operator[](usz n) -> CardId {
         Assert(n < cards.size());
@@ -98,6 +101,13 @@ public:
     Player(net::TCPConnexion client_connexion, std::string name)
         : client_connexion(std::move(client_connexion)),
           name(std::move(name)) {}
+
+    /// Remove a card in the player’s hand.
+    void remove(Card& c) {
+        auto it = rgs::find(hand, c.id, &Card::id);
+        Assert(it != hand.end(), "Card not in hand");
+        hand.erase(it);
+    }
 
     /// Send a packet to the player.
     template <typename T>
@@ -182,6 +192,14 @@ private:
     }
 
     void Draw(Player& p, usz count = 1);
+
+    void HandlePlaySoundCard(
+        net::TCPConnexion& client,
+        Card& card,
+        Player& target_player,
+        u32 target_index
+    );
+
     void NextPlayer();
     void SendGameState(Player& p);
     void SetUpGame();

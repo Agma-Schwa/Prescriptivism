@@ -117,6 +117,26 @@ void GameScreen::TickSingleTarget() {
     if (not selected_element) return;
     Assert(our_selected_card, "We should have selected one of our cards");
 
+    auto PlaySingleTarget = [&] {
+        auto& stack = selected_element->as<CardStacks::Stack>();
+        auto owner = player_map.at(&stack.parent);
+        Assert(owner, "Selected card without owner?");
+
+        // Tell the server about this.
+        auto& our_stack = our_selected_card->parent->as<CardStacks::Stack>();
+        auto card_in_hand_index = our_hand->index_of(our_stack);
+        auto selected_card_index = owner->word->index_of(stack);
+        client.server_connexion.send(packets::cs::PlaySingleTarget{
+            *card_in_hand_index,
+            owner->id,
+            *selected_card_index,
+        });
+
+        // Remove the card we played.
+        ClearSelection();
+        our_hand->remove(our_stack);
+    };
+
     // We selected one of our own cards while we already had one selected.
     if (selected_element->has_parent(our_hand)) {
         if (selected_element == our_selected_card) return ClearSelection();
@@ -127,33 +147,19 @@ void GameScreen::TickSingleTarget() {
 
     // We’re playing a sound card on a sound card.
     if (our_selected_card->id.is_sound()) {
-        auto& stack = selected_element->as<CardStacks::Stack>();
-        auto owner = player_map.at(&stack.parent);
-        Assert(owner, "Selected card without owner?");
-        Assert(stack.top.id.is_sound(), "Playing a sound on a non-sound card?");
-
-        // Tell the server about this.
-        auto& our_stack = our_selected_card->parent->as<CardStacks::Stack>();
-        auto card_in_hand_index = our_hand->index_of(our_stack);
-        auto selected_card_index = owner->word->index_of(stack);
-        Assert(card_in_hand_index.has_value(), "Could not find card in hand?");
-        Assert(selected_card_index.has_value(), "Could not find card in word?");
-        client.server_connexion.send(packets::cs::PlaySoundCard{
-            *card_in_hand_index,
-            owner->id,
-            *selected_card_index,
-        });
-
-        // Remove the card we played.
-        ClearSelection();
-        our_hand->remove(our_stack);
+        PlaySingleTarget();
         return;
     }
 
     // We’re playing a power card.
     if (our_selected_card->id.is_power()) {
-        Log("TODO: Play power card");
-        ClearSelection();
+        switch (our_selected_card->id.value) {
+            case CardIdValue::P_SpellingReform: PlaySingleTarget(); return;
+            default:
+                Log("TODO: Implement {}", CardDatabase[+our_selected_card->id].name);
+                ClearSelection();
+                break;
+        }
     }
 }
 
@@ -213,6 +219,11 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     // Finally, ‘end’ our turn to reset everything.
     end_turn();
     client.enter_screen(*this);
+}
+
+void GameScreen::lock_changed(PlayerId player, u32 stack_index, bool locked) {
+    auto& p = PlayerById(player);
+    p.word->stacks()[stack_index].locked = locked;
 }
 
 void GameScreen::on_refresh(Renderer& r) {

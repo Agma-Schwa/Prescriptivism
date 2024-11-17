@@ -196,30 +196,71 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
     if (players.size() == PlayersNeeded) SetUpGame();
 }
 
-void Server::handle(net::TCPConnexion& client, cs::PlaySoundCard c) {
-    auto& p = player_map[client];
-
+void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
     // Check that the player is the current player.
+    auto& p = player_map[client];
     if (p->id != current_player) return Kick(client, UnexpectedPacket);
+
+    /// Check that the player index is valid.
+    if (c.player >= players.size()) return Kick(client, InvalidPacket);
 
     // Check that the card indices are valid.
     auto& target_player = players[c.player];
     if (
         c.card_index >= p->hand.size() or
-        c.target_card_index >= target_player->word.stacks.size()
+        c.target_stack_index >= target_player->word.stacks.size()
     ) return Kick(client, InvalidPacket);
 
-    // Check that the card is actually a sound card.
+    // The card is a sound card.
     auto& card = p->hand[c.card_index];
+    if (card.id.is_sound()) return HandlePlaySoundCard(
+        client,
+        card,
+        *target_player,
+        c.target_stack_index
+    );
+
+    // The card is a power card.
+    switch (card.id.value) {
+        default: Kick(client, InvalidPacket); break;
+        case CardIdValue::P_SpellingReform: {
+            // Check that the target word belongs to the player.
+            if (c.player != p->id) return Kick(client, InvalidPacket);
+
+            // Check that the target stack isn’t already locked.
+            auto& s = target_player->word.stacks[c.target_stack_index];
+            if (s.locked) return Kick(client, InvalidPacket);
+
+            // Lock the stack.
+            s.locked = true;
+            Broadcast(sc::StackLockChanged{target_player->id, c.target_stack_index, true});
+            p->remove(card);
+            NextPlayer();
+        } break;
+    }
+}
+
+// =============================================================================
+//  Playing Cards
+// =============================================================================
+void Server::HandlePlaySoundCard(
+    net::TCPConnexion& client,
+    Card& card,
+    Player& target_player,
+    u32 target_index
+) {
+    auto& p = player_map[client];
+
+    // Check that the card is actually a sound card.
     if (not card.id.is_sound()) return Kick(client, InvalidPacket);
 
     // Check that the stack it’s being played on isn’t full.
-    auto& s = target_player->word.stacks[c.target_card_index];
+    auto& s = target_player.word.stacks[target_index];
     if (s.full) return Kick(client, InvalidPacket);
 
     // Check that the target card is a valid target.
     if (
-        validation::ValidatePlaySoundCard(card.id, target_player->word.ids(), c.target_card_index) !=
+        validation::ValidatePlaySoundCard(card.id, target_player.word.ids(), target_index) !=
         validation::PlaySoundCardValidationResult::Valid
     ) return Kick(client, InvalidPacket);
 
@@ -228,15 +269,15 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySoundCard c) {
     // TODO: Check for locks.
     // TODO: The cursed i+2*j -> j change.
     s.push(Card{card.id});
-    Broadcast(sc::AddSoundToStack{c.player, c.target_card_index, card.id});
+    Broadcast(sc::AddSoundToStack{target_player.id, target_index, card.id});
 
     // Remove the card from the player’s hand and end their turn.
-    p->hand.erase(p->hand.begin() + c.card_index);
+    p->remove(card);
     NextPlayer();
 }
 
 // =============================================================================
-//  Game Logic
+//  General Game Logic
 // =============================================================================
 void Server::Draw(Player& p, usz count) {
     for (usz i = 0; i < count; ++i) {

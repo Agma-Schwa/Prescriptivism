@@ -11,11 +11,12 @@
     X(EndTurn)          \
     X(Draw)             \
     X(StartGame)        \
-    X(AddSoundToStack)
+    X(AddSoundToStack)  \
+    X(StackLockChanged)
 
 #define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
     X(Login)             \
-    X(PlaySoundCard)
+    X(PlaySingleTarget)
 
 #endif // PRESCRIPTIVISM_PACKETS_HH

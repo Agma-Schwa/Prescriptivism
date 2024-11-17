@@ -341,6 +341,10 @@ void Client::handle(sc::AddSoundToStack add) {
     game_screen.add_card(add.player, add.stack_index, add.card);
 }
 
+void Client::handle(sc::StackLockChanged lock) {
+    game_screen.lock_changed(lock.player, lock.stack_index, lock.locked);
+}
+
 void Client::TickNetworking() {
     if (server_connexion.disconnected) return;
     server_connexion.receive([&](net::ReceiveBuffer& buf) {

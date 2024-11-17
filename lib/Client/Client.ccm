@@ -187,6 +187,7 @@ public:
     void add_card_to_hand(CardId id);
     void enter(packets::sc::StartGame sg);
     void end_turn();
+    void lock_changed(PlayerId player, u32 stack_index, bool locked);
     void on_refresh(Renderer& r) override;
     void start_turn();
     void tick(InputSystem& input) override;

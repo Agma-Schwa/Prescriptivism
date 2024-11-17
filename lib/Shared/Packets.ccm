@@ -190,6 +190,24 @@ DefinePacket(AddSoundToStack) {
     /// The card we’re adding.
     CardId card;
 };
+
+DefinePacket(StackLockChanged) {
+    Ctor(StackLockChanged)(PlayerId player, u32 stack_index, bool locked)
+        : player(player),
+          stack_index(stack_index),
+          locked(locked) {}
+
+    Serialisable(player, stack_index, locked);
+
+    /// The player whose stack we’re locking.
+    PlayerId player;
+
+    /// The index of the stack we’re locking.
+    u32 stack_index;
+
+    /// Whether the stack is locked or unlocked.
+    bool locked;
+};
 } // namespace pr::packets::sc
 
 // =============================================================================
@@ -215,13 +233,13 @@ DefinePacket(Login) {
     std::string password;
 };
 
-DefinePacket(PlaySoundCard) {
-    Ctor(PlaySoundCard)(u32 card_index, PlayerId player, u32 target_card_index)
+DefinePacket(PlaySingleTarget) {
+    Ctor(PlaySingleTarget)(u32 card_index, PlayerId player, u32 target_card_index)
         : card_index(card_index),
           player(player),
-          target_card_index(target_card_index) {}
+          target_stack_index(target_card_index) {}
 
-    Serialisable(card_index, player, target_card_index);
+    Serialisable(card_index, player, target_stack_index);
 
     /// The index of the card in hand to play.
     u32 card_index;
@@ -231,7 +249,7 @@ DefinePacket(PlaySoundCard) {
 
     /// The index of the card on the player’s word on which
     /// this one is played.
-    u32 target_card_index;
+    u32 target_stack_index;
 };
 } // namespace pr::packets::cs
 
