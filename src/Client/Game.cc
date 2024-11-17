@@ -32,7 +32,9 @@ auto GameScreen::ValidatorFor(Player& p) -> Validator {
 // =============================================================================
 // Helpers
 // =============================================================================
-GameScreen::GameScreen(Client& c) : client(c) {}
+GameScreen::GameScreen(Client& c) : client(c) {
+    // UI is set up in enter().
+}
 
 auto GameScreen::PlayerById(PlayerId id) -> Player& {
     auto p = rgs::find(all_players, id, &Player::get_id);
@@ -183,6 +185,9 @@ void GameScreen::add_card_to_hand(CardId id) {
 void GameScreen::enter(packets::sc::StartGame sg) {
     DeleteAllChildren();
 
+    pass = &Create<Button>(client.renderer.make_text("Pass", FontSize::Medium), Position(-50, 50));
+    pass->on_click = [&] { Log("TODO: Pass turn"); };
+
     other_players.clear();
     other_words = &Create<Group>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
@@ -273,6 +278,7 @@ void GameScreen::tick(InputSystem& input) {
 
 void GameScreen::start_turn() {
     state = State::NoSelection;
+    pass->selectable = Selectable::Yes;
     for (auto& c : our_hand->top_cards()) {
         if (not Empty(Targets(c))) {
             c.overlay = Card::Overlay::Default;
@@ -283,6 +289,7 @@ void GameScreen::start_turn() {
 
 void GameScreen::end_turn() {
     state = State::NotOurTurn;
+    pass->selectable = Selectable::No;
     our_hand->make_selectable(Selectable::No);
     our_hand->set_display_state(Card::Overlay::Inactive);
     ResetWords();

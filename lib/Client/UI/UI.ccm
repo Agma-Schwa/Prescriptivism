@@ -195,11 +195,17 @@ class pr::client::Element {
     Readonly(AABB, bounding_box);
 
 protected:
+    LIBBASE_DEBUG(bool _bb_size_initialised = false;)
+
     Element() = default;
-    void SetBoundingBox(AABB aabb) { _bounding_box = aabb; }
-    void SetBoundingBox(xy origin, Size size) { _bounding_box = {origin, size}; }
-    void UpdateBoundingBox(xy origin) { _bounding_box = {origin, _bounding_box.size()}; }
-    void UpdateBoundingBox(Size size) { _bounding_box = {_bounding_box.origin(), size}; }
+    void SetBoundingBox(xy origin, Size size) { SetBoundingBox(AABB{origin, size}); }
+    void SetBoundingBox(AABB aabb) {
+        LIBBASE_DEBUG(_bb_size_initialised = true;)
+        _bounding_box = aabb;
+    }
+
+    void UpdateBoundingBox(xy origin) { SetBoundingBox(origin, _bounding_box.size()); }
+    void UpdateBoundingBox(Size size) { SetBoundingBox(_bounding_box.origin(), size); }
 
 public:
     virtual ~Element() = default;
@@ -229,7 +235,7 @@ class pr::client::Widget : public Element {
     LIBBASE_IMMOVABLE(Widget);
     Readonly(Element*, parent);
 
-    Property(bool, needs_refresh, false);
+    Property(bool, needs_refresh, true);
 
 public:
     bool hovered  : 1 = false; ///< Element is being hovered.
@@ -253,7 +259,14 @@ public:
     auto abox() -> AABB { return {apos(), bounding_box.size()}; }
 
     /// Calculate the absolute position in screen coordinates.
-    auto apos() -> xy { return pos.relative(parent->bounding_box, bounding_box.size()); }
+    auto apos() -> xy {
+        DebugAssert(
+            _bb_size_initialised,
+            "Accessing apos() before bounding box was set! NEVER do "
+            "UpdateBoundingBox(apos()) or SetBoundingBox(apos(), ...)!"
+        );
+        return pos.relative(parent->bounding_box, bounding_box.size());
+    }
 
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
@@ -481,6 +494,9 @@ protected:
 public:
     void draw(Renderer& r) override;
     void refresh(Renderer& r) override;
+
+protected:
+    void draw(Renderer& r, Colour text_colour);
 };
 
 class pr::client::Button : public TextBox {

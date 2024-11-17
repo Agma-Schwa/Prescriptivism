@@ -10,8 +10,12 @@ module pr.client.ui;
 using namespace pr;
 using namespace pr::client;
 
+constexpr Colour InactiveButtonColour{55, 55, 55, 255};
 constexpr Colour DefaultButtonColour{36, 36, 36, 255};
 constexpr Colour HoverButtonColour{23, 23, 23, 255};
+
+constexpr Colour ButtonTextColour = Colour::White;
+constexpr Colour InactiveButtonTextColour = Colour::Grey;
 
 /// Compute the absolute coordinates for positioning
 /// text in the center of a box. The box must be in
@@ -60,8 +64,15 @@ auto CenterTextInBox(
 }
 
 void Button::draw(Renderer& r) {
-    r.draw_rect(abox(), hovered ? HoverButtonColour : DefaultButtonColour);
-    TextBox::draw(r);
+    bool active = selectable != Selectable::No;
+    r.draw_rect(
+        abox(),
+        not active ? InactiveButtonColour
+        : hovered  ? HoverButtonColour
+                   : DefaultButtonColour
+    );
+
+    TextBox::draw(r, active ? ButtonTextColour : InactiveButtonTextColour);
 }
 
 void Label::draw(Renderer& r) {
@@ -121,9 +132,13 @@ auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
 }
 
 void TextBox::draw(Renderer& r) {
+    draw(r, label.empty() ? Colour::Grey : Colour::White);
+}
+
+void TextBox::draw(Renderer& r, Colour text_colour) {
     auto& text = label.empty() ? placeholder : label;
     auto pos = TextPos(r, text);
-    r.draw_text(text, pos, label.empty() ? Colour::Grey : Colour::White);
+    r.draw_text(text, pos, text_colour);
     if (cursor_offs != -1) {
         auto [asc, desc] = r.font_for_text(label).strut_split();
         r.draw_line(
@@ -141,7 +156,10 @@ void TextBox::refresh(Renderer& r) {
         std::max({min_ht, i32(label.height + label.depth), strut}) + 2 * padding,
     };
 
-    SetBoundingBox(apos(), sz);
+    // Absolute position calculation depends on the size, so make sure
+    // to initialise them in the right order.
+    UpdateBoundingBox(sz);
+    UpdateBoundingBox(apos());
 }
 
 void TextEdit::draw(Renderer& r) {

@@ -157,6 +157,9 @@ class pr::client::GameScreen : public Screen {
 
     Client& client;
 
+    /// The pass button.
+    Button* pass;
+
     /// The other players in the game.
     std::vector<Player> other_players;
 
