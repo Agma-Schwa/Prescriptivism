@@ -490,12 +490,13 @@ void CardStacks::Stack::draw(Renderer& r) {
     }
 
     if (locked) {
+        auto cs = Card::CardSize[scale];
         auto b = Card::Border[scale];
         auto p = Card::Padding[scale];
         auto sz = LockedTexture->size * Card::IconScale[scale];
         r.draw_texture_scaled(
             *LockedTexture,
-            Position{b.wd + p, b.ht + p}.relative(abox(), sz),
+            Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.relative(abox(), sz),
             Card::IconScale[scale]
         );
     }
