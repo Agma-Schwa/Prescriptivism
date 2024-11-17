@@ -91,7 +91,7 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
         case CardIdValue::P_SpellingReform: {
             auto v = ValidatorFor(us);
             for (auto [i, s] : us.word->stacks() | vws::enumerate)
-                if (validation::ValidateSpellingReform(v, i))
+                if (validation::ValidateP_SpellingReform(v, i))
                     co_yield Target{s, s.top};
         } break;
     }

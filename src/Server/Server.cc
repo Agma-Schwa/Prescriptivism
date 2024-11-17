@@ -258,7 +258,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
     switch (card.id.value) {
         default: Kick(client, InvalidPacket); break;
         case CardIdValue::P_SpellingReform: {
-            if (not validation::ValidateSpellingReform(ValidatorFor(*p), c.target_stack_index))
+            if (not validation::ValidateP_SpellingReform(ValidatorFor(*p), c.target_stack_index))
                 return Kick(client, InvalidPacket);
 
             // Lock the stack.
