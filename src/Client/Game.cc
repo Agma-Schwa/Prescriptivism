@@ -51,13 +51,25 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
     return p->second;
 }
 
+void GameScreen::ResetHand() {
+    for (auto& c : our_hand->top_cards()) {
+        if (not Empty(Targets(c))) {
+            c.overlay = Card::Overlay::Default;
+            c.selectable = Selectable::Yes;
+        } else {
+            c.overlay = Card::Overlay::Inactive;
+            c.selectable = Selectable::No;
+        }
+    }
+}
+
 void GameScreen::ResetWords(
     Selectable s,
     Card::Overlay o
 ) {
     for (auto p : all_players) {
         p->word->make_selectable(s);
-        p->word->set_display_state(o);
+        p->word->set_overlay(o);
     }
 }
 
@@ -88,12 +100,35 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
 // =============================================================================
 //  Game Logic
 // =============================================================================
-void GameScreen::ClearSelection() {
+void GameScreen::ClearSelection(State new_state) {
     ResetWords();
-    state = State::NoSelection;
+    state = new_state;
     if (selected_element) selected_element->unselect();
     if (our_selected_card) our_selected_card->unselect();
     our_selected_card = nullptr;
+}
+
+void GameScreen::Discard(CardStacks::Stack& stack) {
+    ClearSelection();
+    our_hand->remove(stack);
+}
+
+void GameScreen::Pass() {
+    ClearSelection(state == State::Passing ? State::NoSelection : State::Passing);
+
+    // Update the button to cancel the passing action if pressed again.
+    pass->update_text(client.renderer.make_text(
+        state == State::Passing ? "Cancel"sv : "Pass"sv,
+        FontSize::Medium
+    ));
+
+    // Prepare to select a card to discard.
+    if (state == State::Passing) {
+        our_hand->make_selectable();
+        our_hand->set_overlay(Card::Overlay::Default);
+    } else {
+        ResetHand();
+    }
 }
 
 void GameScreen::TickNoSelection() {
@@ -120,6 +155,19 @@ void GameScreen::TickNoSelection() {
 
 void GameScreen::TickNotOurTurn() {}
 
+void GameScreen::TickPassing() {
+    if (not selected_element) return;
+    auto& our_stack = selected_element->as<Card>().parent->as<CardStacks::Stack>();
+    auto idx = our_hand->index_of(our_stack);
+    client.server_connexion.send(packets::cs::Pass{*idx});
+    Discard(our_stack);
+    pass->update_text(client.renderer.make_text("Pass"sv, FontSize::Medium));
+
+    /// Make sure the user can’t press the pass button again (and the server
+    /// is going to send an end turn packet anyway), so end the turn now.
+    end_turn();
+}
+
 void GameScreen::TickSingleTarget() {
     if (not selected_element) return;
     Assert(our_selected_card, "We should have selected one of our cards");
@@ -140,8 +188,7 @@ void GameScreen::TickSingleTarget() {
         });
 
         // Remove the card we played.
-        ClearSelection();
-        our_hand->remove(our_stack);
+        Discard(our_stack);
     };
 
     // We selected one of our own cards while we already had one selected.
@@ -186,7 +233,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     DeleteAllChildren();
 
     pass = &Create<Button>(client.renderer.make_text("Pass", FontSize::Medium), Position(-50, 50));
-    pass->on_click = [&] { Log("TODO: Pass turn"); };
+    pass->on_click = [&] { Pass(); };
 
     other_players.clear();
     other_words = &Create<Group>(Position());
@@ -260,6 +307,7 @@ void GameScreen::tick(InputSystem& input) {
     switch (state) {
         case State::NoSelection: TickNoSelection(); break;
         case State::NotOurTurn: TickNotOurTurn(); break;
+        case State::Passing: TickPassing(); break;
         case State::SingleTarget: TickSingleTarget(); break;
     }
 
@@ -279,18 +327,13 @@ void GameScreen::tick(InputSystem& input) {
 void GameScreen::start_turn() {
     state = State::NoSelection;
     pass->selectable = Selectable::Yes;
-    for (auto& c : our_hand->top_cards()) {
-        if (not Empty(Targets(c))) {
-            c.overlay = Card::Overlay::Default;
-            c.selectable = Selectable::Yes;
-        }
-    }
+    ResetHand();
 }
 
 void GameScreen::end_turn() {
     state = State::NotOurTurn;
     pass->selectable = Selectable::No;
     our_hand->make_selectable(Selectable::No);
-    our_hand->set_display_state(Card::Overlay::Inactive);
-    ResetWords();
+    our_hand->set_overlay(Card::Overlay::Inactive);
+    ClearSelection();
 }

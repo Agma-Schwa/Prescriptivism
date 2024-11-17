@@ -568,7 +568,7 @@ void CardStacks::refresh(Renderer& r) {
     Group::refresh(r);
 }
 
-void CardStacks::set_display_state(Card::Overlay new_value) {
+void CardStacks::set_overlay(Card::Overlay new_value) {
     for (auto& c : stacks()) c.overlay = new_value;
 }
 

@@ -102,13 +102,6 @@ public:
         : client_connexion(std::move(client_connexion)),
           name(std::move(name)) {}
 
-    /// Remove a card in the player’s hand.
-    void remove(Card& c) {
-        auto it = rgs::find(hand, c.id, &Card::id);
-        Assert(it != hand.end(), "Card not in hand");
-        hand.erase(it);
-    }
-
     /// Send a packet to the player.
     template <typename T>
     void send(const T& t) { client_connexion.send(t); }
@@ -204,6 +197,15 @@ private:
     );
 
     void NextPlayer();
+
+    /// Remove a card a player’s hand.
+    void RemoveCard(Player& p, Card& c) {
+        auto it = rgs::find(p.hand, c.id, &Card::id);
+        Assert(it != p.hand.end(), "Card not in hand");
+        discard.emplace_back(c.id);
+        p.hand.erase(it);
+    }
+
     void SendGameState(Player& p);
     void SetUpGame();
     void Tick();

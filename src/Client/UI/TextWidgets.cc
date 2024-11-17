@@ -119,10 +119,10 @@ TextBox::TextBox(
     padding{padding},
     min_wd{min_wd},
     min_ht{min_ht} {
-    UpdateText(std::move(text));
+    update_text(std::move(text));
 }
 
-void TextBox::UpdateText(ShapedText new_text) {
+void TextBox::update_text(ShapedText new_text) {
     label = std::move(new_text);
     needs_refresh = true;
 }
@@ -174,7 +174,7 @@ void TextEdit::draw(Renderer& r) {
             &clusters
         );
 
-        UpdateText(std::move(shaped));
+        update_text(std::move(shaped));
     }
 
     // Use HarfBuzz cluster information to position the cursor: if the cursor

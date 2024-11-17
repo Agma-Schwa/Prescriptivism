@@ -211,6 +211,19 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
     if (players.size() == PlayersNeeded) SetUpGame();
 }
 
+void Server::handle(net::TCPConnexion& client, cs::Pass pass) {
+    // Check that the player is the current player.
+    auto& p = player_map[client];
+    if (p->id != current_player) return Kick(client, UnexpectedPacket);
+
+    // Check that the card index is valid.
+    if (pass.card_index >= p->hand.size()) return Kick(client, InvalidPacket);
+
+    // Discard the card and end the player’s turn.
+    RemoveCard(*p, p->hand[pass.card_index]);
+    NextPlayer();
+}
+
 void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
     // Check that the player is the current player.
     auto& p = player_map[client];
@@ -251,7 +264,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
             // Lock the stack.
             target_player->word.stacks[c.target_stack_index].locked = true;
             Broadcast(sc::StackLockChanged{target_player->id, c.target_stack_index, true});
-            p->remove(card);
+            RemoveCard(*p, card);
             NextPlayer();
         } break;
     }
@@ -282,7 +295,7 @@ void Server::HandlePlaySoundCard(
     Broadcast(sc::AddSoundToStack{target_player.id, target_index, card.id});
 
     // Remove the card from the player’s hand and end their turn.
-    p->remove(card);
+    RemoveCard(*p, card);
     NextPlayer();
 }
 
@@ -291,7 +304,11 @@ void Server::HandlePlaySoundCard(
 // =============================================================================
 void Server::Draw(Player& p, usz count) {
     for (usz i = 0; i < count; ++i) {
-        if (deck.empty()) return;
+        if (deck.empty()) {
+            // TODO: Shuffle discard pile back into deck.
+            return;
+        }
+
         p.hand.push_back(std::move(deck.back()));
         deck.pop_back();
         p.send(sc::Draw{p.hand.back().id});
@@ -304,6 +321,20 @@ void Server::NextPlayer() {
     player().send(sc::EndTurn{});
     current_player = (current_player + 1) % players.size();
     player().send(sc::StartTurn{});
+
+    // If this player’s hand is empty, move on to the next player. Do this
+    // *after* drawing so this code only fires if the deck is empty.
+    if (player().hand.empty()) {
+        // If *all* players’ hands are empty, we need to end the game. This
+        // *shouldn’t* happen, but you never know...
+        if (rgs::all_of(players, [](auto& p) { return p->hand.empty(); })) {
+            Broadcast(sc::Disconnect{Unspecified});
+            Log("No more plays can be made. The game is a draw.");
+            std::exit(27);
+        }
+
+        NextPlayer();
+    }
 }
 
 void Server::SendGameState(Player& p) {

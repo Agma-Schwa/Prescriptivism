@@ -251,6 +251,14 @@ DefinePacket(PlaySingleTarget) {
     /// this one is played.
     u32 target_stack_index;
 };
+
+DefinePacket(Pass) {
+    Ctor(Pass)(u32 card_index) : card_index(card_index) {}
+    Serialisable(card_index);
+
+    /// The index of the card in hand that is discarded.
+    u32 card_index;
+};
 } // namespace pr::packets::cs
 
 // =============================================================================

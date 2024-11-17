@@ -145,6 +145,10 @@ class pr::client::GameScreen : public Screen {
         ///
         /// 'our_selected_card' holds the selected sound card.
         SingleTarget,
+
+        /// We pressed the pass button; prompt the user to select
+        /// a card to discard.
+        Passing,
     };
 
     /// A targeted card in someone’s word.
@@ -199,9 +203,12 @@ public:
     void tick(InputSystem& input) override;
 
 private:
-    void ClearSelection();
+    void ClearSelection(State new_state = State::NoSelection);
+    void Discard(CardStacks::Stack& stack);
+    void Pass();
     auto PlayerById(PlayerId id) -> Player&;
     auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
+    void ResetHand();
     void ResetWords(Selectable s = Selectable::No, Card::Overlay o = Card::Overlay::Default);
 
     /// Get all valid targets for the card at this index, assuming it is in our hand.
@@ -209,6 +216,7 @@ private:
 
     void TickNoSelection();
     void TickNotOurTurn();
+    void TickPassing();
     void TickSingleTarget();
     auto ValidatorFor(Player& p) -> Validator;
 };

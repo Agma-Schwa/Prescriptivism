@@ -244,11 +244,24 @@ auto Widget::parent_screen() -> Screen& {
 }
 
 void Widget::unselect() {
+    if (not selected and not is<Group>()) return;
     auto& parent = parent_screen();
+    unselect_impl(parent);
+}
+
+void Widget::unselect_impl(Screen& parent) {
+    // If this is selected, unselect it.
     if (selected) {
         selected = false;
-        if (parent.selected_element == this)
-            parent.selected_element = nullptr;
+        if (parent.selected_element == this) parent.selected_element = nullptr;
+        if (parent.hovered_element == this) parent.hovered_element = nullptr;
+    }
+
+    // Otherwise, if this is a group, try to unselect all of our children;
+    // this is required if we’re e.g. deleting a group whose child needs to
+    // be untagged as the selected element.
+    else if (auto g = cast<Group>()) {
+        for (auto& ch : g->children()) ch.unselect_impl(parent);
     }
 }
 

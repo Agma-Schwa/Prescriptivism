@@ -233,8 +233,10 @@ public:
 /// Element that is not a screen.
 class pr::client::Widget : public Element {
     LIBBASE_IMMOVABLE(Widget);
-    Readonly(Element*, parent);
 
+    friend Screen;
+
+    Readonly(Element*, parent);
     Property(bool, needs_refresh, true);
 
 public:
@@ -304,8 +306,11 @@ public:
         return SelectResult::TakeIf(this, selectable);
     }
 
-    /// Unselect the element
+    /// Unselect the element.
     void unselect();
+
+private:
+    void unselect_impl(Screen& parent);
 };
 
 class pr::client::WidgetHolder {
@@ -341,6 +346,8 @@ public:
 class pr::client::Screen : public Element
     , public WidgetHolder {
     LIBBASE_IMMOVABLE(Screen);
+
+    friend void Widget::unselect_impl(Screen&);
 
     /// Previous size so we don’t refresh every frame.
     Size prev_size = {};
@@ -392,8 +399,6 @@ public:
     /// interactions on them; thus, calling this handler is recommended
     /// if you override it.
     virtual void tick(InputSystem& input);
-
-    friend void Widget::unselect();
 };
 
 /// Label that supports reflowing text automatically.
@@ -488,12 +493,12 @@ protected:
         i32 min_ht = 0
     );
 
-    void UpdateText(ShapedText new_text);
     auto TextPos(Renderer& r, const ShapedText& text) -> xy;
 
 public:
     void draw(Renderer& r) override;
     void refresh(Renderer& r) override;
+    void update_text(ShapedText new_text);
 
 protected:
     void draw(Renderer& r, Colour text_colour);
@@ -818,8 +823,11 @@ public:
     /// Get a range of all the topmost cards in each stack.
     auto top_cards() { return children() | vws::transform(Lambda_topmost); }
 
+    /// Remove a stack from this group.
+    void remove(Stack& s) { Group::remove(s); }
+
     /// Set the display state for all children.
-    void set_display_state(Card::Overlay state);
+    void set_overlay(Card::Overlay state);
 
     /// Get the card stacks in this group.
     auto stacks(this auto&& self) {

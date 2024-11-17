@@ -17,6 +17,7 @@
 #define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
     X(Login)             \
-    X(PlaySingleTarget)
+    X(PlaySingleTarget)  \
+    X(Pass)
 
 #endif // PRESCRIPTIVISM_PACKETS_HH
