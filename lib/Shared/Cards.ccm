@@ -1,13 +1,15 @@
 module;
 #include <array>
-#include <string_view>
+#include <pr/Utils.hh>
 #include <ranges>
+#include <string_view>
 #include <vector>
 export module pr.cards;
 import pr.utils;
+import pr.serialisation;
 
 export namespace pr {
-enum struct CardId : u16 {
+enum struct CardIdValue : u16 {
     // Consonants
     // clang-format off
 
@@ -101,12 +103,48 @@ enum struct CardType : u8 {
     PowerCard,
 };
 
+/// This only exists because we can’t put members on an enum...
+struct CardId {
+    using enum CardIdValue;
+
+    PR_SERIALISE(value);
+    CardIdValue value = $$Count;
+
+    constexpr CardId() = default;
+    constexpr CardId(CardIdValue v) : value(v) {}
+
+    /// Check if this is a consonant.
+    [[nodiscard]] bool is_consonant() const {
+        return $$ConsonantStart <= value and value <= $$ConsonantEnd;
+    }
+
+    /// Check if this is a vowel.
+    [[nodiscard]] bool is_vowel() const {
+        return $$VowelStart <= value and value <= $$VowelEnd;
+    }
+
+    /// Check if this is a power card.
+    [[nodiscard]] bool is_power() const {
+        return $$PowersStart <= value and value <= $$PowersEnd;
+    }
+
+    /// Check if this is a sound card.
+    [[nodiscard]] bool is_sound() const {
+        return is_consonant() or is_vowel();
+    }
+
+    /// Get the type of this card.
+    [[nodiscard]] CardType type() const {
+        return is_sound() ? CardType::SoundCard : CardType::PowerCard;
+    }
+
+    [[nodiscard]] u16 operator+() const { return +value; }
+    [[nodiscard]] friend auto operator<=>(CardId, CardId) = default;
+};
+
 struct CardData {
     /// The ID of this card.
     CardId id;
-
-    /// The type of this card.
-    CardType type;
 
     /// How many of this card there are in the deck at the start
     /// of the game.
@@ -139,7 +177,7 @@ struct CardData {
         std::string_view center,
         std::vector<std::vector<CardId>> converts_to = {}
     ) -> CardData {
-        return {id, CardType::SoundCard, count, place, manner, name, center, std::move(converts_to)};
+        return {id, count, place, manner, name, center, std::move(converts_to)};
     }
 
     /// Create a power card.
@@ -148,31 +186,20 @@ struct CardData {
         usz count,
         std::string_view name
     ) {
-        return CardData{id, CardType::PowerCard, count, 0, 0, name, "", {}};
+        return CardData{id, count, 0, 0, name, "", {}};
     }
-
-    /// Check if this is a consonant.
-    [[nodiscard]] bool is_consonant() const { return CardId::$$ConsonantStart <= id and  id <= CardId::$$ConsonantEnd; }
-
-    /// Check if this is a power card.
-    [[nodiscard]] bool is_power() const { return type == CardType::PowerCard; }
-
-    /// Check if this is a sound card.
-    [[nodiscard]]  bool is_sound() const { return type == CardType::SoundCard; }
-
-    /// Check if this is a vowel.
-    [[nodiscard]] bool is_vowel() const { return CardId::$$VowelStart <= id and id <= CardId::$$VowelEnd; }
 };
-}
+} // namespace pr
 
 namespace pr::impl {
-using enum CardId;
+using enum CardIdValue;
 using enum CardType;
 
-#define Sound(x, ...) [+x] = CardData::Sound(x, __VA_ARGS__)
-#define Power(x, ...) [+x] = CardData::Power(x, __VA_ARGS__)
+#define Sound(x, ...) [+x] = CardData::Sound({x}, __VA_ARGS__)
+#define Power(x, ...) [+x] = CardData::Power({x}, __VA_ARGS__)
 
-const CardData CardDatabaseImpl[+$$Count] { // clang-format off
+const CardData CardDatabaseImpl[+$$Count]{
+    // clang-format off
     // CONSONANTS - M4     Count  P  M  Name                                        Center   Conversions
     Sound(C_p,             4,     4, 4, "Voiceless\nbilabial\nstop",                "p",     {{C_m}}),
     Sound(C_b,             2,     4, 4, "Voiced\nbilabial\nstop",                   "b",     {{C_m}}),
@@ -278,12 +305,11 @@ static_assert([] {
     }
     return true;
 }(), "Card database integrity check");*/
-}
+} // namespace pr::impl
 
 export namespace pr {
 constexpr std::span<const CardData> CardDatabase = impl::CardDatabaseImpl;
-constexpr std::span<const CardData> CardDatabaseVowels = CardDatabase.subspan(+CardId::$$VowelStart, +CardId::$$VowelEnd - +CardId::$$VowelStart + 1);
-constexpr std::span<const CardData> CardDatabaseConsonants = CardDatabase.subspan(+CardId::$$ConsonantStart, +CardId::$$ConsonantEnd - +CardId::$$ConsonantStart + 1);
-constexpr std::span<const CardData> CardDatabasePowers = CardDatabase.subspan(+CardId::$$PowersStart, +CardId::$$PowersEnd - +CardId::$$PowersStart + 1);
-
+constexpr std::span<const CardData> CardDatabaseVowels = CardDatabase.subspan(+CardIdValue::$$VowelStart, +CardIdValue::$$VowelEnd - +CardIdValue::$$VowelStart + 1);
+constexpr std::span<const CardData> CardDatabaseConsonants = CardDatabase.subspan(+CardIdValue::$$ConsonantStart, +CardIdValue::$$ConsonantEnd - +CardIdValue::$$ConsonantStart + 1);
+constexpr std::span<const CardData> CardDatabasePowers = CardDatabase.subspan(+CardIdValue::$$PowersStart, +CardIdValue::$$PowersEnd - +CardIdValue::$$PowersStart + 1);
 }

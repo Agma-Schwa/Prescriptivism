@@ -43,7 +43,7 @@ struct PowerCardData {
 };
 
 namespace pr::client::power_card_database {
-using enum CardId;
+using enum CardIdValue;
 
 #define Entry(x, ...) [+P_##x - +$$PowersStart] = PowerCardData(#x ".webp", __VA_ARGS__)
 
@@ -321,10 +321,10 @@ void Card::draw(Renderer& r) {
     description.draw(r);
 
     // Do not draw the name if this is a small sound card.
-    if (scale > OtherPlayer or CardDatabase[+id].is_power())
+    if (scale > OtherPlayer or id.is_power())
         name.draw(r);
 
-    if (CardDatabase[+id].is_sound()) {
+    if (id.is_sound()) {
         auto offs = Padding[scale];
         for (int i = 0; i < count; ++i) r.draw_rect(
             Position{-3 * offs, -(2 * offs + 2 * i * offs)}
@@ -370,7 +370,7 @@ void Card::refresh(Renderer& r) {
     needs_full_refresh = false;
 
     // Adjust label font sizes.
-    bool power = CardDatabase[+id].is_power();
+    bool power = id.is_power();
     code.font_size = CodeSizes[scale];
     name.font_size = NameSizes[scale];
     middle.font_size = MiddleSizes[scale];
@@ -426,13 +426,13 @@ void Card::set_id(CardId ct) {
     name.update_text(std::string{data.name});
 
     // Sound card properties.
-    if (data.type == CardType::SoundCard) {
-        outline_colour = data.is_consonant() ? ConsonantColour : VowelColour;
+    if (ct.type() == CardType::SoundCard) {
+        outline_colour = ct.is_consonant() ? ConsonantColour : VowelColour;
         code.update_text(std::format( //
             "{}{}{}{}",
-            data.is_consonant() ? 'P' : 'F',
+            ct.is_consonant() ? 'P' : 'F',
             data.place_or_frontness,
-            data.is_consonant() ? 'M' : 'H',
+            ct.is_consonant() ? 'M' : 'H',
             data.manner_or_height
         ));
 

@@ -7,6 +7,7 @@ module;
 #include <ranges>
 #include <thread>
 #include <vector>
+#include <generator>
 export module pr.client;
 
 import pr.utils;
@@ -143,10 +144,21 @@ class pr::client::GameScreen : public Screen {
         SingleTarget,
     };
 
+    /// A targeted card in someone’s word.
+    struct Target {
+        CardStacks::Stack* stack;
+        Card* card;
+
+        Target(CardStacks::Stack& s, Card& c) : stack{&s}, card{&c} {}
+    };
+
     Client& client;
 
     /// The other players in the game.
     std::vector<Player> other_players;
+
+    /// All players, including us.
+    std::vector<Player*> all_players;
 
     /// Map from card groups to their players.
     std::unordered_map<CardStacks*, Player*> player_map;
@@ -180,11 +192,13 @@ public:
     void tick(InputSystem& input) override;
 
 private:
+    void ClearSelection();
     auto PlayerById(PlayerId id) -> Player&;
     auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
-    void ResetOpponentWords();
+    void ResetWords(Selectable s = Selectable::No, Card::Overlay o = Card::Overlay::Default);
 
-    void ClearSelection();
+    /// Get all valid targets for the card at this index, assuming it is in our hand.
+    auto Targets(Card& c) -> std::generator<Target>;
 
     void TickNoSelection();
     void TickNotOurTurn();

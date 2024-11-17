@@ -211,7 +211,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySoundCard c) {
 
     // Check that the card is actually a sound card.
     auto& card = p->hand[c.card_index];
-    if (not card.data.is_sound()) return Kick(client, InvalidPacket);
+    if (not card.id.is_sound()) return Kick(client, InvalidPacket);
 
     // Check that the stack it’s being played on isn’t full.
     auto& s = target_player->word.stacks[c.target_card_index];

@@ -1,10 +1,12 @@
 module;
 #include <base/Assert.hh>
+#include <generator>
 #include <ranges>
 module pr.client;
 
 import pr.validation;
 import pr.packets;
+import pr.cards;
 
 using namespace pr;
 using namespace pr::client;
@@ -12,12 +14,6 @@ using namespace pr::client;
 // =============================================================================
 // Validation Helpers
 // =============================================================================
-bool CanPlaySoundCard(CardId card, CardStacks& on, usz at) {
-    // TODO: Handle evolutions that require an extra card.
-    if (on[at].full) return false;
-    auto res = validation::ValidatePlaySoundCard(card, on.ids(), at);
-    return res == validation::PlaySoundCardValidationResult::Valid;
-}
 
 // =============================================================================
 // Helpers
@@ -25,10 +21,9 @@ bool CanPlaySoundCard(CardId card, CardStacks& on, usz at) {
 GameScreen::GameScreen(Client& c) : client(c) {}
 
 auto GameScreen::PlayerById(PlayerId id) -> Player& {
-    if (id == us.id) return us;
-    auto p = rgs::find(other_players, id, &Player::get_id);
-    Assert(p != other_players.end(), "Player {} not found?", id);
-    return *p;
+    auto p = rgs::find(all_players, id, &Player::get_id);
+    Assert(p != all_players.end(), "Player {} not found?", id);
+    return **p;
 }
 
 auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
@@ -40,10 +35,46 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
     return p->second;
 }
 
-void GameScreen::ResetOpponentWords() {
-    for (auto& p : other_players) {
-        p.word->make_selectable(Selectable::No);
-        p.word->set_display_state(Card::Overlay::Default);
+void GameScreen::ResetWords(
+    Selectable s,
+    Card::Overlay o
+) {
+    for (auto p : all_players) {
+        p->word->make_selectable(s);
+        p->word->set_display_state(o);
+    }
+}
+
+auto GameScreen::Targets(Card& c) -> std::generator<Target> {
+    [[maybe_unused]] auto YieldAll = [&] -> std::generator<Target> {
+        for (auto p : all_players)
+            for (auto& s : p->word->stacks())
+                for (auto& card : s.cards())
+                    co_yield Target{s, card};
+    };
+
+    auto YieldOurs = [&] -> std::generator<Target> {
+        for (auto& s : us.word->stacks())
+            for (auto& card : s.cards())
+                co_yield Target{s, card};
+    };
+
+    if (c.id.is_sound()) {
+        for (auto p : all_players) {
+            for (auto [i, s] : p->word->stacks() | vws::enumerate) {
+                // TODO: Handle evolutions that require an extra card.
+                if (s.full) continue;
+                auto res = validation::ValidatePlaySoundCard(c.id, p->word->ids(), i);
+                bool valid = res == validation::PlaySoundCardValidationResult::Valid;
+                if (valid) co_yield Target{s, s.cards()[i]};
+            }
+        }
+        co_return;
+    }
+
+    switch (c.id.value) {
+        default: break;
+        case CardIdValue::P_SpellingReform: co_yield rgs::elements_of(YieldOurs());
     }
 }
 
@@ -51,10 +82,11 @@ void GameScreen::ResetOpponentWords() {
 //  Game Logic
 // =============================================================================
 void GameScreen::ClearSelection() {
+    ResetWords();
     state = State::NoSelection;
-    ResetOpponentWords();
+    if (selected_element) selected_element->unselect();
+    if (our_selected_card) our_selected_card->unselect();
     our_selected_card = nullptr;
-    selected_element->unselect();
 }
 
 void GameScreen::TickNoSelection() {
@@ -70,13 +102,12 @@ void GameScreen::TickNoSelection() {
     // what we can select here.
     state = State::SingleTarget;
 
-    // Make other player’s cards selectable if we can play this card on it.
-    for (auto& p : other_players) {
-        for (auto [i, s] : p.word->stacks() | vws::enumerate) {
-            bool valid = CanPlaySoundCard(our_selected_card->id, *p.word, i);
-            s.make_selectable(valid ? Selectable::Yes : Selectable::No);
-            s.overlay = valid ? Card::Overlay::Default : Card::Overlay::Inactive;
-        }
+    // If this is a sound card, make other player’s cards selectable if we can
+    // play this card on it.
+    ResetWords(Selectable::No, Card::Overlay::Inactive);
+    for (auto [s, _] : Targets(*our_selected_card)) {
+        s->make_selectable();
+        s->overlay = Card::Overlay::Default;
     }
 }
 
@@ -94,27 +125,36 @@ void GameScreen::TickSingleTarget() {
         return TickNoSelection();
     }
 
-    // Otherwise, we selected another player’s card. We should never get here
-    // if we didn’t previously select one of our cards.
-    auto& stack = selected_element->as<CardStacks::Stack>();
-    auto owner = player_map.at(&stack.parent);
-    Assert(owner, "Selected card without owner?");
+    // We’re playing a sound card on a sound card.
+    if (our_selected_card->id.is_sound()) {
+        auto& stack = selected_element->as<CardStacks::Stack>();
+        auto owner = player_map.at(&stack.parent);
+        Assert(owner, "Selected card without owner?");
+        Assert(stack.top.id.is_sound(), "Playing a sound on a non-sound card?");
 
-    // Tell the server about this.
-    auto& our_stack = our_selected_card->parent->as<CardStacks::Stack>();
-    auto card_in_hand_index = our_hand->index_of(our_stack);
-    auto selected_card_index = owner->word->index_of(stack);
-    Assert(card_in_hand_index.has_value(), "Could not find card in hand?");
-    Assert(selected_card_index.has_value(), "Could not find card in word?");
-    client.server_connexion.send(packets::cs::PlaySoundCard{
-        *card_in_hand_index,
-        owner->id,
-        *selected_card_index,
-    });
+        // Tell the server about this.
+        auto& our_stack = our_selected_card->parent->as<CardStacks::Stack>();
+        auto card_in_hand_index = our_hand->index_of(our_stack);
+        auto selected_card_index = owner->word->index_of(stack);
+        Assert(card_in_hand_index.has_value(), "Could not find card in hand?");
+        Assert(selected_card_index.has_value(), "Could not find card in word?");
+        client.server_connexion.send(packets::cs::PlaySoundCard{
+            *card_in_hand_index,
+            owner->id,
+            *selected_card_index,
+        });
 
-    // Remove the card we played.
-    our_hand->remove(our_stack);
-    ClearSelection();
+        // Remove the card we played.
+        ClearSelection();
+        our_hand->remove(our_stack);
+        return;
+    }
+
+    // We’re playing a power card.
+    if (our_selected_card->id.is_power()) {
+        Log("TODO: Play power card");
+        ClearSelection();
+    }
 }
 
 // =============================================================================
@@ -154,9 +194,14 @@ void GameScreen::enter(packets::sc::StartGame sg) {
 
     // Build the player map *after* creating all the players, since they
     // might move while in the loop above.
+    all_players.clear();
     player_map.clear();
     player_map[us.word] = &us;
-    for (auto& p : other_players) player_map[p.word] = &p;
+    all_players.push_back(&us);
+    for (auto& p : other_players) {
+        player_map[p.word] = &p;
+        all_players.push_back(&p);
+    }
 
     // The preview must be created at the end so it’s drawn
     // above everything else.
@@ -213,25 +258,10 @@ void GameScreen::tick(InputSystem& input) {
 void GameScreen::start_turn() {
     state = State::NoSelection;
     for (auto& c : our_hand->top_cards()) {
-        // Power cards are always usable for now.
-        // TODO: Some power cards may not always have valid targets; check for that.
-        if (CardDatabase[+c.id].is_power()) {
+        if (not Empty(Targets(c))) {
             c.overlay = Card::Overlay::Default;
             c.selectable = Selectable::Yes;
-            continue;
         }
-
-        // For sound cards, check if there are any sounds we can play them on.
-        for (auto& p : other_players) {
-            for (usz i = 0; i < p.word->children().size(); i++) {
-                if (CanPlaySoundCard(c.id, *p.word, i)) {
-                    c.overlay = Card::Overlay::Default;
-                    c.selectable = Selectable::Yes;
-                    goto next_card;
-                }
-            }
-        }
-    next_card:;
     }
 }
 
@@ -239,5 +269,5 @@ void GameScreen::end_turn() {
     state = State::NotOurTurn;
     our_hand->make_selectable(Selectable::No);
     our_hand->set_display_state(Card::Overlay::Inactive);
-    ResetOpponentWords();
+    ResetWords();
 }

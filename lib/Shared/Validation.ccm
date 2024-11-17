@@ -33,11 +33,6 @@ template <CardList T>
 auto ValidatePlaySoundCard(CardId played, const T& on, usz at) -> PlaySoundCardValidationResult {
     using enum PlaySoundCardValidationResult;
 
-    // FIXME: Move this into CardId.
-    auto IsConsonant = [](CardId id) -> bool {
-        return CardDatabase[+id].is_consonant();
-    };
-
     // Is this played on a /h/ or a /ə/ and the played sound is adjacent?
     if (
         (on[at] == CardId::C_h or on[at] == CardId::V_ə) and
@@ -49,10 +44,11 @@ auto ValidatePlaySoundCard(CardId played, const T& on, usz at) -> PlaySoundCardV
         if (played == c[0]) return c.size() > 1 ? NeedsOtherCard : Valid;
 
     // Is this an adjacent phoneme or a different phoneme with the same coordinates?
+    auto d1 = std::abs(CardDatabase[+played].place_or_frontness - CardDatabase[+on[at]].place_or_frontness);
+    auto d2 = std::abs(CardDatabase[+played].manner_or_height - CardDatabase[+on[at]].manner_or_height);
     if (
-        IsConsonant(played) == IsConsonant(on[at]) and
-        std::abs(CardDatabase[+played].place_or_frontness - CardDatabase[+on[at]].place_or_frontness) +
-            std::abs(CardDatabase[+played].manner_or_height - CardDatabase[+on[at]].manner_or_height) < 2 and
+        played.is_consonant() == on[at].is_consonant() and
+        d1 + d2 < 2 and
         played != on[at]
     ) return Valid;
 
