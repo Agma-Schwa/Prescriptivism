@@ -476,7 +476,7 @@ public:
 
 class pr::client::TextBox : public Widget {
 protected:
-    ShapedText label;
+    ShapedText label; // TODO: Should be Text rather than ShapedText.
     ShapedText placeholder;
     i32 padding{};
     i32 min_wd{};

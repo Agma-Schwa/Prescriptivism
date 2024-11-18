@@ -120,7 +120,7 @@ void GameScreen::Pass() {
     // TODO: In addition to changing the button’s state, also display a permanent
     //       message to the user (either above their hand or their word) along the
     //       lines of ‘Select a card in your hand to discard’.
-    pass->update_text(client.renderer.make_text(
+    end_turn_button->update_text(client.renderer.make_text(
         state == State::Passing ? "Cancel"sv : "Pass"sv,
         FontSize::Medium
     ));
@@ -164,7 +164,7 @@ void GameScreen::TickPassing() {
     auto idx = our_hand->index_of(our_stack);
     client.server_connexion.send(packets::cs::Pass{*idx});
     Discard(our_stack);
-    pass->update_text(client.renderer.make_text("Pass"sv, FontSize::Medium));
+    end_turn_button->update_text(client.renderer.make_text("Pass"sv, FontSize::Medium));
 
     /// Make sure the user can’t press the pass button again (and the server
     /// is going to send an end turn packet anyway), so end the turn now.
@@ -235,8 +235,8 @@ void GameScreen::add_card_to_hand(CardId id) {
 void GameScreen::enter(packets::sc::StartGame sg) {
     DeleteAllChildren();
 
-    pass = &Create<Button>(client.renderer.make_text("Pass", FontSize::Medium), Position(-50, 50));
-    pass->on_click = [&] { Pass(); };
+    end_turn_button = &Create<Button>(client.renderer.make_text("Pass", FontSize::Medium), Position(-50, 50));
+    end_turn_button->on_click = [&] { Pass(); };
 
     other_players.clear();
     other_words = &Create<Group>(Position());
@@ -329,13 +329,14 @@ void GameScreen::tick(InputSystem& input) {
 
 void GameScreen::start_turn() {
     state = State::NoSelection;
-    pass->selectable = Selectable::Yes;
+    end_turn_button->selectable = Selectable::Yes;
     ResetHand();
+    // TODO: Automatically go into passing mode if we cannot play anything in our hand.
 }
 
 void GameScreen::end_turn() {
     state = State::NotOurTurn;
-    pass->selectable = Selectable::No;
+    end_turn_button->selectable = Selectable::No;
     our_hand->make_selectable(Selectable::No);
     our_hand->set_overlay(Card::Overlay::Inactive);
     ClearSelection();

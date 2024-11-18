@@ -83,6 +83,20 @@ target_link_options(options INTERFACE
     $<$<CONFIG:RELEASE>:-O3 -march=native>
 )
 
+if (PRESCRIPTIVISM_ENABLE_SANITISERS)
+    target_compile_options(options INTERFACE
+        -fsanitize=undefined,address
+    )
+
+    target_link_options(options INTERFACE
+        -fsanitize=undefined,address
+    )
+
+    target_compile_definitions(options INTERFACE
+        -DPRESCRIPTIVISM_ENABLE_SANITISERS=1
+    )
+endif()
+
 ## ============================================================================
 ##  Submodules and include dirs.
 ## ============================================================================

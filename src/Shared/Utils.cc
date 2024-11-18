@@ -9,6 +9,14 @@ module pr.utils;
 
 using namespace pr;
 
+#ifdef PRESCRIPTIVISM_ENABLE_SANITISERS
+extern "C" const char* __asan_default_options() {
+    // Disable memory leak detection since some of the libraries we
+    // use like to allocate global state, which is never freed.
+    return "detect_leaks=0";
+}
+#endif
+
 // Run the logger on a separate thread since printing to the console
 // might be slow depending on what console we’re printing to (it can
 // take ~100ms in my IDE).

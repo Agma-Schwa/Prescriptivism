@@ -551,6 +551,8 @@ auto Font::shape(
             u32 col = u32(i) % atlas_columns;
 
             // Copy the glyph’s bitmap data into the atlas.
+            // TODO: Optimisation: If the bitmap is empty (i.e. every cell is 0), then
+            //       we should not create any vertices for this glyph below.
             for (usz r = 0; r < face->glyph->bitmap.rows; r++) {
                 std::memcpy(
                     atlas_buffer.data() + (row * atlas_entry_height + r) * u32(atlas_width) + col * atlas_entry_width,

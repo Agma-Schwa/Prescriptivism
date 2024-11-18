@@ -161,8 +161,9 @@ class pr::client::GameScreen : public Screen {
 
     Client& client;
 
-    /// The pass button.
-    Button* pass;
+    /// The end turn / pass / cancel button in the lower
+    /// right corner of the screen.
+    Button* end_turn_button;
 
     /// The other players in the game.
     std::vector<Player> other_players;
