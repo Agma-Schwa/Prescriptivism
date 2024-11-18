@@ -344,6 +344,8 @@ class pr::client::Text {
     ComputedProperty(FontSize, font_size);
     mutable bool dirty = false;
     mutable bool needs_multiple_lines = false;
+    // FIXME: Store reference to renderer so that we can
+    // refresh this w/o having to pass it in?
 
 public:
     Text() : _align(TextAlign::SingleLine), _style(TextStyle::Regular) {}
@@ -377,6 +379,14 @@ public:
     void set(std::string_view new_text) {
         content = base::text::ToUTF32(new_text);
         dirty = true;
+    }
+
+    /// FIXME: This is only here because the TextEdit needs to shape the
+    /// text itself so it can get cluster information.
+    void set(std::u32string raw, ShapedText s) {
+        content = std::move(raw);
+        text = std::move(s);
+        dirty = false;
     }
 
     /// Get this as shaped text, shaping it if it is not already shaped.

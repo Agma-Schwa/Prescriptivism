@@ -32,12 +32,11 @@ ErrorScreen::ErrorScreen(Client& c) {
         TextAlign::Center
     );
 
-    auto& back = Create<Button>(
-        c.renderer.make_text("Back", FontSize::Medium),
-        Position::HCenter(150)
+    Create<Button>(
+        "Back",
+        Position::HCenter(150),
+        [&] { c.enter_screen(*return_screen); }
     );
-
-    back.on_click = [&] { c.enter_screen(*return_screen); };
 }
 
 void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
@@ -55,16 +54,6 @@ MenuScreen::MenuScreen(Client& c) {
         Position::HCenter(-50)
     );
 
-    auto& quit = Create<Button>(
-        c.renderer.make_text("Quit", FontSize::Medium),
-        Position::HCenter(75)
-    );
-
-    auto& connect = Create<Button>(
-        c.renderer.make_text("Connect", FontSize::Medium),
-        Position::HCenter(150)
-    );
-
     auto& address = Create<TextEdit>(
         Position::HCenter(350),
         c.renderer.make_text("Server Address", FontSize::Medium)
@@ -80,21 +69,30 @@ MenuScreen::MenuScreen(Client& c) {
         c.renderer.make_text("Password", FontSize::Medium)
     );
 
+    Create<Button>(
+        "Quit",
+        Position::HCenter(75),
+        [&] { c.input_system.quit = true; }
+    );
+
+    Create<Button>(
+        "Connect",
+        Position::HCenter(150),
+        [&] { // clang-format off
+            c.connexion_screen.enter(
+                address.value(),
+                username.value(),
+                password.value()
+            );
+        } // clang-format on
+    );
+
     password.set_hide_text(true);
 
     // FIXME: Testing only. Remove these later.
     address.value(U"localhost");
     username.value(U"testuser");
     password.value(U"password");
-
-    quit.on_click = [&] { c.input_system.quit = true; };
-    connect.on_click = [&] {
-        c.connexion_screen.enter(
-            address.value(),
-            username.value(),
-            password.value()
-        );
-    };
 }
 
 // =============================================================================
@@ -106,14 +104,8 @@ ConnexionScreen::ConnexionScreen(Client& c) : client{c} {
         Position::HCenter(-100)
     );
 
-    auto& abort = Create<Button>(
-        c.renderer.make_text("Abort", FontSize::Medium),
-        Position::HCenter(150)
-    );
-
     Create<Throbber>(Position::Center());
-
-    abort.on_click = [&] { st = State::Aborted; };
+    Create<Button>("Abort", Position::HCenter(150), [&] { st = State::Aborted; });
 }
 
 auto ConnexionScreen::connexion_thread_main(
@@ -203,17 +195,15 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->autoscale = true;
 
-    auto& submit = Create<Button>(
-        c.renderer.make_text("Submit", FontSize::Medium),
-        Position::HCenter(75)
-    );
-
+    Create<Button>("Submit", Position::HCenter(75), [&] { SendWord(); });
     Create<Label>(
-        c.renderer.make_text("Click on a card to select it, then click on a different card to swap them.", FontSize::Medium),
+        c.renderer.make_text(
+            "Click on a card to select it, then click on "
+            "a different card to swap them.",
+            FontSize::Medium
+        ),
         Position::HCenter(-150)
     );
-
-    submit.on_click = [&] { SendWord(); };
 }
 
 void WordChoiceScreen::SendWord() {

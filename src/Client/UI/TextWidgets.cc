@@ -108,24 +108,29 @@ TRIVIAL_CACHING_SETTER(Label, i32, fixed_height);
 
 TextBox::TextBox(
     Element* parent,
-    ShapedText text,
+    Text text,
     ShapedText placeholder,
     Position pos,
     i32 padding,
     i32 min_wd,
     i32 min_ht
 ) : Widget{parent, pos},
+    label{std::move(text)},
     placeholder{std::move(placeholder)},
     padding{padding},
     min_wd{min_wd},
-    min_ht{min_ht} {
-    update_text(std::move(text));
-}
+    min_ht{min_ht} {}
 
-void TextBox::update_text(ShapedText new_text) {
-    label = std::move(new_text);
+void TextBox::update_text(std::string_view new_text) {
+    label.set(new_text);
     needs_refresh = true;
 }
+
+void TextBox::update_text(std::u32string raw, ShapedText new_text) {
+    label.set(std::move(raw), std::move(new_text));
+    needs_refresh = true;
+}
+
 
 auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
     return CenterTextInBox(r, text, bounding_box.height(), abox());
@@ -136,11 +141,11 @@ void TextBox::draw(Renderer& r) {
 }
 
 void TextBox::draw(Renderer& r, Colour text_colour) {
-    auto& text = label.empty() ? placeholder : label;
+    auto& text = label.empty() ? placeholder : label.shaped(r);
     auto pos = TextPos(r, text);
     r.draw_text(text, pos, text_colour);
     if (cursor_offs != -1) {
-        auto [asc, desc] = r.font_for_text(label).strut_split();
+        auto [asc, desc] = r.font_for_text(label.shaped(r)).strut_split();
         r.draw_line(
             xy(i32(pos.x) + cursor_offs, pos.y - i32(desc)),
             xy(i32(pos.x) + cursor_offs, pos.y + i32(asc)),
@@ -150,10 +155,11 @@ void TextBox::draw(Renderer& r, Colour text_colour) {
 }
 
 void TextBox::refresh(Renderer& r) {
-    auto strut = r.font_for_text(label).strut();
+    auto& text = label.shaped(r);
+    auto strut = r.font_for_text(text).strut();
     Size sz{
-        std::max(min_wd, i32(label.width)) + 2 * padding,
-        std::max({min_ht, i32(label.height + label.depth), strut}) + 2 * padding,
+        std::max(min_wd, i32(text.width)) + 2 * padding,
+        std::max({min_ht, i32(text.height + text.depth), strut}) + 2 * padding,
     };
 
     // Absolute position calculation depends on the size, so make sure
@@ -165,8 +171,9 @@ void TextBox::refresh(Renderer& r) {
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
+        auto t = hide_text ? std::u32string(text.size(), U'•') : text;
         auto shaped = r.make_text(
-            hide_text ? std::u32string(text.size(), U'•') : text,
+            t,
             size,
             style,
             TextAlign::SingleLine,
@@ -174,7 +181,7 @@ void TextEdit::draw(Renderer& r) {
             &clusters
         );
 
-        update_text(std::move(shaped));
+        update_text(std::move(t), std::move(shaped));
     }
 
     // Use HarfBuzz cluster information to position the cursor: if the cursor
@@ -204,7 +211,7 @@ void TextEdit::draw(Renderer& r) {
         cursor_offs = [&] -> i32 {
             // Cursor is at the start/end of the text.
             if (cursor == 0) return 0;
-            if (cursor == i32(text.size())) return i32(label.width);
+            if (cursor == i32(text.size())) return i32(label.shaped(r).width);
 
             // Find the smallest cluster with an index greater than or equal
             // to the cursor position. We interpolate the cursor’s position
@@ -244,7 +251,7 @@ void TextEdit::draw(Renderer& r) {
 
             // Interpolate between the last cluster and the end of the text.
             else {
-                x2 = i32(label.width);
+                x2 = i32(label.shaped(r).width);
                 i2 = i32(text.size());
             }
 
@@ -267,8 +274,8 @@ void TextEdit::event_click(InputSystem& input) {
     // we stop and go back to the one before it.
     no_blink_ticks = 20;
     i32 mx = input.mouse.pos.x;
-    i32 x0 = TextPos(input.renderer, label).x;
-    i32 x1 = x0 + i32(label.width);
+    i32 x0 = TextPos(input.renderer, label.shaped(input.renderer)).x;
+    i32 x1 = x0 + i32(label.shaped(input.renderer).width);
     if (mx < x0) cursor = 0;
     else if (mx > x1) cursor = i32(text.size());
     else if (clusters.size() < 2) cursor = 0;

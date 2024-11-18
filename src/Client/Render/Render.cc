@@ -1025,6 +1025,7 @@ auto Renderer::font(u32 size, TextStyle style) -> Font& {
     return it->second;
 }
 
+// FIXME: Text should just store the font instead.
 auto Renderer::font_for_text(const ShapedText& r) -> Font& {
     return font(+r.font_size, r.style);
 }

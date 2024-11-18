@@ -476,7 +476,7 @@ public:
 
 class pr::client::TextBox : public Widget {
 protected:
-    ShapedText label; // TODO: Should be Text rather than ShapedText.
+    Text label; // TODO: Should be Text rather than ShapedText.
     ShapedText placeholder;
     i32 padding{};
     i32 min_wd{};
@@ -485,7 +485,7 @@ protected:
 
     explicit TextBox(
         Element* parent,
-        ShapedText label,
+        Text label,
         ShapedText placeholder,
         Position pos,
         i32 padding,
@@ -498,7 +498,8 @@ protected:
 public:
     void draw(Renderer& r) override;
     void refresh(Renderer& r) override;
-    void update_text(ShapedText new_text);
+    void update_text(std::string_view new_text);
+    void update_text(std::u32string raw, ShapedText new_text);
 
 protected:
     void draw(Renderer& r, Colour text_colour);
@@ -510,13 +511,30 @@ public:
 
     explicit Button(
         Element* parent,
-        ShapedText label,
+        std::string_view label,
         Position pos,
         i32 padding = 0,
         i32 min_wd = 125,
         i32 min_ht = 0
-    ) : TextBox(parent, std::move(label), ShapedText(), pos, padding, min_wd, min_ht) {
+    ) : TextBox( // clang-format off
+        parent,
+        Text(label, FontSize::Medium, TextAlign::Center),
+        ShapedText(),
+        pos,
+        padding,
+        min_wd,
+        min_ht
+    ) { // clang-format on
         selectable = Selectable::Yes;
+    }
+
+    explicit Button(
+        Element* parent,
+        std::string_view label,
+        Position pos,
+        std::function<void()> click_handler
+    ) : Button(parent, label, pos) {
+        on_click = std::move(click_handler);
     }
 
     void event_click(InputSystem&) override {

@@ -120,10 +120,7 @@ void GameScreen::Pass() {
     // TODO: In addition to changing the button’s state, also display a permanent
     //       message to the user (either above their hand or their word) along the
     //       lines of ‘Select a card in your hand to discard’.
-    end_turn_button->update_text(client.renderer.make_text(
-        state == State::Passing ? "Cancel"sv : "Pass"sv,
-        FontSize::Medium
-    ));
+    end_turn_button->update_text(state == State::Passing ? "Cancel"sv : "Pass"sv);
 
     // Prepare to select a card to discard.
     if (state == State::Passing) {
@@ -164,7 +161,7 @@ void GameScreen::TickPassing() {
     auto idx = our_hand->index_of(our_stack);
     client.server_connexion.send(packets::cs::Pass{*idx});
     Discard(our_stack);
-    end_turn_button->update_text(client.renderer.make_text("Pass"sv, FontSize::Medium));
+    end_turn_button->update_text("Pass");
 
     /// Make sure the user can’t press the pass button again (and the server
     /// is going to send an end turn packet anyway), so end the turn now.
@@ -235,9 +232,7 @@ void GameScreen::add_card_to_hand(CardId id) {
 void GameScreen::enter(packets::sc::StartGame sg) {
     DeleteAllChildren();
 
-    end_turn_button = &Create<Button>(client.renderer.make_text("Pass", FontSize::Medium), Position(-50, 50));
-    end_turn_button->on_click = [&] { Pass(); };
-
+    end_turn_button = &Create<Button>("Pass", Position(-50, 50), [&] { Pass(); });
     other_players.clear();
     other_words = &Create<Group>(Position());
     for (auto [i, p] : sg.player_data | vws::enumerate) {
