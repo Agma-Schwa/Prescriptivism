@@ -109,7 +109,7 @@ TRIVIAL_CACHING_SETTER(Label, i32, fixed_height);
 TextBox::TextBox(
     Element* parent,
     Text text,
-    ShapedText placeholder,
+    std::optional<ShapedText> placeholder,
     Position pos,
     i32 padding,
     i32 min_wd,
@@ -141,7 +141,7 @@ void TextBox::draw(Renderer& r) {
 }
 
 void TextBox::draw(Renderer& r, Colour text_colour) {
-    auto& text = label.empty() ? placeholder : label.shaped(r);
+    auto& text = label.empty() and placeholder.has_value() ? *placeholder : label.shaped(r);
     auto pos = TextPos(r, text);
     r.draw_text(text, pos, text_colour);
     if (cursor_offs != -1) {

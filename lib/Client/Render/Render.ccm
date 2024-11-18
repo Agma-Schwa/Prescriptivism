@@ -276,6 +276,8 @@ struct std::formatter<pr::client::AABB> : std::formatter<std::string> {
 //  Text
 // =============================================================================
 /// Text to be rendered.
+///
+/// This is an internal type; users should store 'Text' instead.
 class pr::client::ShapedText {
     friend Renderer;
     friend Font;
@@ -313,7 +315,7 @@ private:
 
 public:
     /// Create an empty text object that optionally stores a font size.
-    explicit ShapedText(FontSize sz = FontSize::Text, TextStyle style = TextStyle::Regular)
+    explicit ShapedText(FontSize sz, TextStyle style = TextStyle::Regular)
         : vao{VertexLayout::PositionTexture4D},
           _font_size{sz},
           _width{},

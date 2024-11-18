@@ -476,8 +476,8 @@ public:
 
 class pr::client::TextBox : public Widget {
 protected:
-    Text label; // TODO: Should be Text rather than ShapedText.
-    ShapedText placeholder;
+    Text label;
+    std::optional<ShapedText> placeholder;
     i32 padding{};
     i32 min_wd{};
     i32 min_ht{};
@@ -486,7 +486,7 @@ protected:
     explicit TextBox(
         Element* parent,
         Text label,
-        ShapedText placeholder,
+        std::optional<ShapedText> placeholder,
         Position pos,
         i32 padding,
         i32 min_wd = 0,
@@ -519,7 +519,7 @@ public:
     ) : TextBox( // clang-format off
         parent,
         Text(label, FontSize::Medium, TextAlign::Center),
-        ShapedText(),
+        std::nullopt,
         pos,
         padding,
         min_wd,
@@ -572,12 +572,19 @@ public:
         bool hide_text = false,
         i32 min_wd = 250,
         i32 min_ht = 0
-    ) : TextBox(parent, ShapedText(), std::move(placeholder), pos, padding, min_wd, min_ht),
-        size{size},
+    ) : TextBox( // clang-format off
+        parent,
+        Text("", size, TextAlign::SingleLine),
+        std::move(placeholder),
+        pos,
+        padding,
+        min_wd,
+        min_ht
+    ),  size{size},
         style{style},
         hide_text{hide_text} {
         selectable = Selectable::Yes;
-    }
+    } // clang-format on
 
     void draw(Renderer& r) override;
     void event_click(InputSystem& input) override;
