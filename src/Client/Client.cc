@@ -25,12 +25,8 @@ namespace cs = packets::cs;
 //  Error Screen
 // =============================================================================
 ErrorScreen::ErrorScreen(Client& c) {
-    msg = &Create<Label>(
-        Position::Center(),
-        FontSize::Large,
-        TextStyle::Regular,
-        TextAlign::Center
-    );
+    msg = &Create<Label>("", FontSize::Large, Position::Center());
+    msg->align = TextAlign::Center;
 
     Create<Button>(
         "Back",
@@ -49,32 +45,13 @@ void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
 //  Main Menu Screen
 // =============================================================================
 MenuScreen::MenuScreen(Client& c) {
-    Create<Label>(
-        c.renderer.make_text("Prescriptivism", FontSize::Title, TextStyle::Italic),
-        Position::HCenter(-50)
-    );
+    auto& address = Create<TextEdit>(Position::HCenter(350), "Server Address");
+    auto& username = Create<TextEdit>(Position::HCenter(287), "Your Name");
+    auto& password = Create<TextEdit>(Position::HCenter(225), "Password");
+    password.set_hide_text(true);
 
-    auto& address = Create<TextEdit>(
-        Position::HCenter(350),
-        c.renderer.make_text("Server Address", FontSize::Medium)
-    );
-
-    auto& username = Create<TextEdit>(
-        Position::HCenter(287),
-        c.renderer.make_text("Your Name", FontSize::Medium)
-    );
-
-    auto& password = Create<TextEdit>(
-        Position::HCenter(225),
-        c.renderer.make_text("Password", FontSize::Medium)
-    );
-
-    Create<Button>(
-        "Quit",
-        Position::HCenter(75),
-        [&] { c.input_system.quit = true; }
-    );
-
+    Create<Label>("Prescriptivism", FontSize::Title, Position::HCenter(-50));
+    Create<Button>("Quit", Position::HCenter(75), [&] { c.input_system.quit = true; });
     Create<Button>(
         "Connect",
         Position::HCenter(150),
@@ -87,8 +64,6 @@ MenuScreen::MenuScreen(Client& c) {
         } // clang-format on
     );
 
-    password.set_hide_text(true);
-
     // FIXME: Testing only. Remove these later.
     address.value(U"localhost");
     username.value(U"testuser");
@@ -100,7 +75,8 @@ MenuScreen::MenuScreen(Client& c) {
 // =============================================================================
 ConnexionScreen::ConnexionScreen(Client& c) : client{c} {
     Create<Label>(
-        c.renderer.make_text("Connecting to server...", FontSize::Large),
+        "Connecting to server...",
+        FontSize::Large,
         Position::HCenter(-100)
     );
 
@@ -183,10 +159,11 @@ void ConnexionScreen::set_address(std::string addr) {
     address = std::move(addr);
 }
 
-WaitingScreen::WaitingScreen(Client& c) {
+WaitingScreen::WaitingScreen(Client&) {
     Create<Throbber>(Position::Center());
     Create<Label>(
-        c.renderer.make_text("Waiting for players...", FontSize::Medium),
+        "Waiting for players...",
+        FontSize::Medium,
         Position::Center().voffset(100)
     );
 }
@@ -197,11 +174,9 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 
     Create<Button>("Submit", Position::HCenter(75), [&] { SendWord(); });
     Create<Label>(
-        c.renderer.make_text(
-            "Click on a card to select it, then click on "
-            "a different card to swap them.",
-            FontSize::Medium
-        ),
+        "Click on a card to select it, then click on "
+        "a different card to swap them.",
+        FontSize::Medium,
         Position::HCenter(-150)
     );
 }
@@ -424,7 +399,7 @@ auto Client::Startup() -> Renderer {
     // fact that we don’t have the required assets yet.
     Screen screen;
     Renderer r{1'800, 1'000};
-    Thread asset_loader{AssetLoader::Create(r)};
+    Thread asset_loader{AssetLoader::Create()};
     InputSystem startup{r};
     screen.Create<Throbber>(Position::Center());
 

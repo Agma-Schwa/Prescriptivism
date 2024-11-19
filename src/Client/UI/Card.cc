@@ -287,10 +287,10 @@ Card::Card(
     Element* parent,
     Position pos
 ) : Widget{parent, pos},
-    code{this, Position()},
-    name{this, Position()},
-    middle{this, Position::Center()},
-    description{this, Position()},
+    code{this, Text(), Position()},
+    name{this, Text(), Position()},
+    middle{this, Text(), Position::Center()},
+    description{this, Text(), Position()},
     image{this, Position()} {
     code.colour = Colour::Black;
     name.colour = Colour::Black;
@@ -390,8 +390,8 @@ void Card::refresh(Renderer& r) {
         // set the height of the name field to a fixed value based on the
         // font’s strut (which *should* work for any font size), and center
         // the name vertically in that field.
-        auto name_height = i32(1.75 * r.font_for_text(name.shaped(r)).strut());
-        name.pos = Position::HCenter(-Border[scale].ht - (name_height - name.size(r).ht) / 2);
+        auto name_height = i32(1.75 * name.text.font.strut());
+        name.pos = Position::HCenter(i32(-Border[scale].ht - (name_height - name.text.height) / 2));
 
         // Position the image right below the name. Since the name field ends
         // up being larger than the height of the nam text, we don’t need to
@@ -402,7 +402,7 @@ void Card::refresh(Renderer& r) {
         image.pos = Position{Border[scale].wd, -Border[scale].ht}.voffset(-name_height);
     } else {
         code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
-        name.pos = auto{code.pos}.voffset(-code.size(r).ht - 2 * Padding[scale]);
+        name.pos = auto{code.pos}.voffset(i32(-code.text.height - 2 * Padding[scale]));
     }
 
     // The description is either below the image, or at a fixed offset

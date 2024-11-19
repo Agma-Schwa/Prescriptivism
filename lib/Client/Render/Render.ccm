@@ -18,6 +18,7 @@ import pr.client.render.gl;
 import pr.serialisation;
 
 export namespace pr::client {
+struct TextCluster;
 struct Colour;
 struct AABB;
 struct xy;
@@ -25,7 +26,6 @@ struct xy;
 class AssetLoader;
 class Renderer;
 class Font;
-class ShapedText;
 class Text;
 
 enum struct FontSize : u32;
@@ -40,7 +40,7 @@ enum struct Cursor : u32;
 /// To keep font sizes uniform.
 enum struct pr::client::FontSize : base::u32 {
     Small = 6,
-    Text = 12,
+    Normal = 12,
     Intermediate = 18,
     Medium = 24,
     Large = 36,
@@ -275,132 +275,6 @@ struct std::formatter<pr::client::AABB> : std::formatter<std::string> {
 // =============================================================================
 //  Text
 // =============================================================================
-/// Text to be rendered.
-///
-/// This is an internal type; users should store 'Text' instead.
-class pr::client::ShapedText {
-    friend Renderer;
-    friend Font;
-
-public:
-    struct Cluster {
-        i32 index; ///< Cluster index.
-        i32 xoffs; ///< X position right before the cluster.
-
-        bool operator<(const Cluster& rhs) const { return index < rhs.index; }
-        bool operator==(const Cluster& rhs) const { return index == rhs.index; }
-    };
-
-private:
-    VertexArrays vao;
-    Readonly(FontSize, font_size);
-    Readonly(f32, width);
-    Readonly(f32, height);
-    Readonly(f32, depth);
-    Readonly(TextStyle, style);
-
-    explicit ShapedText(
-        VertexArrays vao,
-        FontSize fsize,
-        TextStyle style,
-        f32 wd,
-        f32 ht,
-        f32 dp
-    ) : vao(std::move(vao)),
-        _font_size(fsize),
-        _width(wd),
-        _height(ht),
-        _depth(dp),
-        _style(style) {}
-
-public:
-    /// Create an empty text object that optionally stores a font size.
-    explicit ShapedText(FontSize sz, TextStyle style = TextStyle::Regular)
-        : vao{VertexLayout::PositionTexture4D},
-          _font_size{sz},
-          _width{},
-          _height{},
-          _depth{},
-          _style{style} {}
-
-    /// Debugging function that dumps the contents of a HarfBuzz buffer;
-    /// must be called after shaping.
-    static auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf);
-
-    /// Check if this text is empty.
-    auto empty() const -> bool { return vao.empty(); }
-
-    /// Get the size of the text, including depth.
-    auto size() const -> Size { return {i32(width), i32(height + depth)}; }
-
-    /// Get the vertices for this text.
-    auto verts() const -> const VertexArrays& { return vao; }
-};
-
-/// Text to be rendered that also stores the characters of the text.
-class pr::client::Text {
-    mutable ShapedText text{FontSize::Text};
-    std::u32string content;
-    Property(TextAlign, align);
-    Property(TextStyle, style);
-    ComputedProperty(FontSize, font_size);
-    mutable bool dirty = false;
-    mutable bool needs_multiple_lines = false;
-    // FIXME: Store reference to renderer so that we can
-    // refresh this w/o having to pass it in?
-
-public:
-    Text() : _align(TextAlign::SingleLine), _style(TextStyle::Regular) {}
-    Text(
-        ShapedText t,
-        TextAlign align = TextAlign::SingleLine,
-        TextStyle style = TextStyle::Regular
-    ) : text{std::move(t)}, _align{align}, _style{style} {}
-
-    Text(
-        std::u32string s,
-        FontSize sz,
-        TextAlign align,
-        TextStyle style = TextStyle::Regular
-    ) : text{sz}, content{std::move(s)}, _align{align}, _style{style}, dirty{true} {}
-
-    Text(
-        std::string_view s,
-        FontSize sz,
-        TextAlign align,
-        TextStyle style = TextStyle::Regular
-    ) : Text{base::text::ToUTF32(s), sz, align, style} {}
-
-    /// Check if this text is empty.
-    bool empty() const { return content.empty() and text.size() == Size{}; }
-
-    /// Reflow the text to fit within the given width.
-    void reflow(Renderer& r, i32 width);
-
-    /// Update the text.
-    void set(std::string_view new_text) {
-        content = base::text::ToUTF32(new_text);
-        dirty = true;
-    }
-
-    /// FIXME: This is only here because the TextEdit needs to shape the
-    /// text itself so it can get cluster information.
-    void set(std::u32string raw, ShapedText s) {
-        content = std::move(raw);
-        text = std::move(s);
-        dirty = false;
-    }
-
-    /// Get this as shaped text, shaping it if it is not already shaped.
-    auto shaped(Renderer& r) const -> const ShapedText&;
-
-    /// Get the text’s extents.
-    auto size(Renderer& r) const -> Size { return shaped(r).size(); }
-
-private:
-    void shape(Renderer& r, i32 desired_width = 0) const;
-};
-
 /// A fixed-sized font, combined with a HarfBuzz shaper and texture atlas.
 class pr::client::Font {
 public:
@@ -416,6 +290,9 @@ private:
         vec2 size;
         vec2 bearing;
     };
+
+    /// The renderer that owns this font.
+    Readonly(Renderer*, renderer, nullptr);
 
     /// HarfBuzz font to use for shaping.
     HarfBuzzFontHandle hb_font;
@@ -456,10 +333,10 @@ private:
     u32 atlas_entries{};
 
     /// The font size.
-    u32 size{};
+    Readonly(FontSize, size);
 
     /// The font style.
-    TextStyle style{};
+    Readonly(TextStyle, style);
 
     /// Interline skip.
     ///
@@ -473,33 +350,39 @@ private:
     /// The atlas texture.
     Texture atlas;
 
-    Font(FT_Face ft_face, u32 size, TextStyle style);
-
 public:
     i32 x_height{};
-    Font() = default;
 
-    /// Shape text using this font.
-    ///
-    /// The resulting object is position-independent and can
-    /// be drawn at any coordinates.
-    ///
-    /// Prefer to call Renderer::make_text() instead.
-    auto shape(
-        std::u32string_view text,
-        TextAlign align,
-        i32 desired_width,
-        std::vector<ShapedText::Cluster>* clusters,
-        bool* multiline
-    ) -> ShapedText;
+private:
+    Font(FT_Face ft_face, FontSize size, TextStyle style);
+
+public:
+    Font() = default;
 
     /// Get the size of the font texture.
     auto atlas_height() const -> i32 {
         return i32(atlas_rows * atlas_entry_height);
     }
 
+    /// Get the bold variant of this font.
+    auto bold() -> Font&;
+
+    /// Get the italic variant of this font.
+    auto italic() -> Font&;
+
     /// Activate the font for rendering.
     void use() const { atlas.bind(); }
+
+    /// Shape text using this font.
+    ///
+    /// The resulting object is position-independent and can
+    /// be drawn at any coordinates.
+    ///
+    /// This always reshapes the text and should only be called by code
+    /// that manages caching of the shaped text, as well as any code that
+    /// cares about properties computed during shaping, such as cluster
+    /// information.
+    void shape(const Text& text, std::vector<TextCluster>* clusters);
 
     /// Get the font’s strut height.
     auto strut() const -> i32 { return i32(strut_asc + strut_desc); }
@@ -507,6 +390,95 @@ public:
 
 private:
     auto AllocBuffer() -> hb_buffer_t*;
+};
+
+/// Information about a segment of shaped text.
+struct pr::client::TextCluster {
+    i32 index; ///< Cluster index.
+    i32 xoffs; ///< X position right before the cluster.
+
+    bool operator<(const TextCluster& rhs) const { return index < rhs.index; }
+    bool operator==(const TextCluster& rhs) const { return index == rhs.index; }
+};
+
+/// A text object that caches the shaping output and vertices needed
+/// to render the text.
+class pr::client::Text {
+    friend Font;
+
+    /// The alignment of the text.
+    Property(TextAlign, align);
+
+    /// The text content as UTF-32.
+    Property(std::u32string, content);
+
+    /// The desired width of this text object.
+    ///
+    /// If this is 0, the text will not be wrapped.
+    Property(i32, desired_width, 0);
+
+    /// The font of the text.
+    Readonly(Font&, font);
+
+    /// Whether this text spans multiple lines.
+    ComputedReadonly(bool, multiline, _multiline);
+
+    /// The style of the text (regular, bold, italic).
+    ComputedProperty(TextStyle, style, font.style);
+
+    /// The font size of the text.
+    ComputedProperty(FontSize, font_size, font.size);
+
+    /// Check if this is empty.
+    ComputedReadonly(bool, empty, content.empty());
+
+    /// The horizontal width of the text.
+    ComputedReadonly(f32, width, reshape()._width);
+
+    /// The vertical height of the text above the baseline.
+    ComputedReadonly(f32, height, reshape()._height);
+
+    /// The vertical depth of the text below the baseline. This
+    /// value is positive.
+    ComputedReadonly(f32, depth, reshape()._depth);
+
+    /// The total size of the text, including depth.
+    ComputedReadonly(Size, text_size, Size(i32(width), i32(height + depth)));
+
+    /// Internal state cache.
+    mutable std::optional<VertexArrays> vertices;
+    mutable f32 _width{}, _height{}, _depth{};
+    mutable bool _multiline{};
+
+public:
+    /// Use Renderer::text() instead if you want the text to be shaped
+    /// immediately. These constructors are lazy and only shape the text
+    /// when it is drawn or when the text size is queried.
+    explicit Text();
+    explicit Text(Font& font, std::u32string content, TextAlign align = TextAlign::SingleLine)
+        : _align{align}, _content{std::move(content)}, _font{&font} {}
+
+    explicit Text(Font& font, std::string_view content, TextAlign align = TextAlign::SingleLine)
+        : _align{align}, _content{base::text::ToUTF32(content)}, _font{&font} {}
+
+    /// Draw the vertices of this text.
+    void draw_vertices() const { reshape().vertices->draw_vertices(); }
+
+    /// Update the text.
+    ///
+    /// Assign to 'content' instead of calling this directly.
+    void set_content(std::string_view new_text) {
+        content = base::text::ToUTF32(new_text);
+    }
+
+private:
+    auto reshape() const -> const Text& {
+        if (not vertices.has_value()) [[unlikely]]
+            reshape_impl();
+        return *this;
+    }
+
+    void reshape_impl() const;
 };
 
 // =============================================================================
@@ -545,7 +517,7 @@ public:
     /// Load assets; this is an expensive operation and happens
     /// in a separate thread. This does *NOT* create any OpenGL
     /// objects.
-    static auto Create(Renderer& r) -> Thread<AssetLoader>;
+    static auto Create() -> Thread<AssetLoader>;
 
     /// Finish loading assets.
     void finalise(Renderer& r);
@@ -588,7 +560,13 @@ public:
     };
 
     /// Create a new window and renderer.
-    Renderer(int initial_wd, int initial_ht);
+    Renderer(int initial_wd, int initial_ht, bool set_active = true);
+
+    /// Get the current renderer.
+    static auto current() -> Renderer&;
+
+    /// Set the renderer for the current thread.
+    static void SetThreadRenderer(Renderer& r);
 
     /// Whether to render blinking cursors.
     ///
@@ -637,7 +615,6 @@ public:
     }
 
     /// Draw text at a position in world coordinates.
-    void draw_text(const ShapedText& text, xy pos, Colour c = Colour::White);
     void draw_text(const Text& text, xy pos, Colour c = Colour::White);
 
     /// Draw a texture at a position in world coordinates.
@@ -665,52 +642,11 @@ public:
     /// \see draw_texture(), draw_texture_scaled()
     void draw_texture_sized(const DrawableTexture& tex, AABB box);
 
-    /// Get the font used to shape a text element.
-    auto font_for_text(const ShapedText& r) -> Font&;
+    /// Get a font of a given size.
+    auto font(FontSize size, TextStyle style = TextStyle::Regular) -> Font&;
 
     /// Start a new frame.
     auto frame() -> Frame;
-
-    /// Create a text object that can be drawn.
-    ///
-    /// \param text The text to be shaped.
-    /// \param size The font size to use.
-    /// \param align The alignment of the text.
-    /// \param style The style options of the text (regular, bold, italic).
-    /// \param desired_width The width to fit the text into; pass 0 to disable wrapping.
-    /// \param clusters Out parameter for clusters that allow mapping shaped text to original text.
-    /// \param multiline Out parameter for whether the text requires multiple lines to display.
-    /// \return The shaped text object.
-    auto make_text(
-        std::string_view text,
-        FontSize size,
-        TextStyle style = TextStyle::Regular,
-        TextAlign align = TextAlign::Left,
-        i32 desired_width = 0,
-        std::vector<ShapedText::Cluster>* clusters = nullptr,
-        bool* multiline = nullptr
-    ) {
-        return make_text(
-            text::ToUTF32(text),
-            size,
-            style,
-            align,
-            desired_width,
-            clusters,
-            multiline
-        );
-    }
-
-    /// As make_text(), but takes a UTF-32 string.
-    auto make_text(
-        std::u32string_view text,
-        FontSize size,
-        TextStyle style = TextStyle::Regular,
-        TextAlign align = TextAlign::Left,
-        i32 desired_width = 0,
-        std::vector<ShapedText::Cluster>* clusters = nullptr,
-        bool* multiline = nullptr
-    ) -> ShapedText;
 
     /// Reload all shaders.
     ///
@@ -726,13 +662,35 @@ public:
     /// Get the size of the window.
     auto size() -> Size;
 
+    /// Create a text object that can be drawn.
+    ///
+    /// \param value The text to be shaped.
+    /// \param size The font size to use.
+    /// \param align The alignment of the text.
+    /// \param style The style options of the text (regular, bold, italic).
+    /// \param clusters Out parameter for clusters that allow mapping shaped text to original text.
+    /// \return The shaped text object.
+    auto text(
+        std::string_view value = "",
+        FontSize size = FontSize::Normal,
+        TextStyle style = TextStyle::Regular,
+        TextAlign align = TextAlign::Left,
+        std::vector<TextCluster>* clusters = nullptr
+    ) -> Text { return text(text::ToUTF32(value), size, style, align, clusters); }
+
+    /// As text(), but takes a UTF-32 string.
+    auto text(
+        std::u32string value,
+        FontSize size = FontSize::Normal,
+        TextStyle style = TextStyle::Regular,
+        TextAlign align = TextAlign::Left,
+        std::vector<TextCluster>* clusters = nullptr
+    ) -> Text;
+
     /// Set the active shader.
     void use(ShaderProgram& shader);
 
 private:
-    /// Get a font of a given size.
-    auto font(u32 size, TextStyle style) -> Font&;
-
     /// Start/end a frame.
     void frame_end();
     void frame_start();

@@ -21,13 +21,12 @@ constexpr Colour InactiveButtonTextColour = Colour::Grey;
 /// text in the center of a box. The box must be in
 /// absolute coordinates.
 auto CenterTextInBox(
-    Renderer& r,
-    const ShapedText& text,
+    const Text& text,
     i32 box_height,
     AABB absolute_box
 ) -> xy {
-    f32 ascender = r.font_for_text(text).strut_split().first;
-    f32 strut = r.font_for_text(text).strut();
+    f32 ascender = text.font.strut_split().first;
+    f32 strut = text.font.strut();
     Size sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
 
     // Bail out if we don’t have enough space.
@@ -76,40 +75,38 @@ void Button::draw(Renderer& r) {
 }
 
 void Label::draw(Renderer& r) {
-    auto& shaped = text.shaped(r);
     auto parent_box = parent->bounding_box;
     xy position;
 
     if (fixed_height != 0) {
-        position = CenterTextInBox(r, shaped, fixed_height, abox());
+        position = CenterTextInBox(text, fixed_height, abox());
     } else {
-        position = auto{pos}.voffset(i32(shaped.depth)).relative(parent_box, shaped.size());
+        position = auto{pos}.voffset(i32(text.depth)).relative(parent_box, text.text_size);
     }
 
-    r.draw_text(shaped, position, colour);
+    r.draw_text(text, position, colour);
 }
 
-void Label::refresh(Renderer& r) {
+void Label::refresh(Renderer&) {
     defer {
-        auto sz = text.shaped(r).size();
+        auto sz = text.text_size;
         UpdateBoundingBox(Size{sz.wd, std::max(sz.ht, fixed_height)});
     };
 
     if (not reflow) return;
-    text.reflow(r, std::min(max_width, parent->bounding_box.width()));
+    _text.desired_width = std::min(max_width, parent->bounding_box.width());
 }
-
-void Label::set_align(TextAlign new_value) { text.align = new_value; }
-void Label::set_font_size(FontSize new_value) { text.font_size = new_value; }
 
 TRIVIAL_CACHING_SETTER(Label, bool, reflow);
 TRIVIAL_CACHING_SETTER(Label, i32, max_width);
 TRIVIAL_CACHING_SETTER(Label, i32, fixed_height);
+CACHING_SETTER(Label, TextAlign, align, _text.align);
+CACHING_SETTER(Label, FontSize, font_size, _text.font_size);
 
 TextBox::TextBox(
     Element* parent,
     Text text,
-    std::optional<ShapedText> placeholder,
+    std::optional<Text> placeholder,
     Position pos,
     i32 padding,
     i32 min_wd,
@@ -122,30 +119,29 @@ TextBox::TextBox(
     min_ht{min_ht} {}
 
 void TextBox::update_text(std::string_view new_text) {
-    label.set(new_text);
+    label.content = new_text;
     needs_refresh = true;
 }
 
-void TextBox::update_text(std::u32string raw, ShapedText new_text) {
-    label.set(std::move(raw), std::move(new_text));
+void TextBox::update_text(Text new_text) {
+    label = std::move(new_text);
     needs_refresh = true;
 }
 
-
-auto TextBox::TextPos(Renderer& r, const ShapedText& text) -> xy {
-    return CenterTextInBox(r, text, bounding_box.height(), abox());
+auto TextBox::TextPos(const Text& text) -> xy {
+    return CenterTextInBox(text, bounding_box.height(), abox());
 }
 
 void TextBox::draw(Renderer& r) {
-    draw(r, label.empty() ? Colour::Grey : Colour::White);
+    draw(r, label.empty ? Colour::Grey : Colour::White);
 }
 
 void TextBox::draw(Renderer& r, Colour text_colour) {
-    auto& text = label.empty() and placeholder.has_value() ? *placeholder : label.shaped(r);
-    auto pos = TextPos(r, text);
+    auto& text = label.empty and placeholder.has_value() ? *placeholder : label;
+    auto pos = TextPos(text);
     r.draw_text(text, pos, text_colour);
     if (cursor_offs != -1) {
-        auto [asc, desc] = r.font_for_text(label.shaped(r)).strut_split();
+        auto [asc, desc] = text.font.strut_split();
         r.draw_line(
             xy(i32(pos.x) + cursor_offs, pos.y - i32(desc)),
             xy(i32(pos.x) + cursor_offs, pos.y + i32(asc)),
@@ -154,12 +150,11 @@ void TextBox::draw(Renderer& r, Colour text_colour) {
     }
 }
 
-void TextBox::refresh(Renderer& r) {
-    auto& text = label.shaped(r);
-    auto strut = r.font_for_text(text).strut();
+void TextBox::refresh(Renderer&) {
+    auto strut = label.font.strut();
     Size sz{
-        std::max(min_wd, i32(text.width)) + 2 * padding,
-        std::max({min_ht, i32(text.height + text.depth), strut}) + 2 * padding,
+        std::max(min_wd, i32(label.width)) + 2 * padding,
+        std::max({min_ht, i32(label.height + label.depth), strut}) + 2 * padding,
     };
 
     // Absolute position calculation depends on the size, so make sure
@@ -171,17 +166,7 @@ void TextBox::refresh(Renderer& r) {
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
-        auto t = hide_text ? std::u32string(text.size(), U'•') : text;
-        auto shaped = r.make_text(
-            t,
-            size,
-            style,
-            TextAlign::SingleLine,
-            0,
-            &clusters
-        );
-
-        update_text(std::move(t), std::move(shaped));
+        label.content = hide_text ? std::u32string(text.size(), U'•') : text;
     }
 
     // Use HarfBuzz cluster information to position the cursor: if the cursor
@@ -211,7 +196,7 @@ void TextEdit::draw(Renderer& r) {
         cursor_offs = [&] -> i32 {
             // Cursor is at the start/end of the text.
             if (cursor == 0) return 0;
-            if (cursor == i32(text.size())) return i32(label.shaped(r).width);
+            if (cursor == i32(text.size())) return i32(label.width);
 
             // Find the smallest cluster with an index greater than or equal
             // to the cursor position. We interpolate the cursor’s position
@@ -221,7 +206,7 @@ void TextEdit::draw(Renderer& r) {
             // than the cursor, since there will always be a cluster with index
             // 0, and the cursor index cannot be zero (because we checked for that
             // above).
-            auto it = rgs::lower_bound(clusters, cursor, {}, &ShapedText::Cluster::index);
+            auto it = rgs::lower_bound(clusters, cursor, {}, &TextCluster::index);
             auto prev = std::prev(it);
             i32 x1 = prev->xoffs;
             i32 i1 = prev->index;
@@ -251,7 +236,7 @@ void TextEdit::draw(Renderer& r) {
 
             // Interpolate between the last cluster and the end of the text.
             else {
-                x2 = i32(label.shaped(r).width);
+                x2 = i32(label.width);
                 i2 = i32(text.size());
             }
 
@@ -274,8 +259,8 @@ void TextEdit::event_click(InputSystem& input) {
     // we stop and go back to the one before it.
     no_blink_ticks = 20;
     i32 mx = input.mouse.pos.x;
-    i32 x0 = TextPos(input.renderer, label.shaped(input.renderer)).x;
-    i32 x1 = x0 + i32(label.shaped(input.renderer).width);
+    i32 x0 = TextPos(label).x;
+    i32 x1 = x0 + i32(label.width);
     if (mx < x0) cursor = 0;
     else if (mx > x1) cursor = i32(text.size());
     else if (clusters.size() < 2) cursor = 0;
@@ -287,7 +272,7 @@ void TextEdit::event_click(InputSystem& input) {
 
         // A cluster might correspond to multiple glyphs, in which case
         // we need to interpolate into it.
-        ShapedText::Cluster* prev = nullptr;
+        TextCluster* prev = nullptr;
         while (cursor < i32(text.size()) and it != clusters.end()) {
             auto xoffs = [&] {
                 // Cluster matches cursor index; we can use the x

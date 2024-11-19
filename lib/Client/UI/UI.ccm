@@ -403,11 +403,11 @@ public:
 
 /// Label that supports reflowing text automatically.
 class pr::client::Label : public Widget {
-    Text text;
+    Readonly(Text, text);
 
     /// Whether the text should reflow onto multiple lines if it
     /// exceeds a maximum width.
-    Property(bool, reflow, false);
+    Property(bool, reflow, true);
 
     /// The maximum width of this text.
     Property(i32, max_width, std::numeric_limits<i32>::max());
@@ -415,9 +415,6 @@ class pr::client::Label : public Widget {
     /// If set, the text will be centered vertically at the baseline
     /// within this height.
     Property(i32, fixed_height, 0);
-
-    /// Whether the text is empty.
-    ComputedReadonly(bool, empty, text.empty());
 
     /// The font size of the text.
     ComputedProperty(FontSize, font_size, text.font_size);
@@ -429,47 +426,20 @@ public:
     /// The colour of the label.
     Colour colour = Colour::White;
 
-    explicit Label(Element* parent, Position pos) : Widget(parent, pos) {}
-    explicit Label(Element* parent, ShapedText text, Position pos)
-        : Widget(parent, pos), text(std::move(text)) {}
+    explicit Label(Element* parent, Text text, Position pos)
+        : Widget(parent, pos), _text(std::move(text)) {}
 
     explicit Label(
         Element* parent,
-        Position pos,
+        std::string_view text,
         FontSize sz,
-        TextStyle style,
-        TextAlign align,
-        bool reflow = true
-    ) : Widget(parent, pos),
-        text("", sz, align, style),
-        _reflow(reflow) {}
-
-    explicit Label(
-        Element* parent,
-        std::string text,
-        Position pos,
-        FontSize sz = FontSize::Text,
-        TextStyle style = TextStyle::Regular,
-        TextAlign align = TextAlign::SingleLine,
-        bool reflow = true
-    ) : Label(parent, pos, sz, style, align, reflow) {
-        update_text(std::move(text));
-    }
+        Position pos
+    ) : Widget(parent, pos), _text(Renderer::current().text(text, sz)) {}
 
     void draw(Renderer& r) override;
     void refresh(Renderer& r) override;
-    auto shaped(Renderer& r) -> const ShapedText& { return text.shaped(r); }
-    auto size(Renderer& r) -> Size {
-        if (needs_refresh) {
-            refresh(r);
-            needs_refresh = false;
-        }
-
-        return text.size(r);
-    }
-
-    void update_text(std::string new_text) {
-        text.set(std::move(new_text));
+    void update_text(std::string_view new_text) {
+        _text.content = new_text;
         needs_refresh = true;
     }
 };
@@ -477,7 +447,7 @@ public:
 class pr::client::TextBox : public Widget {
 protected:
     Text label;
-    std::optional<ShapedText> placeholder;
+    std::optional<Text> placeholder;
     i32 padding{};
     i32 min_wd{};
     i32 min_ht{};
@@ -486,20 +456,20 @@ protected:
     explicit TextBox(
         Element* parent,
         Text label,
-        std::optional<ShapedText> placeholder,
+        std::optional<Text> placeholder,
         Position pos,
         i32 padding,
         i32 min_wd = 0,
         i32 min_ht = 0
     );
 
-    auto TextPos(Renderer& r, const ShapedText& text) -> xy;
+    auto TextPos(const Text& text) -> xy;
 
 public:
     void draw(Renderer& r) override;
     void refresh(Renderer& r) override;
     void update_text(std::string_view new_text);
-    void update_text(std::u32string raw, ShapedText new_text);
+    void update_text(Text new_text);
 
 protected:
     void draw(Renderer& r, Colour text_colour);
@@ -513,12 +483,13 @@ public:
         Element* parent,
         std::string_view label,
         Position pos,
+        Font& font = Renderer::current().font(FontSize::Medium),
         i32 padding = 0,
         i32 min_wd = 125,
         i32 min_ht = 0
     ) : TextBox( // clang-format off
         parent,
-        Text(label, FontSize::Medium, TextAlign::Center),
+        Text(font, label),
         std::nullopt,
         pos,
         padding,
@@ -551,38 +522,48 @@ class pr::client::TextEdit : public TextBox {
         i32 end;
     };
 
-    std::vector<ShapedText::Cluster> clusters;
-    FontSize size;
-    TextStyle style;
+    /// The actual contents of the text edit, which can be different
+    /// from the label of the underlying TextBox in case this is a
+    /// password input box.
+    std::u32string text;
+
+    /// Clusters for the *shaped* text; used mainly for cursor positioning.
+    std::vector<TextCluster> clusters;
+
+    /// Whether the text has changed.
     bool dirty = false;
+
+    /// Whether text should be replaced with '•'.
     bool hide_text = false;
+
+    /// The cursor index.
     i32 cursor = 0;
-    u32 no_blink_ticks = 0; // Used to inhibit blinking during typing.
-    Selection sel{};
+
+    /// Used to inhibit blinking during typing.
+    u32 no_blink_ticks = 0;
+
+    /// To be used once selecting text has been implemented, if ever.
+    [[maybe_unused]] Selection sel{};
 
 public:
-    std::u32string text;
     TextEdit(
         Element* parent,
         Position pos,
-        ShapedText placeholder,
-        FontSize size = FontSize::Medium,
-        TextStyle style = TextStyle::Regular,
+        std::string_view placeholder,
+        Font& font = Renderer::current().font(FontSize::Medium),
         i32 padding = 0,
         bool hide_text = false,
         i32 min_wd = 250,
         i32 min_ht = 0
     ) : TextBox( // clang-format off
         parent,
-        Text("", size, TextAlign::SingleLine),
-        std::move(placeholder),
+        Text(font, ""),
+        Text(font, placeholder),
         pos,
         padding,
         min_wd,
         min_ht
-    ),  size{size},
-        style{style},
-        hide_text{hide_text} {
+    ),  hide_text{hide_text} {
         selectable = Selectable::Yes;
     } // clang-format on
 
@@ -670,10 +651,10 @@ public:
     static constexpr f32 IconScale[NumScales] = {.25f, .5f, 1.f, 2.f};
 
 private:
-    static constexpr FontSize CodeSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Huge, FontSize::Title};
-    static constexpr FontSize NameSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Medium, FontSize::Large};
-    static constexpr FontSize SoundDescriptionSizes[NumScales] = {FontSize::Text, FontSize::Medium, FontSize::Large, FontSize::Huge};
-    static constexpr FontSize PowerDescriptionSizes[NumScales] = {FontSize::Small, FontSize::Text, FontSize::Intermediate, FontSize::Medium};
+    static constexpr FontSize CodeSizes[NumScales] = {FontSize::Normal, FontSize::Medium, FontSize::Huge, FontSize::Title};
+    static constexpr FontSize NameSizes[NumScales] = {FontSize::Small, FontSize::Normal, FontSize::Medium, FontSize::Large};
+    static constexpr FontSize SoundDescriptionSizes[NumScales] = {FontSize::Normal, FontSize::Medium, FontSize::Large, FontSize::Huge};
+    static constexpr FontSize PowerDescriptionSizes[NumScales] = {FontSize::Small, FontSize::Normal, FontSize::Intermediate, FontSize::Medium};
     static constexpr FontSize MiddleSizes[NumScales] = {FontSize::Medium, FontSize::Huge, FontSize::Title, FontSize::Gargantuan};
 
     Property(CardId, id, CardId::$$Count);

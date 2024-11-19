@@ -12,4 +12,12 @@
         __VA_ARGS__;                                       \
     }
 
+#define CACHING_SETTER(class, type, name, target, ...) \
+    void class ::set_##name(type new_value) {          \
+        if (target == new_value) return;               \
+        target = new_value;                            \
+        needs_refresh = true;                          \
+        __VA_ARGS__;                                   \
+    }
+
 #endif // PRESCRIPTIVISM_CLIENT_UI_MACROS_HH

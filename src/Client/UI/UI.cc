@@ -431,7 +431,7 @@ void Screen::tick(InputSystem& input) {
 //  Game Loop.
 // =============================================================================
 void InputSystem::game_loop(std::function<void()> tick) {
-    constexpr chr::milliseconds ClientTickDuration = 16ms;
+    constexpr auto ClientTickDuration = 16ms;
     while (not quit) {
         auto start_of_tick = chr::system_clock::now();
 

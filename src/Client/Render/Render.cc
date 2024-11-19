@@ -57,6 +57,8 @@ struct FTCallImpl {
 
 constexpr Colour DefaultBGColour{45, 42, 46, 255};
 
+// FIXME: Load ALL OF THIS at runtime so it’s customisable, and so
+// we can do hot reloading for shaders and fonts.
 constexpr char PrimitiveVertexShaderData[]{
 #embed "Shaders/Primitive.vert"
 };
@@ -130,7 +132,7 @@ constexpr std::span<const char> Fonts[]{
 // =============================================================================
 //  Text and Fonts
 // =============================================================================
-auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
+auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     std::string debug;
     debug.resize(10'000);
     hb_buffer_serialize_glyphs(
@@ -147,18 +149,18 @@ auto ShapedText::DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
     Log("Buffer: {}", debug);
 }
 
-Font::Font(FT_Face ft_face, u32 size, TextStyle style)
+Font::Font(FT_Face ft_face, FontSize size, TextStyle style)
     : face{ft_face},
-      size{size},
-      style{style} {
+      _size{size},
+      _style{style} {
     // Set the font size.
-    FT_Set_Pixel_Sizes(ft_face, 0, size);
+    FT_Set_Pixel_Sizes(ft_face, 0, +size);
     f32 em = f32(ft_face->units_per_EM);
 
     // Compute the interline skip.
     // Note: the interline skip for the font we’re using is absurd
     // if calculated this way, so just do it manually.
-    skip = u32(1.2f * size);
+    skip = u32(1.2f * +size);
     // skip = u32(ft_face->height / f32(ft_face->units_per_EM) * size);
 
     // Determine the maximum width and height amongst all glyphs; we
@@ -170,8 +172,8 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     // because that seems to more closely match the data we got from
     // iterating over every glyph in the font and computing the maximum
     // metrics.
-    atlas_entry_width = u32(std::ceil(ft_face->max_advance_width / em * size));
-    atlas_entry_height = u32(std::ceil(size * (ft_face->bbox.yMax - ft_face->bbox.yMin) / em));
+    atlas_entry_width = u32(std::ceil(ft_face->max_advance_width / em * +size));
+    atlas_entry_height = u32(std::ceil(+size * (ft_face->bbox.yMax - ft_face->bbox.yMin) / em));
 
     // Create a HarfBuzz font for it.
     auto f = hb_ft_font_create(ft_face, nullptr);
@@ -184,12 +186,22 @@ Font::Font(FT_Face ft_face, u32 size, TextStyle style)
     // 'ascender' and 'descender' fields may contain garbage.
     auto table = static_cast<TT_OS2*>(FT_Get_Sfnt_Table(ft_face, FT_SFNT_OS2));
     if (table) {
-        strut_asc = table->sTypoAscender / em * size;
-        strut_desc = -table->sTypoDescender / em * size;
+        strut_asc = table->sTypoAscender / em * +size;
+        strut_desc = -table->sTypoDescender / em * +size;
     } else {
-        strut_asc = ft_face->ascender / em * size;
-        strut_desc = -ft_face->descender / em * size;
+        strut_asc = ft_face->ascender / em * +size;
+        strut_desc = -ft_face->descender / em * +size;
     }
+}
+
+auto Font::bold() -> Font& {
+    if (style & TextStyle::Bold) return *this;
+    return renderer->font(size, style | TextStyle::Bold);
+}
+
+auto Font::italic() -> Font& {
+    if (style & TextStyle::Italic) return *this;
+    return renderer->font(size, style | TextStyle::Italic);
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
@@ -202,47 +214,42 @@ auto Font::AllocBuffer() -> hb_buffer_t* {
     return hb_bufs[hb_buffers_in_use++].get();
 }
 
-FontSize Text::get_font_size() const {
-    return text.font_size;
+Text::Text() {
+    _align = TextAlign::SingleLine;
+    _font = &Renderer::current().font(FontSize::Normal, TextStyle::Regular);
 }
 
-void Text::reflow(Renderer& r, i32 width) {
-    if (dirty or width < text.width or needs_multiple_lines) shape(r, width);
+void Text::set_desired_width(i32 desired) {
+    _desired_width = desired;
+    if (not vertices or desired < width or multiline) reshape_impl();
 }
 
-void Text::set_align(TextAlign a) {
-    if (_align == a) return;
-    _align = a;
-    dirty = true;
+void Text::set_align(TextAlign new_value) {
+    if (_align == new_value) return;
+    _align = new_value;
+    vertices = std::nullopt;
 }
 
-void Text::set_font_size(FontSize new_value) {
-    text = ShapedText(new_value);
-    dirty = true;
+void Text::set_content(std::u32string new_value) {
+    if (new_value == _content) return;
+    _content = std::move(new_value);
+    vertices = std::nullopt;
 }
 
-void Text::set_style(TextStyle s) {
-    if (_style == s) return;
-    _style = s;
-    dirty = true;
+void Text::set_font_size(FontSize new_size) {
+    if (_font->size == new_size) return;
+    _font = &Renderer::current().font(new_size, _font->style);
+    vertices = std::nullopt;
 }
 
-auto Text::shaped(Renderer& r) const -> const ShapedText& {
-    if (dirty) shape(r, 0);
-    return text;
+void Text::set_style(TextStyle new_value) {
+    if (_font->style == new_value) return;
+    _font = &Renderer::current().font(_font->size, new_value);
+    vertices = std::nullopt;
 }
 
-void Text::shape(Renderer& r, i32 desired_width) const {
-    dirty = false;
-    text = r.make_text(
-        content,
-        text.font_size,
-        style,
-        align,
-        desired_width,
-        nullptr,
-        &needs_multiple_lines
-    );
+void Text::reshape_impl() const {
+    font.shape(*this, nullptr);
 }
 
 // =============================================================================
@@ -266,15 +273,14 @@ void Text::shape(Renderer& r, i32 desired_width) const {
 //   4. Determine if we need to add any glyphs to the font atlas and do so.
 //
 //   5. Convert the shaped physical lines into vertices and upload the vertex data.
-auto Font::shape(
-    std::u32string_view text,
-    TextAlign align,
-    i32 desired_text_width,
-    std::vector<ShapedText::Cluster>* clusters,
-    bool* multiline
-) -> ShapedText {
-    if (multiline) *multiline = false;
-    if (text.empty()) return ShapedText{FontSize(size), style};
+void Font::shape(const Text& text, std::vector<TextCluster>* clusters) {
+    // Reset text properties in case we end up returning early.
+    text.vertices = VertexArrays{VertexLayout::PositionTexture4D};
+    text._width = text._height = text._depth = 0;
+    text._multiline = false;
+    if (text.empty) return;
+
+    // Check that this font has been fully initialised.
     auto font = hb_font.get();
     Assert(font, "Forgot to call finalise()!");
 
@@ -282,20 +288,12 @@ auto Font::shape(
     defer { hb_buffers_in_use = 0; };
 
     // Set the font size.
-    FT_Set_Pixel_Sizes(face, 0, size);
+    FT_Set_Pixel_Sizes(face, 0, +size);
 
     // Refuse to go below a certain width to save us from major headaches.
     static constexpr i32 MinTextWidth = 40;
-    const bool reflow = desired_text_width != 0;
-    const f32 desired_width = desired_text_width == 0 ? 0 : std::max(desired_text_width, MinTextWidth);
-
-    // Convert to UTF-32 in canonical decomposition form; this helps
-    // with fonts that may not have certain precombined characters, but
-    // which *do* support the individual components.
-    //
-    // Normalisation can fail if the input was nonsense; just render an
-    // error string in that case.
-    auto norm = Normalise(text, text::NormalisationForm::NFD).value_or(U"<ERROR>");
+    const bool reflow = text.desired_width != 0;
+    const f32 desired_width = text.desired_width == 0 ? 0 : std::max(text.desired_width, MinTextWidth);
 
     // Get the glyph information and position from a HarfBuzz buffer.
     auto GetInfo = [](hb_buffer_t* buf, i32 start = 0, i32 end = 0) -> std::pair<std::span<hb_glyph_info_t>, std::span<hb_glyph_position_t>> {
@@ -346,7 +344,7 @@ auto Font::shape(
 
         // Scale the font; HarfBuzz uses integers for position values,
         // so this is used so we can get fractional values out of it.
-        hb_font_set_scale(font, size * Scale, size * Scale);
+        hb_font_set_scale(font, +size * Scale, +size * Scale);
 
         // Enable an OpenType feature.
         auto Feature = [](auto tag) {
@@ -639,10 +637,10 @@ auto Font::shape(
     };
 
     // Shape (and if need be reflow) the lines.
-    auto lines_to_shape = u32stream{norm}.lines() | vws::transform(&u32stream::text) | rgs::to<std::vector>();
-    if (lines_to_shape.empty()) return ShapedText{FontSize(size), style};
+    auto lines_to_shape = u32stream{text.content}.lines() | vws::transform(&u32stream::text) | rgs::to<std::vector>();
+    if (lines_to_shape.empty()) return;
     f32 max_x = ShapeLines(lines_to_shape);
-    if (multiline) *multiline = lines.size() > 1;
+    text._multiline = lines.size() > 1;
 
     // Rebuild the texture atlas.
     RebuildAtlas();
@@ -654,7 +652,7 @@ auto Font::shape(
     for (const auto& line : lines) {
         // Determine the starting X position for this line.
         f32 xbase = [&] -> f32 {
-            switch (align) {
+            switch (text.align) {
                 case TextAlign::Left: return 0;
                 case TextAlign::Center: return (max_x - line.width) / 2;
                 case TextAlign::Right: return max_x - line.width;
@@ -680,16 +678,16 @@ auto Font::shape(
     }
 
     // And upload the vertices.
-    VertexArrays vao{VertexLayout::PositionTexture4D};
-    auto& vbo = vao.add_buffer();
-    vbo.copy_data(verts);
-    return ShapedText(std::move(vao), FontSize(size), style, max_x, ht, dp);
+    text.vertices->add_buffer().copy_data(verts);
+    text._width = max_x;
+    text._height = ht;
+    text._depth = dp;
 }
 
 // =============================================================================
 //  Initialisation
 // =============================================================================
-Renderer::Renderer(int initial_wd, int initial_ht) {
+Renderer::Renderer(int initial_wd, int initial_ht, bool set_active) {
     static std::once_flag GlobalInit;
     std::call_once(GlobalInit, [] {
         check SDL_Init(SDL_INIT_VIDEO);
@@ -788,6 +786,24 @@ Renderer::Renderer(int initial_wd, int initial_ht) {
     // Enable blending.
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Make this the current renderer.
+    if (set_active) SetThreadRenderer(*this);
+}
+
+/// The currently active renderer; this exists because while we still
+/// may want to have multiple renderers eventually, a lot of the program
+/// state is implicitly tied to the OpenGL context / renderer, and we
+/// don’t want to store it everywhere.
+thread_local Renderer* ThreadRenderer = nullptr;
+
+auto Renderer::current() -> Renderer& {
+    Assert(ThreadRenderer, "Thread renderer not set!");
+    return *ThreadRenderer;
+}
+
+void Renderer::SetThreadRenderer(Renderer& r) {
+    ThreadRenderer = &r;
 }
 
 Renderer::Frame::Frame(Renderer& r) : r(r) { r.frame_start(); }
@@ -895,28 +911,23 @@ void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
 }
 
 void Renderer::draw_text(
-    const ShapedText& text,
+    const Text& text,
     xy pos,
     Colour colour
 ) {
-    if (text.empty()) return;
-    auto& f = font(+text.font_size, text.style);
+    if (text.empty) return;
 
     // Initialise the text shader.
     use(text_shader);
     text_shader.uniform("text_colour", colour.vec4());
     text_shader.uniform("position", pos.vec());
-    text_shader.uniform("atlas_height", f.atlas_height());
+    text_shader.uniform("atlas_height", text.font.atlas_height());
 
     // Bind the font atlas.
-    f.use();
+    text.font.use();
 
     // Dew it.
-    text.vao.draw_vertices();
-}
-
-void Renderer::draw_text(const Text& text, xy pos, Colour c) {
-    draw_text(text.shaped(*this), pos, c);
+    text.draw_vertices();
 }
 
 void Renderer::draw_texture(
@@ -1010,39 +1021,22 @@ void Renderer::use(ShaderProgram& shader) {
 // =============================================================================
 //  Creating Objects
 // =============================================================================
-auto Renderer::font(u32 size, TextStyle style) -> Font& {
+auto Renderer::font(FontSize size, TextStyle style) -> Font& {
     // Make sure the font exists.
-    auto it = font_data.fonts.find({size, style});
+    auto it = font_data.fonts.find({+size, style});
     Assert(
         it != font_data.fonts.end(),
         "Font with size {} and style {} has not been built yet. Make sure to "
         "load this font size in the asset loader (AssetLoader::load()) if you "
         "want to use it",
-        size,
+        +size,
         +style
     );
 
     return it->second;
 }
 
-// FIXME: Text should just store the font instead.
-auto Renderer::font_for_text(const ShapedText& r) -> Font& {
-    return font(+r.font_size, r.style);
-}
-
 auto Renderer::frame() -> Frame { return Frame(*this); }
-
-auto Renderer::make_text(
-    std::u32string_view text,
-    FontSize size,
-    TextStyle style,
-    TextAlign align,
-    i32 desired_width,
-    std::vector<ShapedText::Cluster>* clusters,
-    bool* multiline
-) -> ShapedText {
-    return font(+size, style).shape(text, align, desired_width, clusters, multiline);
-}
 
 void Renderer::reload_shaders() {
     // TODO: inotify().
@@ -1065,6 +1059,18 @@ void Renderer::set_cursor(Cursor c) {
     // us to avoid flicker in case a cursor change is requested multiple
     // times per frame and thus also makes that possible as a pattern.
     requested_cursor = c;
+}
+
+auto Renderer::text(
+    std::u32string value,
+    FontSize size,
+    TextStyle style,
+    TextAlign align,
+    std::vector<TextCluster>* clusters
+) -> Text {
+    Text t{font(size, style), std::move(value), align};
+    t.font.shape(t, clusters);
+    return t;
 }
 
 void Renderer::SetCursorImpl() {
@@ -1105,7 +1111,7 @@ auto AABB::contains(xy pos) const -> bool {
 // The renderer parameter is unused and is only passed in
 // to ensure that we create the renderer before the asset
 // loader.
-auto AssetLoader::Create(Renderer&) -> Thread<AssetLoader> {
+auto AssetLoader::Create() -> Thread<AssetLoader> {
     return Thread<AssetLoader>{&Load};
 }
 
@@ -1135,7 +1141,7 @@ void AssetLoader::load(std::stop_token stop) {
     for (
         auto f : {
             FontSize::Small,
-            FontSize::Text,
+            FontSize::Normal,
             FontSize::Intermediate,
             FontSize::Medium,
             FontSize::Large,
@@ -1145,7 +1151,7 @@ void AssetLoader::load(std::stop_token stop) {
         }
     ) {
         for (auto s : {Regular, Italic, Bold, BoldItalic})
-            font_data.fonts[{+f, s}] = Font{*font_data.ft_face[+s], +f, s};
+            font_data.fonts[{+f, s}] = Font{*font_data.ft_face[+s], f, s};
     }
 }
 
@@ -1156,6 +1162,8 @@ void AssetLoader::finalise(Renderer& r) {
 
     // Build font textures.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    for (auto& [_, f] : r.font_data.fonts)
+    for (auto& [_, f] : r.font_data.fonts) {
+        f._renderer = &r;
         f.atlas_width = Texture::MaxSize();
+    }
 }
