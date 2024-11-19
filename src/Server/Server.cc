@@ -450,7 +450,9 @@ void Server::Run() {
         if (tick_duration < ServerTickDuration) {
             std::this_thread::sleep_for(ServerTickDuration - tick_duration);
         } else {
+#ifndef PRESCRIPTIVISM_ENABLE_SANITISERS
             Log("Server tick took too long: {}ms", tick_duration.count());
+#endif
         }
     }
 }

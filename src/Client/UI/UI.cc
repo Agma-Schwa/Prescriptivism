@@ -448,7 +448,9 @@ void InputSystem::game_loop(std::function<void()> tick) {
                 i32((ClientTickDuration - tick_duration).count())
             );
         } else {
+#ifndef PRESCRIPTIVISM_ENABLE_SANITISERS
             Log("Client tick took too long: {}ms", tick_duration.count());
+#endif
         }
     }
 }
