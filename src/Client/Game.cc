@@ -80,7 +80,7 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
                 // TODO: Handle evolutions that require an extra card.
                 auto res = validation::ValidatePlaySoundCard(c.id, ValidatorFor(*p), i);
                 bool valid = res == validation::PlaySoundCardValidationResult::Valid;
-                if (valid) co_yield Target{s, s.cards()[i]};
+                if (valid) co_yield Target{s};
             }
         }
         co_return;
@@ -92,7 +92,7 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
             auto v = ValidatorFor(us);
             for (auto [i, s] : us.word->stacks() | vws::enumerate)
                 if (validation::ValidateP_SpellingReform(v, i))
-                    co_yield Target{s, s.top};
+                    co_yield Target{s};
         } break;
     }
 }

@@ -154,9 +154,9 @@ class pr::client::GameScreen : public Screen {
     /// A targeted card in someone’s word.
     struct Target {
         CardStacks::Stack* stack;
-        Card* card;
+        std::optional<u32> card_idx;
 
-        Target(CardStacks::Stack& s, Card& c) : stack{&s}, card{&c} {}
+        explicit Target(CardStacks::Stack& s) : stack{&s} {}
     };
 
     Client& client;
