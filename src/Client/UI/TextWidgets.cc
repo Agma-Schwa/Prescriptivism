@@ -167,6 +167,7 @@ void TextEdit::draw(Renderer& r) {
     if (dirty) {
         dirty = false;
         label.content = hide_text ? std::u32string(text.size(), U'•') : text;
+        label.font.shape(label, &clusters);
     }
 
     // Use HarfBuzz cluster information to position the cursor: if the cursor
