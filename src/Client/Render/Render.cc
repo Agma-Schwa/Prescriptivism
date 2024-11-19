@@ -196,12 +196,12 @@ Font::Font(FT_Face ft_face, FontSize size, TextStyle style)
 
 auto Font::bold() -> Font& {
     if (style & TextStyle::Bold) return *this;
-    return renderer->font(size, style | TextStyle::Bold);
+    return renderer.font(size, style | TextStyle::Bold);
 }
 
 auto Font::italic() -> Font& {
     if (style & TextStyle::Italic) return *this;
-    return renderer->font(size, style | TextStyle::Italic);
+    return renderer.font(size, style | TextStyle::Italic);
 }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {

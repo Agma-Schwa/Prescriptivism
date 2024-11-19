@@ -236,7 +236,7 @@ class pr::client::Widget : public Element {
 
     friend Screen;
 
-    Readonly(Element*, parent);
+    Readonly(Element&, parent);
     Property(bool, needs_refresh, true);
 
 public:
@@ -267,7 +267,7 @@ public:
             "Accessing apos() before bounding box was set! NEVER do "
             "UpdateBoundingBox(apos()) or SetBoundingBox(apos(), ...)!"
         );
-        return pos.relative(parent->bounding_box, bounding_box.size());
+        return pos.relative(parent.bounding_box, bounding_box.size());
     }
 
     /// Event handler for when the mouse is clicked on this element.
@@ -278,12 +278,12 @@ public:
 
     /// Check whether an element is a parent of this widget.
     bool has_parent(Element* other) {
-        auto p = parent;
+        auto p = &parent;
         for (;;) {
             if (p == other) return true;
             auto w = p->cast<Widget>();
             if (not w) return false;
-            p = w->parent;
+            p = &w->parent;
         }
     }
 
@@ -717,7 +717,7 @@ public:
     void clear();
 
     /// Check if this group contains an element.
-    auto contains(Widget* c) -> bool { return c->parent == this; }
+    auto contains(Widget* c) -> bool { return &c->parent == this; }
 
     /// Make all children of this group selectable.
     void make_selectable(Selectable new_value = Selectable::Yes);
@@ -761,7 +761,7 @@ public:
         Writeonly(Card::Overlay, overlay);
 
         /// Get the parent stacks.
-        ComputedReadonly(CardStacks&, parent, Widget::get_parent()->as<CardStacks>());
+        ComputedReadonly(CardStacks&, parent, Widget::get_parent().as<CardStacks>());
 
         /// Get the topmost card.
         ComputedReadonly(Card&, top, static_cast<Card&>(*widgets.back()));

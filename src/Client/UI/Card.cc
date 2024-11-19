@@ -350,7 +350,7 @@ void Card::draw(Renderer& r) {
 
 void Card::refresh(Renderer& r) {
     SetBoundingBox(
-        pos.relative(parent->bounding_box, CardSize[scale]),
+        pos.relative(parent.bounding_box, CardSize[scale]),
         CardSize[scale]
     );
 
@@ -395,7 +395,7 @@ void Card::refresh(Renderer& r) {
 
         // Position the image right below the name. Since the name field ends
         // up being larger than the height of the nam text, we don’t need to
-        // add any extra vertical paddinxg here.
+        // add any extra vertical padding here.
         auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
         auto ht = wd / 4 * 3; // Arbitrary aspect ratio.
         image.fixed_size = Size{wd, ht};
@@ -537,9 +537,9 @@ auto CardStacks::selected_child(InputSystem& input) -> SelectResult {
     auto res = Group::selected_child(input);
     if (res.widget) res.widget = [&] -> Widget* {
         switch (selection_mode) {
-            case SelectionMode::Stack: return &res.widget->parent->as<Stack>();
+            case SelectionMode::Stack: return &res.widget->parent.as<Stack>();
             case SelectionMode::Card: return res.widget;
-            case SelectionMode::Top: return &res.widget->parent->as<Stack>().top;
+            case SelectionMode::Top: return &res.widget->parent.as<Stack>().top;
         }
         Unreachable();
     }();

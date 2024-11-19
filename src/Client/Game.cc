@@ -44,7 +44,7 @@ auto GameScreen::PlayerById(PlayerId id) -> Player& {
 
 auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
     Assert(c);
-    auto stack = c->parent->cast<CardStacks::Stack>();
+    auto stack = c->parent.cast<CardStacks::Stack>();
     if (not stack) return nullptr;
     auto p = player_map.find(&stack->parent);
     if (p == player_map.end()) return nullptr;
@@ -157,7 +157,7 @@ void GameScreen::TickNotOurTurn() {}
 
 void GameScreen::TickPassing() {
     if (not selected_element) return;
-    auto& our_stack = selected_element->as<Card>().parent->as<CardStacks::Stack>();
+    auto& our_stack = selected_element->as<Card>().parent.as<CardStacks::Stack>();
     auto idx = our_hand->index_of(our_stack);
     client.server_connexion.send(packets::cs::Pass{*idx});
     Discard(our_stack);
@@ -178,7 +178,7 @@ void GameScreen::TickSingleTarget() {
         Assert(owner, "Selected card without owner?");
 
         // Tell the server about this.
-        auto& our_stack = our_selected_card->parent->as<CardStacks::Stack>();
+        auto& our_stack = our_selected_card->parent.as<CardStacks::Stack>();
         auto card_in_hand_index = our_hand->index_of(our_stack);
         auto selected_card_index = owner->word->index_of(stack);
         client.server_connexion.send(packets::cs::PlaySingleTarget{

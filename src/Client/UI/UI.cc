@@ -166,7 +166,7 @@ void Group::refresh(Renderer& r) {
     // happen instead is that groups propagate the parent size downward
     // and adjust to their actual size after the children have been
     // positioned.
-    SetBoundingBox(parent->bounding_box);
+    SetBoundingBox(parent.bounding_box);
 
     // Refresh each element to make sure their sizes are up-to-date
     // and compute the total width of all elements.
@@ -182,7 +182,7 @@ void Group::refresh(Renderer& r) {
     }
 
     // Compute gap size.
-    auto parent_extent = parent->bounding_box.extent(a);
+    auto parent_extent = parent.bounding_box.extent(a);
     i32 gap = 0;
     if (total_extent < parent_extent and ch.size() > 1) {
         gap = std::min(
@@ -203,7 +203,7 @@ void Group::refresh(Renderer& r) {
     // Update our bounding box.
     auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.extent(flip(a)); }));
     auto sz = Size{a, offset - gap, max};
-    SetBoundingBox(pos.relative(parent->bounding_box, sz), sz);
+    SetBoundingBox(pos.relative(parent.bounding_box, sz), sz);
 
     // And refresh the children again now that we know where everything is.
     for (auto& c : ch) c.refresh(r);
@@ -236,10 +236,10 @@ TRIVIAL_CACHING_SETTER(Group, i32, alignment);
 //  Widget
 // =============================================================================
 auto Widget::parent_screen() -> Screen& {
-    Element* e = parent;
+    Element* e = &parent;
     for (;;) {
         if (auto screen = e->cast<Screen>()) return *screen;
-        e = e->as<Widget>().parent;
+        e = &e->as<Widget>().parent;
     }
 }
 
@@ -274,7 +274,7 @@ void Widget::set_needs_refresh(bool new_value) {
 
     // Groups care about this because they need to recompute the
     // positions of their children.
-    if (auto g = parent->cast<Group>())
+    if (auto g = parent.cast<Group>())
         g->needs_refresh = true;
 }
 

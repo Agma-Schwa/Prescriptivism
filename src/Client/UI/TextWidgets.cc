@@ -75,7 +75,7 @@ void Button::draw(Renderer& r) {
 }
 
 void Label::draw(Renderer& r) {
-    auto parent_box = parent->bounding_box;
+    auto parent_box = parent.bounding_box;
     xy position;
 
     if (fixed_height != 0) {
@@ -94,7 +94,7 @@ void Label::refresh(Renderer&) {
     };
 
     if (not reflow) return;
-    _text.desired_width = std::min(max_width, parent->bounding_box.width());
+    _text.desired_width = std::min(max_width, parent.bounding_box.width());
 }
 
 TRIVIAL_CACHING_SETTER(Label, bool, reflow);

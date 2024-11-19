@@ -292,7 +292,7 @@ private:
     };
 
     /// The renderer that owns this font.
-    Readonly(Renderer*, renderer, nullptr);
+    Readonly(Renderer&, renderer, nullptr);
 
     /// HarfBuzz font to use for shaping.
     HarfBuzzFontHandle hb_font;
