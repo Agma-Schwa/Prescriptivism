@@ -320,6 +320,23 @@ void Card::draw(Renderer& r) {
 
     DrawChildren(r);
 
+    // Draw the border *after* the children since it must be drawn
+    // on top of the image.
+    auto b = InnerBorder[scale];
+    r.draw_outline_rect(
+        rect.shrink(Border[scale].wd + b, Border[scale].ht + b),
+        b,
+        colour.darken(.1f),
+        b
+    );
+
+    if (id.is_power()) r.draw_outline_rect(
+        image.bounding_box.shrink(b),
+        b,
+        colour.darken(.1f),
+        b
+    );
+
     // Draw a white rectangle on top of this card if it is inactive.
     if (overlay == Overlay::Inactive) r.draw_rect(
         rect,
@@ -407,8 +424,8 @@ void Card::refresh(Renderer& r) {
 
         // The description is below the image.
         description.pos = auto{image.pos}
-            .voffset(-ht - Padding[scale])
-            .hoffset(Padding[scale]);
+                              .voffset(-ht - Padding[scale])
+                              .hoffset(Padding[scale]);
     } else {
         code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
         name.pos = auto{code.pos}.voffset(i32(-code.text.height - 2 * Padding[scale]));

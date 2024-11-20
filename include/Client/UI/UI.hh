@@ -610,7 +610,8 @@ public:
     };
 
     static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
-    static constexpr u16 Padding[NumScales] = {1, 2, 4, 6};
+    static constexpr u16 Padding[NumScales] = {2, 3, 5, 7};
+    static constexpr u16 InnerBorder[NumScales] = {1, 1, 2, 3};
 
     // The border is slightly uneven; this is because of an optical illusion
     // that makes vertical lines appear thinner than horizontal lines, so we
