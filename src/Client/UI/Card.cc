@@ -356,10 +356,7 @@ void Card::DrawChildren(Renderer& r) {
 }
 
 void Card::refresh(Renderer& r) {
-    SetBoundingBox(
-        pos.resolve(parent.bounding_box, CardSize[scale]),
-        CardSize[scale]
-    );
+    UpdateBoundingBox(CardSize[scale]);
 
     // Refresh our children *after* we’re done potentially
     // setting properties for them.

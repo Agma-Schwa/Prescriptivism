@@ -243,20 +243,24 @@ public:
     virtual void draw(Renderer& r) = 0;
 
 protected:
-    void SetBoundingBox(xy origin, Size size);
+    /// This is mainly intended to be used by Screen; widgets should
+    /// generally use UpdateBoundingBox() instead.
     void SetBoundingBox(AABB aabb);
-    void UpdateBoundingBox(xy origin);
-    void UpdateBoundingBox(Size size);
 };
 
 /// Element that is not a screen.
 class pr::client::Widget : public Element {
     LIBBASE_IMMOVABLE(Widget);
 
+    friend Element;
     friend Screen;
 
     Readonly(Element&, parent);
     Property(bool, needs_refresh, true);
+
+    /// The scaled bounding box, used for centering. Do NOT use
+    /// this for anything else.
+    AABB scaled_bounding_box;
 
 public:
     bool hovered  : 1 = false; ///< Element is being hovered.
@@ -270,7 +274,7 @@ public:
     Position pos;
 
     /// Scale this widget (and its children) by a factor.
-    f32 ui_scale = 1;
+    Property(f32, ui_scale, 1);
 
 protected:
     explicit Widget(Element* parent, Position pos = {});
@@ -300,6 +304,9 @@ public:
     /// Get the widget’s parent screen
     auto parent_screen() -> Screen&;
 
+    /// Resolve the position of this element.
+    auto position() -> xy;
+
     /// Set the origin and scale used to draw the children of this widget;
     /// this *must* be called before any children are drawn, otherwise, the
     /// children’s positions will be incorrect.
@@ -319,6 +326,9 @@ public:
 
     /// Unselect the element.
     void unselect();
+
+protected:
+    void UpdateBoundingBox(Size sz);
 
 private:
     void unselect_impl(Screen& parent);

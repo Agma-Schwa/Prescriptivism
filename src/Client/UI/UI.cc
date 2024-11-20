@@ -57,14 +57,16 @@ auto Position::resolve(Size parent_size, Size object_size) -> xy {
 // =============================================================================
 //  Element
 // =============================================================================
-void Element::SetBoundingBox(xy origin, Size size) { SetBoundingBox(AABB{origin, size}); }
 void Element::SetBoundingBox(AABB aabb) {
     LIBBASE_DEBUG(_bb_size_initialised = true;)
     _bounding_box = aabb;
 }
 
-void Element::UpdateBoundingBox(xy origin) { SetBoundingBox(origin, _bounding_box.size()); }
-void Element::UpdateBoundingBox(Size size) { SetBoundingBox(_bounding_box.origin(), size); }
+void Widget::UpdateBoundingBox(Size size) {
+    auto scaled = size * ui_scale;
+    SetBoundingBox(AABB{pos.resolve(parent.bounding_box, size), size});
+    scaled_bounding_box = AABB{pos.resolve(parent.bounding_box, scaled), scaled};
+}
 
 // =============================================================================
 //  Widget
@@ -96,8 +98,12 @@ auto Widget::parent_screen() -> Screen& {
     }
 }
 
+auto Widget::position() -> xy {
+    return pos.resolve(parent.bounding_box, bounding_box.size() * ui_scale);
+}
+
 auto Widget::PushTransform(Renderer& r) -> Renderer::MatrixRAII {
-    return r.push_matrix(bounding_box.origin(), ui_scale);
+    return r.push_matrix(scaled_bounding_box.origin(), ui_scale);
 }
 
 auto Widget::rbox() -> AABB { return {rpos(), bounding_box.size()}; }
@@ -112,6 +118,12 @@ auto Widget::rpos() -> xy {
 
 auto Widget::selected_child(xy) -> SelectResult {
     return SelectResult::TakeIf(this, selectable);
+}
+
+void Widget::set_ui_scale(f32 new_value) {
+    if (_ui_scale == new_value) return;
+    _ui_scale = new_value;
+    needs_refresh = true;
 }
 
 void Widget::unselect() {
@@ -304,7 +316,7 @@ void Group::refresh(Renderer& r) {
     // Update our bounding box.
     auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.extent(flip(a)); }));
     auto sz = Size{a, offset - gap, max};
-    SetBoundingBox(pos.resolve(parent.bounding_box, sz), sz);
+    UpdateBoundingBox(sz);
 
     // And refresh the children again now that we know where everything is.
     for (auto& c : ch) c.refresh(r);

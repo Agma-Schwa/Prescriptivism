@@ -225,7 +225,6 @@ void TextBox::refresh(Renderer&) {
     // Absolute position calculation depends on the size, so make sure
     // to initialise them in the right order.
     UpdateBoundingBox(sz);
-    UpdateBoundingBox(rpos());
 }
 
 // =============================================================================
