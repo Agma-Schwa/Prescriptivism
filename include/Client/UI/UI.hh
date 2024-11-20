@@ -258,8 +258,9 @@ class pr::client::Widget : public Element {
     Readonly(Element&, parent);
     Property(bool, needs_refresh, true);
 
-    /// The scaled bounding box, used for centering. Do NOT use
-    /// this for anything else.
+    /// The scaled bounding box, used so translations when pushing a
+    /// matrix center objects correctly according to their scaled size.
+    /// Do NOT use this for anything else.
     AABB scaled_bounding_box;
 
 public:
