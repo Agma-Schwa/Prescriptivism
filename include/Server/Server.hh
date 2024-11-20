@@ -15,6 +15,7 @@
 #include <memory>
 #include <random>
 #include <ranges>
+#include <source_location>
 #include <vector>
 
 namespace pr::server {
@@ -160,7 +161,11 @@ public:
     Server(u16 port, std::string password);
 
     /// Disconnect a client.
-    void Kick(net::TCPConnexion& client, DisconnectReason reason);
+    void Kick(
+        net::TCPConnexion& client,
+        DisconnectReason reason,
+        std::source_location sloc = std::source_location::current()
+    );
 
     /// Run the server for ever.
     [[noreturn]] void Run();
@@ -197,7 +202,7 @@ private:
 
     /// Remove a card a player’s hand.
     void RemoveCard(Player& p, Card& c) {
-        auto it = rgs::find(p.hand, c.id, &Card::id);
+        auto it = rgs::find_if(p.hand, [&](Card& x) { return &x == &c; });
         Assert(it != p.hand.end(), "Card not in hand");
         discard.emplace_back(c.id);
         p.hand.erase(it);

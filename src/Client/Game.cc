@@ -179,9 +179,9 @@ void GameScreen::TickSingleTarget() {
         auto card_in_hand_index = our_hand->index_of(our_stack);
         auto selected_card_index = owner->word->index_of(stack);
         client.server_connexion.send(packets::cs::PlaySingleTarget{
-            *card_in_hand_index,
+            card_in_hand_index.value(),
             owner->id,
-            *selected_card_index,
+            selected_card_index.value(),
         });
 
         // Remove the card we played.

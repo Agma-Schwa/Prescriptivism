@@ -49,8 +49,17 @@ auto Server::ValidatorFor(Player& p) -> Validator {
 // =============================================================================
 //  Networking
 // =============================================================================
-void Server::Kick(net::TCPConnexion& client, DisconnectReason reason) {
-    client.send(packets::sc::Disconnect{reason});
+void Server::Kick(net::TCPConnexion& client, DisconnectReason reason, std::source_location sloc) {
+    Log(
+        "Kicking client {} for reason {} (at {}:{}:{})",
+        client.address,
+        +reason,
+        sloc.file_name(),
+        sloc.line(),
+        sloc.column()
+    );
+
+    client.send(sc::Disconnect{reason});
     client.disconnect();
 }
 
@@ -254,7 +263,11 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
 
     // The card is a power card.
     switch (card.id.value) {
-        default: Kick(client, InvalidPacket); break;
+        default:
+            Log("Sorry, playing {} is not implemented yet", CardDatabase[+card.id].name);
+            Kick(client, InvalidPacket);
+            break;
+
         case CardIdValue::P_SpellingReform: {
             if (not validation::ValidateP_SpellingReform(ValidatorFor(*p), c.target_stack_index))
                 return Kick(client, InvalidPacket);
