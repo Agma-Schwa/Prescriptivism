@@ -648,18 +648,29 @@ public:
     /// Start a new frame.
     auto frame() -> Frame;
 
-    /// Push a matrix onto the stack.
+    /// Push a transform matrix.
     ///
     /// This makes it so that the translation and scaling passed here
     /// are applied to everything drawn until the matrix is popped. The
     /// return value is an RAII object that pops the matrix when it goes
     /// out of scope.
     ///
-    /// The transformation will be applied to the previous matrix (i.e.
-    /// pushing two translation matrices will result in the sum of the
+    /// The transformation will be applied relative to the previous matrix
+    /// (i.e. pushing two translation matrices will result in the sum of the
     /// two translations).
     ///
     /// The bottom-most element of the matrix stack is the identity matrix.
+    ///
+    /// E.g. assuming an initially empty stack, if we push a matrix, draw
+    /// a rectangle, then push another matrix, and draw another rectangle,
+    ///
+    ///     auto _ = renderer.push_matrix({100, 100});
+    ///     renderer.draw_rect({0, 0}, {20, 20});
+    ///
+    ///     auto _ = renderer.push_matrix({50, 50});
+    ///     renderer.draw_rect({0, 0}, {20, 20});
+    ///
+    /// we get two rectangles at (100, 100) and (150, 150) respectively.
     auto push_matrix(xy translate, f32 scale = 1) -> MatrixRAII;
 
     /// Reload all shaders.
