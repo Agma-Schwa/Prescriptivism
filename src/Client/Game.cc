@@ -1,12 +1,11 @@
-module;
-#include <base/Assert.hh>
+#include <Client/Client.hh>
+
+#include <Shared/Validation.hh>
+
+#include <base/Base.hh>
+
 #include <generator>
 #include <ranges>
-module pr.client;
-
-import pr.validation;
-import pr.packets;
-import pr.cards;
 
 using namespace pr;
 using namespace pr::client;

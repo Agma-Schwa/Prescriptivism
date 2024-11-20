@@ -1,6 +1,8 @@
-module;
-#include <base/Assert.hh>
-#include <base/Macros.hh>
+#ifndef PRESCRIPTIVISM_SHARED_UTILS_HH
+#define PRESCRIPTIVISM_SHARED_UTILS_HH
+
+#include <base/Base.hh>
+
 #include <chrono>
 #include <cstdarg>
 #include <format>
@@ -8,10 +10,14 @@ module;
 #include <print>
 #include <string>
 #include <thread>
-export module pr.utils;
-export import base;
-export import base.fs;
-export namespace pr {
+
+#define PR_SERIALISE(...)                                              \
+    void serialise(::pr::ser::Writer& buf) const { buf(__VA_ARGS__); } \
+    void deserialise(::pr::ser::Reader& buf) { buf(__VA_ARGS__); }
+
+#define FWD(x) std::forward<decltype(x)>(x)
+
+namespace pr {
 using namespace base;
 
 struct Profile;
@@ -256,3 +262,5 @@ struct std::formatter<pr::Debug<T>> : std::formatter<std::string> {
     }
 };
 #pragma clang diagnostic pop
+
+#endif // PRESCRIPTIVISM_SHARED_UTILS_HH

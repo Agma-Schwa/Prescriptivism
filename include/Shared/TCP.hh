@@ -1,5 +1,11 @@
-module;
-#include <base/Macros.hh>
+#ifndef PRESCRIPTIVISM_SHARED_TCP_HH
+#define PRESCRIPTIVISM_SHARED_TCP_HH
+
+#include <Shared/Serialisation.hh>
+#include <Shared/Utils.hh>
+
+#include <base/Base.hh>
+
 #include <bit>
 #include <cstring>
 #include <functional>
@@ -8,11 +14,8 @@ module;
 #include <span>
 #include <type_traits>
 #include <vector>
-export module pr.tcp;
-import pr.utils;
-import pr.serialisation;
 
-export namespace pr::net {
+namespace pr::net {
 class TCPServerCallbacks;
 class TCPServer;
 class TCPConnexion;
@@ -26,7 +29,6 @@ constexpr u16 DefaultPort = 33'014;
 class pr::net::ReceiveBuffer {
     LIBBASE_IMMOVABLE(ReceiveBuffer);
 
-private:
     std::span<std::byte> data;
 
 public:
@@ -204,3 +206,5 @@ public:
     /// closed connexions.
     void update_connexions();
 };
+
+#endif // PRESCRIPTIVISM_SHARED_TCP_HH

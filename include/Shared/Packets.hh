@@ -1,28 +1,46 @@
-module;
-#include <base/Assert.hh>
+#ifndef PRESCRIPTIVISM_SHARED_PACKETS_HH
+#define PRESCRIPTIVISM_SHARED_PACKETS_HH
+
+#include <Shared/Cards.hh>
+#include <Shared/Constants.hh>
+#include <Shared/Serialisation.hh>
+#include <Shared/TCP.hh>
+#include <Shared/Utils.hh>
+
+#include <base/Base.hh>
+
 #include <cstring>
-#include <pr/Packets.hh>
-#include <pr/Utils.hh>
 #include <utility>
-export module pr.packets;
 
-import pr.serialisation;
-import pr.constants;
-import pr.cards;
-import pr.utils;
-import pr.tcp;
+#define COMMON_PACKETS(X) \
+    X(Disconnect)         \
+    X(WordChoice)
 
-using IDType = base::u8;
+#define SC_PACKETS(X)   \
+    X(HeartbeatRequest) \
+    X(StartTurn)        \
+    X(EndTurn)          \
+    X(Draw)             \
+    X(StartGame)        \
+    X(AddSoundToStack)  \
+    X(StackLockChanged)
 
-export namespace pr {
+#define CS_PACKETS(X)    \
+    X(HeartbeatResponse) \
+    X(Login)             \
+    X(PlaySingleTarget)  \
+    X(Pass)
+
+namespace pr {
 using PlayerId = u8;
-
 }
 
 // =============================================================================
 //  Common Packet API
 // =============================================================================
-namespace pr::net {
+namespace pr::net::detail {
+using IDType = u8;
+
 template <IDType Id>
 struct PacketBase {
     /// Id of the packet.
@@ -30,9 +48,9 @@ struct PacketBase {
     /// Note that server packets and client packets have different IDs!
     IDType id = Id;
 };
-} // namespace pr::net
+} // namespace pr::net::detail
 
-#define DefinePacket(name) export struct name : ::pr::net::PacketBase<+ID::name>
+#define DefinePacket(name) struct name : ::pr::net::detail::PacketBase<+ID::name>
 #define Ctor(name)             \
 private:                       \
     friend net::ReceiveBuffer; \
@@ -46,13 +64,13 @@ public:                        \
 //  Enumerations
 // =============================================================================
 namespace pr::packets::common {
-enum struct ID : IDType {
+enum struct ID : net::detail::IDType {
 #define X(name) name,
     COMMON_PACKETS(X)
 #undef X
 };
 
-#define X(name) export struct name;
+#define X(name) struct name;
 COMMON_PACKETS(X)
 #undef X
 } // namespace pr::packets::common
@@ -65,7 +83,7 @@ enum struct ID : std::underlying_type_t<common::ID> {
 #undef X
 };
 
-#define X(name) export using common::name;
+#define X(name) using common::name;
 COMMON_PACKETS(X)
 #undef X
 } // namespace pr::packets::sc
@@ -78,7 +96,7 @@ enum struct ID : std::underlying_type_t<common::ID> {
 #undef X
 };
 
-#define X(name) export using common::name;
+#define X(name) using common::name;
 COMMON_PACKETS(X)
 #undef X
 } // namespace pr::packets::cs
@@ -265,7 +283,7 @@ DefinePacket(Pass) {
 //  Packet Processing
 // =============================================================================
 namespace pr::packets {
-static_assert(std::is_same_v<IDType, u8>, "TODO: Handle larger packet IDs");
+static_assert(std::is_same_v<net::detail::IDType, u8>, "TODO: Handle larger packet IDs");
 
 template <typename Packet, typename Handler, typename... Args>
 auto Dispatch(Handler& h, net::ReceiveBuffer& buf, Args&&... args) -> Result<bool> {
@@ -281,7 +299,7 @@ auto Dispatch(Handler& h, net::ReceiveBuffer& buf, Args&&... args) -> Result<boo
 /// we should close the connexion) or a bool indicating whether the packet
 /// is complete (if this is false, stop processing packets until we have
 /// more data).
-export template <typename Handler>
+template <typename Handler>
 auto HandleClientSidePacket(Handler& h, net::ReceiveBuffer& buf) -> Result<bool> {
     Assert(not buf.empty(), "No packet to handle?");
     switch (auto ty = buf.peek<sc::ID>().value()) {
@@ -300,7 +318,7 @@ auto HandleClientSidePacket(Handler& h, net::ReceiveBuffer& buf) -> Result<bool>
 /// we should close the connexion) or a bool indicating whether the packet
 /// is complete (if this is false, stop processing packets until we have
 /// more data).
-export template <typename Handler>
+template <typename Handler>
 auto HandleServerSidePacket(Handler& h, net::TCPConnexion& client, net::ReceiveBuffer& buf) -> Result<bool> {
     Assert(not buf.empty(), "No packet to handle?");
     switch (auto ty = buf.peek<cs::ID>().value()) {
@@ -312,4 +330,6 @@ auto HandleServerSidePacket(Handler& h, net::TCPConnexion& client, net::ReceiveB
 #undef X
     }
 }
-}
+} // namespace pr::packets
+
+#endif // PRESCRIPTIVISM_SHARED_PACKETS_HH

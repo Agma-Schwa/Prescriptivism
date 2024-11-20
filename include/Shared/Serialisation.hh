@@ -1,5 +1,10 @@
-module;
-#include <base/Macros.hh>
+#ifndef PRESCRIPTIVISM_SHARED_SERIALISATION_HH
+#define PRESCRIPTIVISM_SHARED_SERIALISATION_HH
+
+#include <Shared/Utils.hh>
+
+#include <base/Base.hh>
+
 #include <cstring>
 #include <expected>
 #include <memory>
@@ -7,8 +12,6 @@ module;
 #include <string>
 #include <utility>
 #include <vector>
-export module pr.serialisation;
-import pr.utils;
 
 /// Serialisation module.
 ///
@@ -30,7 +33,7 @@ import pr.utils;
 ///     static void serialise(Writer& w, const Foo& f) { ... }
 ///     static void deserialise(Reader& r, const Foo& f) { ... }
 /// };
-export namespace pr::ser {
+namespace pr::ser {
 class Reader;
 class Writer;
 
@@ -327,7 +330,7 @@ public:
     }
 };
 
-export namespace pr::ser {
+namespace pr::ser {
 template <usz n>
 Magic(const char (&)[n]) -> Magic<n - 1>;
 
@@ -356,3 +359,5 @@ auto pr::ser::Serialise(const T& t) -> std::vector<std::byte> {
     w << t;
     return std::move(w.data);
 }
+
+#endif // PRESCRIPTIVISM_SHARED_SERIALISATION_HH

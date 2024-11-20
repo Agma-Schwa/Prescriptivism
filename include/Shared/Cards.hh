@@ -1,14 +1,15 @@
-module;
+#ifndef PRESCRIPTIVISM_SHARED_CARDS_HH
+#define PRESCRIPTIVISM_SHARED_CARDS_HH
+
+#include <Shared/Serialisation.hh>
+#include <Shared/Utils.hh>
+
 #include <array>
-#include <pr/Utils.hh>
 #include <ranges>
 #include <string_view>
 #include <vector>
-export module pr.cards;
-import pr.utils;
-import pr.serialisation;
 
-export namespace pr {
+namespace pr {
 enum struct CardIdValue : u16 {
     // Consonants
     // clang-format off
@@ -307,9 +308,11 @@ static_assert([] {
 }(), "Card database integrity check");*/
 } // namespace pr::impl
 
-export namespace pr {
+namespace pr {
 constexpr std::span<const CardData> CardDatabase = impl::CardDatabaseImpl;
 constexpr std::span<const CardData> CardDatabaseVowels = CardDatabase.subspan(+CardIdValue::$$VowelStart, +CardIdValue::$$VowelEnd - +CardIdValue::$$VowelStart + 1);
 constexpr std::span<const CardData> CardDatabaseConsonants = CardDatabase.subspan(+CardIdValue::$$ConsonantStart, +CardIdValue::$$ConsonantEnd - +CardIdValue::$$ConsonantStart + 1);
 constexpr std::span<const CardData> CardDatabasePowers = CardDatabase.subspan(+CardIdValue::$$PowersStart, +CardIdValue::$$PowersEnd - +CardIdValue::$$PowersStart + 1);
 }
+
+#endif // PRESCRIPTIVISM_SHARED_CARDS_HH

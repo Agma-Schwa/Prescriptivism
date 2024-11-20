@@ -1,21 +1,16 @@
-module;
+#include <Client/gl-headers.hh>
+#include <Client/UI/UI.hh>
+
+#include <base/Base.hh>
+#include <base/Text.hh>
+#include <SDL3/SDL.h>
+
 #include <algorithm>
-#include <base/Assert.hh>
-#include <base/Macros.hh>
 #include <cmath>
 #include <numeric>
-#include <pr/gl-headers.hh>
-#include <pr/UIMacros.hh>
 #include <ranges>
-#include <SDL3/SDL.h>
 #include <string_view>
 #include <utility>
-module pr.client.ui;
-
-import base.text;
-import pr.client.utils;
-import pr.client.render;
-import pr.client.render.gl;
 
 using namespace pr;
 using namespace pr::client;

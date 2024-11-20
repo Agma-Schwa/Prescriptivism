@@ -1,24 +1,44 @@
-module;
+#ifndef PRESCRIPTIVISM_CLIENT_UI_HH
+#define PRESCRIPTIVISM_CLIENT_UI_HH
+
+#include <Client/Render/GL.hh>
+#include <Client/Render/Render.hh>
+
+#include <Shared/Cards.hh>
+#include <Shared/Constants.hh>
+#include <Shared/Utils.hh>
+
+#include <base/Base.hh>
+#include <base/Text.hh>
+#include <SDL3/SDL.h>
+
 #include <algorithm>
-#include <base/Assert.hh>
-#include <base/Macros.hh>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <numeric>
-#include <pr/Utils.hh>
 #include <ranges>
-#include <SDL3/SDL.h>
-export module pr.client.ui;
 
-import base.text;
-import pr.cards;
-import pr.utils;
-import pr.constants;
-import pr.client.render;
-import pr.client.render.gl;
+// Define a setter that updates the property value if it is
+// different, and, if so, also tells the element to refresh
+// itself on the next frame.
+#define TRIVIAL_CACHING_SETTER(class, type, property, ...) \
+    void class ::set_##property(type new_value) {          \
+        if (_##property == new_value) return;              \
+        _##property = new_value;                           \
+        needs_refresh = true;                              \
+        __VA_ARGS__;                                       \
+    }
 
-export namespace pr::client {
+#define CACHING_SETTER(class, type, name, target, ...) \
+    void class ::set_##name(type new_value) {          \
+        if (target == new_value) return;               \
+        target = new_value;                            \
+        needs_refresh = true;                          \
+        __VA_ARGS__;                                   \
+    }
+
+namespace pr::client {
 struct Position;
 class Element;
 class Button;
@@ -875,3 +895,5 @@ struct std::formatter<pr::client::Position> : std::formatter<std::string> {
         );
     }
 };
+
+#endif // PRESCRIPTIVISM_CLIENT_UI_HH

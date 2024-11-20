@@ -1,9 +1,7 @@
+#include <Server/Server.hh>
+
 #include <clopts.hh>
 #include <print>
-
-import pr.server;
-import pr.tcp;
-import pr.utils;
 
 using namespace pr;
 using namespace command_line_options;

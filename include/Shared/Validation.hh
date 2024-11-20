@@ -1,12 +1,14 @@
-module;
-#include <span>
-#include <cmath>
-export module pr.validation;
-import pr.cards;
-import pr.constants;
-import pr.utils;
+#ifndef PRESCRIPTIVISM_SHARED_VALIDATION_HH
+#define PRESCRIPTIVISM_SHARED_VALIDATION_HH
 
-export namespace pr::validation {
+#include <Shared/Cards.hh>
+#include <Shared/Constants.hh>
+#include <Shared/Utils.hh>
+
+#include <cmath>
+#include <span>
+
+namespace pr::validation {
 enum struct InitialWordValidationResult {
     Valid,
     NotAPermutation,
@@ -71,4 +73,6 @@ bool ValidateP_SpellingReform(const T& on, usz at) {
     // on a stack that is not already locked.
     return on.is_own_word() and not on.stack_is_locked(at);
 }
-}
+} // namespace pr::validation
+
+#endif // PRESCRIPTIVISM_SHARED_VALIDATION_HH

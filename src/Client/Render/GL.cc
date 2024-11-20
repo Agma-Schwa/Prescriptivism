@@ -1,10 +1,6 @@
-module;
-#include <base/Assert.hh>
-#include <base/Macros.hh>
-#include <pr/gl-headers.hh>
+#include <Client/Render/GL.hh>
+
 #include <webp/decode.h>
-module pr.client.render.gl;
-import pr.utils;
 
 using namespace gl;
 using namespace pr;

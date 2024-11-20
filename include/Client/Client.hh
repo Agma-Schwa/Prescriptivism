@@ -1,29 +1,27 @@
-module;
-#include <base/Assert.hh>
-#include <base/Macros.hh>
+#ifndef PRESCRIPTIVISM_CLIENT_CLIENT_HH
+#define PRESCRIPTIVISM_CLIENT_CLIENT_HH
+
+#include <Client/Render/GL.hh>
+#include <Client/Render/Render.hh>
+#include <Client/UI/UI.hh>
+
+#include <Shared/Cards.hh>
+#include <Shared/Constants.hh>
+#include <Shared/Packets.hh>
+#include <Shared/TCP.hh>
+#include <Shared/Utils.hh>
+
+#include <base/Base.hh>
+
 #include <functional>
+#include <generator>
 #include <memory>
-#include <pr/Packets.hh>
 #include <ranges>
 #include <thread>
 #include <vector>
-#include <generator>
-export module pr.client;
-
-import pr.utils;
-import pr.cards;
-import pr.packets;
-import pr.constants;
-import pr.client.ui;
-import pr.client.render;
-import pr.client.render.gl;
-import pr.tcp;
-
-export namespace pr::client {
-class Client;
-}
 
 namespace pr::client {
+class Client;
 class MenuScreen;
 class ErrorScreen;
 class ConnexionScreen;
@@ -285,3 +283,5 @@ private:
     void Tick();
     void TickNetworking();
 };
+
+#endif // PRESCRIPTIVISM_CLIENT_CLIENT_HH

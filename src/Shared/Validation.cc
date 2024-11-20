@@ -1,10 +1,8 @@
-module;
+#include <Shared/Validation.hh>
+
 #include <algorithm>
 #include <array>
 #include <ranges>
-module pr.validation;
-import pr.utils;
-import pr.cards;
 
 using namespace pr;
 
@@ -38,4 +36,3 @@ auto validation::ValidateInitialWord(constants::Word word, constants::Word origi
     // Else all seems good
     return Valid;
 }
-

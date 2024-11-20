@@ -1,19 +1,16 @@
-module;
+#include <Client/Client.hh>
+
+#include <Shared/Validation.hh>
+
+#include <base/Base.hh>
+#include <base/Text.hh>
+#include <SDL3/SDL.h>
+
 #include <algorithm>
-#include <base/Assert.hh>
-#include <base/Macros.hh>
 #include <chrono>
 #include <functional>
 #include <ranges>
-#include <SDL3/SDL.h>
 #include <thread>
-module pr.client;
-
-import base.text;
-
-import pr.utils;
-import pr.packets;
-import pr.validation;
 
 using namespace pr;
 using namespace pr::client;

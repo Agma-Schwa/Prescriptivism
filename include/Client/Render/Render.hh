@@ -1,23 +1,25 @@
-module;
+#ifndef PRESCRIPTIVISM_CLIENT_RENDER_RENDER_HH
+#define PRESCRIPTIVISM_CLIENT_RENDER_RENDER_HH
+
+#include <Client/Render/GL.hh>
+
+#include <Shared/Serialisation.hh>
+#include <Shared/Utils.hh>
+
 #include <base/Macros.hh>
+#include <base/Text.hh>
 #include <freetype/freetype.h>
 #include <glm/glm.hpp>
-#include <hb.h>
-#include <memory>
-#include <pr/Utils.hh>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
+
+#include <hb.h>
+#include <memory>
 #include <stop_token>
 #include <unordered_map>
 #include <vector>
-export module pr.client.render;
 
-import pr.utils;
-import base.text;
-import pr.client.render.gl;
-import pr.serialisation;
-
-export namespace pr::client {
+namespace pr::client {
 struct TextCluster;
 struct Colour;
 struct AABB;
@@ -75,7 +77,7 @@ enum struct pr::client::Cursor : base::u32 {
     IBeam = SDL_SYSTEM_CURSOR_TEXT,
 };
 
-export namespace pr::client {
+namespace pr::client {
 LIBBASE_DEFINE_FLAG_ENUM(TextStyle);
 }
 
@@ -698,3 +700,5 @@ private:
     /// Set the current cursor.
     void SetCursorImpl();
 };
+
+#endif // PRESCRIPTIVISM_CLIENT_RENDER_RENDER_HH

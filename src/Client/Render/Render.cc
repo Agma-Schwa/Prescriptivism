@@ -1,34 +1,25 @@
-module;
+#include <Client/Render/Render.hh>
+
+#include <base/FS.hh>
+#include <base/Text.hh>
+#include <SDL3/SDL.h>
+#include <webp/decode.h>
+
 #include <algorithm>
-#include <base/Assert.hh>
-#include <base/Macros.hh>
 #include <cstring>
 #include <hb-ft.h>
 #include <hb.h>
-#include <libassert/assert.hpp>
 #include <memory>
-#include <pr/gl-headers.hh>
+#include <mutex>
 #include <ranges>
-#include <SDL3/SDL.h>
-#include <webp/decode.h>
+#include <stop_token>
 
 // clang-format off
 // Include order matters here!
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <freetype/tttables.h>
-
-#include <mutex>
-#include <stop_token>
 // clang-format on
-
-module pr.client.render;
-import pr.client.utils;
-import pr.client.render.gl;
-import pr.serialisation;
-
-import base.text;
-import base.fs;
 
 using namespace gl;
 using namespace pr;

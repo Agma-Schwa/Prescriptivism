@@ -1,34 +1,31 @@
-module;
+#ifndef PRESCRIPTIVISM_SERVER_SERVER_HH
+#define PRESCRIPTIVISM_SERVER_SERVER_HH
+
+#include <Shared/Cards.hh>
+#include <Shared/Constants.hh>
+#include <Shared/Packets.hh>
+#include <Shared/TCP.hh>
+#include <Shared/Utils.hh>
+
+#include <base/Base.hh>
+
 #include <algorithm>
-#include <base/Assert.hh>
-#include <base/Macros.hh>
 #include <chrono>
 #include <map>
 #include <memory>
-#include <pr/Packets.hh>
 #include <random>
 #include <ranges>
 #include <vector>
-export module pr.server;
-import pr.tcp;
 
-import base;
-import pr.utils;
-import pr.packets;
-import pr.cards;
-import pr.constants;
-
-export namespace pr::server {
+namespace pr::server {
 class Card;
 class Player;
 class Server;
 class Stack;
 class Word;
-}
 
-namespace pr::server {
 using DisconnectReason = packets::sc::Disconnect::Reason;
-}
+} // namespace pr::server
 
 class pr::server::Card {
     LIBBASE_MOVE_ONLY(Card);
@@ -216,3 +213,5 @@ private:
     bool accept(net::TCPConnexion& connexion) override;
     void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;
 };
+
+#endif // PRESCRIPTIVISM_SERVER_SERVER_HH

@@ -1,11 +1,11 @@
-module;
+#include <Shared/Utils.hh>
+
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <print>
 #include <queue>
 #include <thread>
-module pr.utils;
 
 using namespace pr;
 
@@ -70,4 +70,3 @@ SilenceLog::SilenceLog() {
 SilenceLog::~SilenceLog() {
     Enabled = true;
 }
-

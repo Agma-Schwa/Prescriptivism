@@ -1,23 +1,20 @@
-module;
-#include <base/Assert.hh>
-#include <base/Macros.hh>
+#ifndef PRESCRIPTIVISM_CLIENT_RENDER_GL_HH
+#define PRESCRIPTIVISM_CLIENT_RENDER_GL_HH
+
+#include <Client/gl-headers.hh>
+
+#include <Shared/Serialisation.hh>
+#include <Shared/Utils.hh>
+
+#include <base/Base.hh>
+#include <base/FS.hh>
 #include <glm/gtc/type_ptr.hpp>
-#include <pr/gl-headers.hh>
-#include <pr/Utils.hh>
+
 #include <utility>
-export module pr.client.render.gl;
 
-import pr.utils;
-import pr.client.utils;
-import pr.serialisation;
-
-import base.fs;
-
+namespace pr::client {
 using namespace gl;
-using namespace pr;
-using namespace pr::client;
 
-export namespace pr::client {
 struct Size;
 
 class DrawableTexture;
@@ -37,6 +34,9 @@ using glm::vec4;
 
 enum class Axis : u8;
 enum class VertexLayout : u8;
+
+template <glm::length_t size>
+using Vertices = std::span<const vec<size, f32>>;
 
 Axis flip(Axis a);
 } // namespace pr::client
@@ -67,17 +67,17 @@ struct pr::ser::Serialiser<glm::vec<n, T>> {
 };
 
 /// Supported vertex layouts.
-enum class client::VertexLayout : u8 {
+enum class pr::client::VertexLayout : base::u8 {
     Position2D,        /// vec2f position
     PositionTexture4D, /// vec4f position(xy)+texture(zw)
 };
 
-enum class client::Axis : u8 {
+enum class pr::client::Axis : base::u8 {
     X,
     Y,
 };
 
-Axis client::flip(Axis a) {
+inline auto pr::client::flip(Axis a) -> Axis {
     return a == Axis::X ? Axis::Y : Axis::X;
 }
 
@@ -113,7 +113,7 @@ private:
 template <auto deleter>
 struct Descriptor {
 protected:
-    GLuint descriptor{};
+    gl::GLuint descriptor{};
 
     Descriptor() = default;
 
@@ -134,10 +134,7 @@ public:
     }
 };
 
-template <glm::length_t size>
-using Vertices = std::span<const vec<size, f32>>;
-
-class client::VertexBuffer : Descriptor<glDeleteBuffers> {
+class pr::client::VertexBuffer : Descriptor<glDeleteBuffers> {
     friend VertexArrays;
 
     GLenum draw_mode;
@@ -189,7 +186,7 @@ private:
     }
 };
 
-class client::VertexArrays : Descriptor<glDeleteVertexArrays> {
+class pr::client::VertexArrays : Descriptor<glDeleteVertexArrays> {
     VertexLayout layout;
     std::vector<VertexBuffer> buffers;
 
@@ -257,7 +254,7 @@ private:
     }
 };
 
-class client::ShaderProgram : Descriptor<glDeleteProgram> {
+class pr::client::ShaderProgram : Descriptor<glDeleteProgram> {
     struct Shader : Descriptor<glDeleteShader> {
         friend ShaderProgram;
         Shader(GLenum type, std::span<const char> source) {
@@ -339,7 +336,7 @@ private:
 
 /// This is an internal handle to texture data. You probably
 /// wand DrawableTexture instead.
-class client::Texture : Descriptor<glDeleteTextures> {
+class pr::client::Texture : Descriptor<glDeleteTextures> {
     GLenum target{};
     GLenum unit{};
     GLenum format{};
@@ -428,7 +425,7 @@ public:
     }
 };
 
-class client::DrawableTexture : public Texture {
+class pr::client::DrawableTexture : public Texture {
     VertexArrays vao{VertexLayout::PositionTexture4D};
 
 public:
@@ -489,3 +486,5 @@ private:
         };
     }
 };
+
+#endif // PRESCRIPTIVISM_CLIENT_RENDER_GL_HH

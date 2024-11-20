@@ -212,6 +212,16 @@ IfMacros: []
 ## Merge include blocks, sort them, and resplit.
 IncludeBlocks: Regroup
 
+IncludeCategories:
+- Regex: '^<(Client|Server)/'
+  Priority: 1
+- Regex: '^<Shared/'
+  Priority: 2
+- Regex: '.*/.*'
+  Priority: 3
+- Regex: '^<'
+  Priority: 4
+
 ## Enable outdenting `private:`.
 # NOTE: This setting currently causes the content of structs
 # to be indented twice.

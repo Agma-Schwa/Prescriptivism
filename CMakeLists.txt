@@ -97,6 +97,10 @@ if (PRESCRIPTIVISM_ENABLE_SANITISERS)
     )
 endif()
 
+target_include_directories(options INTERFACE
+    "${PROJECT_SOURCE_DIR}/include"
+)
+
 ## ============================================================================
 ##  Submodules and include dirs.
 ## ============================================================================
@@ -155,23 +159,19 @@ set_target_properties(runner PROPERTIES
 ##  Shared
 ## ============================================================================
 file(GLOB_RECURSE common_sources src/Shared/*.cc)
-file(GLOB_RECURSE common_modules lib/Shared/*.ccm)
-
+file(GLOB_RECURSE common_headers include/Shared/*.hh)
 add_library(PrescriptivismShared STATIC ${common_sources})
 target_link_libraries(PrescriptivismShared PUBLIC options libbase)
-target_sources(PrescriptivismShared PUBLIC FILE_SET CXX_MODULES FILES ${common_modules})
-target_include_directories(PrescriptivismShared PUBLIC
-    "${PROJECT_SOURCE_DIR}/include/Shared"
-)
+target_sources(PrescriptivismShared PUBLIC FILE_SET HEADERS FILES ${common_headers})
 
 ## ============================================================================
 ##  Server
 ## ============================================================================
 file(GLOB_RECURSE server_sources src/Server/*.cc)
-file(GLOB_RECURSE server_modules lib/Server/*.ccm)
+file(GLOB_RECURSE server_headers include/Server/*.hh)
 
 add_executable(PrescriptivismServer ${server_sources})
-target_sources(PrescriptivismServer PUBLIC FILE_SET CXX_MODULES FILES ${server_modules})
+target_sources(PrescriptivismServer PUBLIC FILE_SET HEADERS FILES ${server_headers})
 target_link_libraries(PrescriptivismServer PRIVATE
     PrescriptivismShared
 )
@@ -180,10 +180,10 @@ target_link_libraries(PrescriptivismServer PRIVATE
 ##  Client
 ## ============================================================================
 file(GLOB_RECURSE client_sources src/Client/*.cc)
-file(GLOB_RECURSE client_modules lib/Client/*.ccm)
+file(GLOB_RECURSE client_headers include/Client/*.hh)
 
 add_executable(Prescriptivism ${client_sources})
-target_sources(Prescriptivism PUBLIC FILE_SET CXX_MODULES FILES ${client_modules})
+target_sources(Prescriptivism PUBLIC FILE_SET HEADERS FILES ${client_headers})
 target_link_libraries(Prescriptivism PRIVATE
     PrescriptivismShared
     SDL3::SDL3
@@ -198,10 +198,6 @@ target_link_libraries(Prescriptivism PRIVATE
 target_compile_options(Prescriptivism PRIVATE
     "--embed-dir=${PROJECT_SOURCE_DIR}/assets"
     -Wno-c23-extensions
-)
-
-target_include_directories(Prescriptivism PRIVATE
-    "${PROJECT_SOURCE_DIR}/include/Client"
 )
 
 ## Allow overriding the default font w/o having to make it part of the project;

@@ -1,6 +1,7 @@
-module;
-#include <base/Assert.hh>
-#include <base/Macros.hh>
+#include <Shared/TCP.hh>
+
+#include <base/Base.hh>
+
 #include <cerrno>
 #include <cstring>
 #include <functional>
@@ -14,11 +15,12 @@ module;
 // =============================================================================
 #ifdef __linux__
 #    include <arpa/inet.h>
-#    include <fcntl.h>
-#    include <netdb.h>
 #    include <netinet/in.h>
 #    include <sys/socket.h>
 #    include <sys/types.h>
+
+#    include <fcntl.h>
+#    include <netdb.h>
 #    include <unistd.h>
 
 // =============================================================================
@@ -27,8 +29,6 @@ module;
 #else
 #    error TODO: Non-linux support
 #endif
-
-module pr.tcp;
 
 using namespace pr;
 using namespace pr::net;

@@ -1,11 +1,11 @@
-module;
-#include <algorithm>
+#include <Client/UI/UI.hh>
+
 #include <base/Macros.hh>
-#include <cmath>
-#include <pr/UIMacros.hh>
-#include <ranges>
 #include <SDL3/SDL.h>
-module pr.client.ui;
+
+#include <algorithm>
+#include <cmath>
+#include <ranges>
 
 using namespace pr;
 using namespace pr::client;
