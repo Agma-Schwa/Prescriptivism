@@ -69,18 +69,8 @@ void Element::UpdateBoundingBox(Size size) { SetBoundingBox(_bounding_box.origin
 // =============================================================================
 //  Widget
 // =============================================================================
-
 Widget::Widget(Element* parent, Position pos) : _parent(parent), pos(pos) {
     Assert(parent, "Every widget must have a parent!");
-}
-auto Widget::rbox() -> AABB { return {rpos(), bounding_box.size()}; }
-auto Widget::rpos() -> xy {
-    DebugAssert(
-        _bb_size_initialised,
-        "Accessing rpos() before bounding box was set! NEVER do "
-        "UpdateBoundingBox(rpos()) or SetBoundingBox(rpos(), ...)!"
-    );
-    return pos.resolve(parent.bounding_box, bounding_box.size());
 }
 
 bool Widget::has_parent(Element* other) {
@@ -104,6 +94,20 @@ auto Widget::parent_screen() -> Screen& {
         if (auto screen = e->cast<Screen>()) return *screen;
         e = &e->as<Widget>().parent;
     }
+}
+
+auto Widget::PushTransform(Renderer& r, f32 scale) -> TransformRAII {
+    return TransformRAII{r, *this, scale};
+}
+
+auto Widget::rbox() -> AABB { return {rpos(), bounding_box.size()}; }
+auto Widget::rpos() -> xy {
+    DebugAssert(
+        _bb_size_initialised,
+        "Accessing rpos() before bounding box was set! NEVER do "
+        "UpdateBoundingBox(rpos()) or SetBoundingBox(rpos(), ...)!"
+    );
+    return pos.resolve(parent.bounding_box, bounding_box.size());
 }
 
 auto Widget::selected_child(xy) -> SelectResult {
@@ -143,6 +147,17 @@ void Widget::set_needs_refresh(bool new_value) {
     // positions of their children.
     if (auto g = parent.cast<Group>())
         g->needs_refresh = true;
+}
+
+Widget::TransformRAII::TransformRAII(Renderer& r, Widget& w, f32 scale)
+    : m{r.push_matrix(w.bounding_box.origin(), scale)},
+      old_box{w.bounding_box},
+      w{w} {
+    w.SetBoundingBox(w.bounding_box.scale(scale));
+}
+
+Widget::TransformRAII::~TransformRAII() {
+    w.SetBoundingBox(old_box);
 }
 
 auto WidgetHolder::index_of(Widget& c) -> std::optional<u32> {
@@ -215,7 +230,7 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture, UpdateDimensions());
 // =============================================================================
 auto Group::HoverSelectHelper(
     xy rel_pos,
-    auto (Widget::*accessor)(xy) -> SelectResult,
+    auto (Widget::*accessor)(xy)->SelectResult,
     Selectable Widget::* property
 ) -> SelectResult {
     auto Get = [&]<typename T>(T&& range) -> SelectResult {
@@ -244,7 +259,7 @@ void Group::clear() {
 }
 
 void Group::draw(Renderer& r) {
-    auto _ = r.push_matrix(bounding_box.origin());
+    auto _ = PushTransform(r);
     for (auto& c : visible_elements()) c.draw(r);
 }
 

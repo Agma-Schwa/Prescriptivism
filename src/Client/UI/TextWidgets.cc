@@ -202,7 +202,7 @@ void TextBox::draw(Renderer& r) {
 
 void TextBox::draw(Renderer& r, Colour text_colour) {
     auto& text = label.empty and placeholder.has_value() ? *placeholder : label;
-    auto _ = r.push_matrix(bounding_box.origin());
+    auto _ = PushTransform(r);
     auto pos = TextPos(text);
     r.draw_text(text, pos, text_colour);
     if (cursor_offs != -1) {

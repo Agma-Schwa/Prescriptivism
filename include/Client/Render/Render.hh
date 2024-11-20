@@ -200,6 +200,7 @@ private:
     friend constexpr bool operator==(xy, xy) = default;
     friend constexpr xy operator+(xy a, xy b) { return {a.x + b.x, a.y + b.y}; }
     friend constexpr xy operator-(xy a, xy b) { return {a.x - b.x, a.y - b.y}; }
+    friend constexpr xy operator*(xy a, f32 b) { return {i32(a.x * b), i32(a.y * b)}; }
 };
 
 /// Axis-aligned bounding box.
@@ -233,6 +234,11 @@ struct pr::client::AABB {
 
     /// Get the origin point of this box.
     [[nodiscard]] constexpr auto origin() const -> xy { return min; }
+
+    /// Scale this box.
+    [[nodiscard]] constexpr auto scale(f32 amount) const -> AABB {
+        return {min, min + xy((max - min) * amount)};
+    }
 
     /// Shrink the box by a given amount.
     [[nodiscard]] constexpr auto shrink(i32 amount) const -> AABB { return shrink(amount, amount); }
@@ -522,6 +528,8 @@ class pr::client::Renderer {
     LIBBASE_MOVE_ONLY(Renderer);
 
     friend AssetLoader;
+
+public:
     class [[nodiscard]] MatrixRAII {
         LIBBASE_IMMOVABLE(MatrixRAII);
         friend Renderer;
@@ -532,6 +540,7 @@ class pr::client::Renderer {
         ~MatrixRAII() { r.matrix_stack.pop_back(); }
     };
 
+private:
     SDLWindowHandle window;
     SDLGLContextStateHandle context;
 
@@ -649,6 +658,8 @@ public:
     auto frame() -> Frame;
 
     /// Push a transform matrix.
+    ///
+    /// For UI elements, prefer calling Widget::push_transform() instead.
     ///
     /// This makes it so that the translation and scaling passed here
     /// are applied to everything drawn until the matrix is popped. The

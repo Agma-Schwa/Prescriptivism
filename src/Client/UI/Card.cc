@@ -1,5 +1,7 @@
 #include <Client/UI/UI.hh>
 
+#include <Shared/Packets.hh>
+
 #include <base/Base.hh>
 
 #include <format>
@@ -314,29 +316,7 @@ void Card::draw(Renderer& r) {
         BorderRadius[scale]
     );
 
-    {
-        auto _ = r.push_matrix(bounding_box.origin());
-        code.draw(r);
-        image.draw(r);
-        middle.draw(r);
-        description.draw(r);
-
-        // Do not draw the name if this is a small sound card.
-        if (scale > OtherPlayer or id.is_power())
-            name.draw(r);
-
-        if (id.is_sound()) {
-            auto offs = Padding[scale];
-            for (int i = 0; i < count; ++i) r.draw_rect(
-                Position{-3 * offs, -(2 * offs + 2 * i * offs)}
-                    .hoffset(-Border[scale].ht)
-                    .voffset(-Border[scale].wd)
-                    .resolve(bounding_box, {5 * offs, offs}),
-                {5 * offs, offs},
-                Colour::Black
-            );
-        }
-    }
+    DrawChildren(r);
 
     // Draw a white rectangle on top of this card if it is inactive.
     if (overlay == Overlay::Inactive) r.draw_rect(
@@ -348,6 +328,30 @@ void Card::draw(Renderer& r) {
     // TODO: Sounds that have been deleted or added to the word
     //       should be greyed out / orange (or a plus in the corner),
     //       respectively.
+}
+
+void Card::DrawChildren(Renderer& r) {
+    auto _ = PushTransform(r);
+    code.draw(r);
+    image.draw(r);
+    middle.draw(r);
+    description.draw(r);
+
+    // Do not draw the name if this is a small sound card.
+    if (scale > OtherPlayer or id.is_power())
+        name.draw(r);
+
+    if (id.is_sound()) {
+        auto offs = Padding[scale];
+        for (int i = 0; i < count; ++i) r.draw_rect(
+            Position{-3 * offs, -(2 * offs + 2 * i * offs)}
+                .hoffset(-Border[scale].ht)
+                .voffset(-Border[scale].wd)
+                .resolve(bounding_box, {5 * offs, offs}),
+            {5 * offs, offs},
+            Colour::Black
+        );
+    }
 }
 
 void Card::refresh(Renderer& r) {
@@ -492,7 +496,7 @@ void CardStacks::Stack::draw(Renderer& r) {
     }
 
     if (locked) {
-        auto _ = r.push_matrix(bounding_box.origin());
+        auto _ = PushTransform(r);
         auto cs = Card::CardSize[scale];
         auto b = Card::Border[scale];
         auto p = Card::Padding[scale];

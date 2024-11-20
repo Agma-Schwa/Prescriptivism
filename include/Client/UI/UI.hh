@@ -258,6 +258,18 @@ class pr::client::Widget : public Element {
     Readonly(Element&, parent);
     Property(bool, needs_refresh, true);
 
+    class [[nodiscard]] TransformRAII {
+        friend Widget;
+        LIBBASE_IMMOVABLE(TransformRAII);
+        Renderer::MatrixRAII m;
+        AABB old_box;
+        Widget& w;
+        TransformRAII(Renderer& r, Widget& w, f32 scale);
+
+    public:
+        ~TransformRAII();
+    };
+
 public:
     bool hovered  : 1 = false; ///< Element is being hovered.
     bool selected : 1 = false; ///< Element is selected.
@@ -296,6 +308,16 @@ public:
 
     /// Get the widget’s parent screen
     auto parent_screen() -> Screen&;
+
+    /// Set the origin and scale used to draw the children of this widget;
+    /// this *must* be called before any children are drawn, otherwise, the
+    /// children’s positions will be incorrect.
+    ///
+    /// Prefer this over calling Renderer::push_matrix() directly; otherwise,
+    /// elements may end up centered incorrectly.
+    ///
+    /// \see Renderer::push_matrix().
+    auto PushTransform(Renderer& r, f32 scale = 1) -> TransformRAII;
 
     /// Recompute bounding box etc.
     virtual void refresh(Renderer&) {}
@@ -631,6 +653,9 @@ public:
 
     void draw(Renderer& r) override;
     void refresh(Renderer&) override;
+
+private:
+    void DrawChildren(Renderer& r);
 };
 
 /// A group of widgets, arranged horizontally or vertically.
