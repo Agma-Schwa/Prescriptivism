@@ -13,6 +13,10 @@
 #include <utility>
 #include <vector>
 
+#define PR_SERIALISE(...)                                              \
+    void serialise(::pr::ser::Writer& buf) const { buf(__VA_ARGS__); } \
+    void deserialise(::pr::ser::Reader& buf) { buf(__VA_ARGS__); }
+
 /// Serialisation module.
 ///
 /// This defines a Reader and Writer pair for serialising and deserialising

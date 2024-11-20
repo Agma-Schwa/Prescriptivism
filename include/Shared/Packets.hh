@@ -332,4 +332,8 @@ auto HandleServerSidePacket(Handler& h, net::TCPConnexion& client, net::ReceiveB
 }
 } // namespace pr::packets
 
+#undef Serialisable
+#undef DefinePacket
+#undef Ctor
+
 #endif // PRESCRIPTIVISM_SHARED_PACKETS_HH
