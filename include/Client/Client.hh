@@ -169,9 +169,6 @@ class pr::client::GameScreen : public Screen {
     /// All players, including us.
     std::vector<Player*> all_players;
 
-    /// Map from card groups to their players.
-    std::unordered_map<CardStacks*, Player*> player_map;
-
     /// Our player object.
     Player us;
 

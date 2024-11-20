@@ -45,9 +45,7 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
     Assert(c);
     auto stack = c->parent.cast<CardStacks::Stack>();
     if (not stack) return nullptr;
-    auto p = player_map.find(&stack->parent);
-    if (p == player_map.end()) return nullptr;
-    return p->second;
+    return stack->parent.owner;
 }
 
 void GameScreen::ResetHand() {
@@ -173,7 +171,7 @@ void GameScreen::TickSingleTarget() {
 
     auto PlaySingleTarget = [&] {
         auto& stack = selected_element->as<CardStacks::Stack>();
-        auto owner = player_map.at(&stack.parent);
+        auto owner = stack.parent.owner;
         Assert(owner, "Selected card without owner?");
 
         // Tell the server about this.
@@ -255,11 +253,10 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     // Build the player map *after* creating all the players, since they
     // might move while in the loop above.
     all_players.clear();
-    player_map.clear();
-    player_map[us.word] = &us;
+    us.word->owner = &us;
     all_players.push_back(&us);
     for (auto& p : other_players) {
-        player_map[p.word] = &p;
+        p.word->owner = &p;
         all_players.push_back(&p);
     }
 

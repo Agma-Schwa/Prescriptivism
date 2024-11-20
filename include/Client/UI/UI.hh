@@ -52,6 +52,7 @@ class Card;
 class Widget;
 class CardStacks;
 class Group;
+class Player;
 
 enum class Anchor : u8;
 enum class Selectable : u8;
@@ -761,6 +762,9 @@ private:
     Property(bool, autoscale, false);
 
 public:
+    /// The owner of this stack, if any.
+    Player* owner = nullptr;
+
     /// How the group should handle selections.
     SelectionMode selection_mode = SelectionMode::Stack;
 
