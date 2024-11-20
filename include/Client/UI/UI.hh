@@ -155,9 +155,6 @@ struct pr::client::Position {
     static constexpr auto HCenter(Position pos) -> Position { return pos.base.x = Centered, pos; }
     static constexpr auto VCenter(Position pos) -> Position { return pos.base.y = Centered, pos; }
 
-    /// Convert to an absolute position.
-    auto absolute(Size screen_size, Size object_size) -> xy;
-
     /// Anchor the position.
     constexpr auto anchor_to(Anchor a) -> Position& {
         anchor = a;
@@ -170,9 +167,9 @@ struct pr::client::Position {
         return *this;
     }
 
-    /// Convert to a relative position.
-    auto relative(AABB parent_box, Size object_size) -> xy;
-    auto relative(Size parent_size, Size object_size) -> xy;
+    /// Resolve centering and anchors relative to the parent box.
+    auto resolve(AABB parent_box, Size object_size) -> xy;
+    auto resolve(Size parent_size, Size object_size) -> xy;
 
     /// Offset vertically.
     constexpr auto voffset(i32 offset) -> Position& {
@@ -213,6 +210,7 @@ public:
 
 /// The root of the UI element hierarchy.
 class pr::client::Element {
+    /// The bounding box of this element, *relative* to its parent.
     Readonly(AABB, bounding_box);
 
 protected:
@@ -266,7 +264,7 @@ public:
     Selectable selectable = Selectable::No;
     Hoverable hoverable = Hoverable::Yes;
 
-    /// Position of the widget.
+    /// Position of the widget relative to its parent.
     Position pos;
 
 protected:

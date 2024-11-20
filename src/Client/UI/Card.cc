@@ -314,26 +314,28 @@ void Card::draw(Renderer& r) {
         BorderRadius[scale]
     );
 
-    auto _ = r.push_matrix(bounding_box.origin());
-    code.draw(r);
-    image.draw(r);
-    middle.draw(r);
-    description.draw(r);
+    {
+        auto _ = r.push_matrix(bounding_box.origin());
+        code.draw(r);
+        image.draw(r);
+        middle.draw(r);
+        description.draw(r);
 
-    // Do not draw the name if this is a small sound card.
-    if (scale > OtherPlayer or id.is_power())
-        name.draw(r);
+        // Do not draw the name if this is a small sound card.
+        if (scale > OtherPlayer or id.is_power())
+            name.draw(r);
 
-    if (id.is_sound()) {
-        auto offs = Padding[scale];
-        for (int i = 0; i < count; ++i) r.draw_rect(
-            Position{-3 * offs, -(2 * offs + 2 * i * offs)}
-                .hoffset(-Border[scale].ht)
-                .voffset(-Border[scale].wd)
-                .relative(bounding_box, {5 * offs, offs}),
-            {5 * offs, offs},
-            Colour::Black
-        );
+        if (id.is_sound()) {
+            auto offs = Padding[scale];
+            for (int i = 0; i < count; ++i) r.draw_rect(
+                Position{-3 * offs, -(2 * offs + 2 * i * offs)}
+                    .hoffset(-Border[scale].ht)
+                    .voffset(-Border[scale].wd)
+                    .resolve(bounding_box, {5 * offs, offs}),
+                {5 * offs, offs},
+                Colour::Black
+            );
+        }
     }
 
     // Draw a white rectangle on top of this card if it is inactive.
@@ -350,7 +352,7 @@ void Card::draw(Renderer& r) {
 
 void Card::refresh(Renderer& r) {
     SetBoundingBox(
-        pos.relative(parent.bounding_box, CardSize[scale]),
+        pos.resolve(parent.bounding_box, CardSize[scale]),
         CardSize[scale]
     );
 
@@ -497,7 +499,7 @@ void CardStacks::Stack::draw(Renderer& r) {
         auto sz = LockedTexture->size * Card::IconScale[scale];
         r.draw_texture_scaled(
             *LockedTexture,
-            Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.relative(rbox(), sz),
+            Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.resolve(rbox(), sz),
             Card::IconScale[scale]
         );
     }

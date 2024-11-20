@@ -18,15 +18,11 @@ using namespace pr::client;
 // =============================================================================
 //  Helpers
 // =============================================================================
-auto Position::absolute(Size screen_size, Size object_size) -> xy {
-    return relative(screen_size, object_size);
+auto Position::resolve(AABB parent_box, Size object_size) -> xy {
+    return resolve(parent_box.size(), object_size);
 }
 
-auto Position::relative(AABB parent_box, Size object_size) -> xy {
-    return relative(parent_box.size(), object_size);
-}
-
-auto Position::relative(Size parent_size, Size object_size) -> xy {
+auto Position::resolve(Size parent_size, Size object_size) -> xy {
     static auto Clamp = [](i32 val, i32 obj_size, i32 total_size) -> i32 {
         if (val == Centered) return (total_size - obj_size) / 2;
         if (val < 0) return total_size + val - obj_size;
@@ -84,7 +80,7 @@ auto Widget::rpos() -> xy {
         "Accessing rpos() before bounding box was set! NEVER do "
         "UpdateBoundingBox(rpos()) or SetBoundingBox(rpos(), ...)!"
     );
-    return pos.relative(parent.bounding_box, bounding_box.size());
+    return pos.resolve(parent.bounding_box, bounding_box.size());
 }
 
 bool Widget::has_parent(Element* other) {
@@ -181,7 +177,7 @@ void Throbber::draw(Renderer& r) {
     static constexpr f32 Rate = 3; // Smaller means faster.
 
     // Uses absolute position because it may not have a parent.
-    auto at = pos.absolute(r.size(), {i32(R), i32(R)});
+    auto at = pos.resolve(r.size(), {i32(R), i32(R)});
     auto rads = f32(glm::radians(fmod(360 * Rate - SDL_GetTicks(), 360 * Rate) / Rate));
     auto xfrm = glm::identity<mat4>();
     xfrm = translate(xfrm, vec3(R, R, 0));
@@ -304,7 +300,7 @@ void Group::refresh(Renderer& r) {
     // Update our bounding box.
     auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.extent(flip(a)); }));
     auto sz = Size{a, offset - gap, max};
-    SetBoundingBox(pos.relative(parent.bounding_box, sz), sz);
+    SetBoundingBox(pos.resolve(parent.bounding_box, sz), sz);
 
     // And refresh the children again now that we know where everything is.
     for (auto& c : ch) c.refresh(r);

@@ -36,7 +36,7 @@ auto CenterTextInBox(
     Size sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
 
     // Bail out if we don’t have enough space.
-    if (strut > box_height) return Position::Center().relative(absolute_box, sz);
+    if (strut > box_height) return Position::Center().resolve(absolute_box, sz);
 
     // This calculation ‘centers’ text in the box at the baseline.
     //
@@ -65,7 +65,7 @@ auto CenterTextInBox(
     //    https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
     //    https://web.archive.org/web/20241112215935/https://learn.microsoft.com/en-us/typography/opentype/spec/recom#stypoascender-stypodescender-and-stypolinegap
     f32 top_offs = ascender + (box_height - strut) / 2;
-    return Position::HCenter(-i32(top_offs)).relative(absolute_box, sz);
+    return Position::HCenter(-i32(top_offs)).resolve(absolute_box, sz);
 }
 
 // =============================================================================
@@ -137,7 +137,7 @@ void Label::draw(Renderer& r) {
     if (fixed_height != 0) {
         position = CenterTextInBox(text, fixed_height, parent_box);
     } else {
-        position = auto{pos}.voffset(i32(text.depth)).relative(parent_box, text.text_size);
+        position = auto{pos}.voffset(i32(text.depth)).resolve(parent_box, text.text_size);
     }
 
     r.draw_text(text, position, colour);
