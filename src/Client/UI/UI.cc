@@ -59,6 +59,110 @@ auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
 }
 
 // =============================================================================
+//  Element
+// =============================================================================
+void Element::SetBoundingBox(xy origin, Size size) { SetBoundingBox(AABB{origin, size}); }
+void Element::SetBoundingBox(AABB aabb) {
+    LIBBASE_DEBUG(_bb_size_initialised = true;)
+    _bounding_box = aabb;
+}
+
+void Element::UpdateBoundingBox(xy origin) { SetBoundingBox(origin, _bounding_box.size()); }
+void Element::UpdateBoundingBox(Size size) { SetBoundingBox(_bounding_box.origin(), size); }
+
+// =============================================================================
+//  Widget
+// =============================================================================
+
+Widget::Widget(Element* parent, Position pos) : _parent(parent), pos(pos) {
+    Assert(parent, "Every widget must have a parent!");
+}
+auto Widget::abox() -> AABB { return {apos(), bounding_box.size()}; }
+auto Widget::apos() -> xy {
+    DebugAssert(
+        _bb_size_initialised,
+        "Accessing apos() before bounding box was set! NEVER do "
+        "UpdateBoundingBox(apos()) or SetBoundingBox(apos(), ...)!"
+    );
+    return pos.relative(parent.bounding_box, bounding_box.size());
+}
+
+bool Widget::has_parent(Element* other) {
+    auto p = &parent;
+    for (;;) {
+        if (p == other) return true;
+        auto w = p->cast<Widget>();
+        if (not w) return false;
+        p = &w->parent;
+    }
+}
+
+auto Widget::hovered_child(InputSystem&) -> HoverResult {
+    if (hoverable == Hoverable::Yes) hovered = true;
+    return HoverResult::TakeIf(this, hoverable);
+}
+
+auto Widget::parent_screen() -> Screen& {
+    Element* e = &parent;
+    for (;;) {
+        if (auto screen = e->cast<Screen>()) return *screen;
+        e = &e->as<Widget>().parent;
+    }
+}
+
+auto Widget::selected_child(InputSystem&) -> SelectResult {
+    return SelectResult::TakeIf(this, selectable);
+}
+
+void Widget::unselect() {
+    if (not selected and not is<Group>()) return;
+    auto& parent = parent_screen();
+    unselect_impl(parent);
+}
+
+void Widget::unselect_impl(Screen& parent) {
+    // If this is selected, unselect it.
+    if (selected) {
+        selected = false;
+        if (parent.selected_element == this) parent.selected_element = nullptr;
+        if (parent.hovered_element == this) parent.hovered_element = nullptr;
+    }
+
+    // Otherwise, if this is a group, try to unselect all of our children;
+    // this is required if we’re e.g. deleting a group whose child needs to
+    // be untagged as the selected element.
+    else if (auto g = cast<Group>()) {
+        for (auto& ch : g->children()) ch.unselect_impl(parent);
+    }
+}
+
+void Widget::set_needs_refresh(bool new_value) {
+    // Do NOT cache this since we need to propagate changes to our
+    // parent, and that may not have been done yet because this may
+    // have already been set before we were assigned a parent if this
+    // is a new object.
+    _needs_refresh = new_value;
+
+    // Groups care about this because they need to recompute the
+    // positions of their children.
+    if (auto g = parent.cast<Group>())
+        g->needs_refresh = true;
+}
+
+auto WidgetHolder::index_of(Widget& c) -> std::optional<u32> {
+    auto it = rgs::find(widgets, &c, &std::unique_ptr<Widget>::get);
+    if (it == widgets.end()) return std::nullopt;
+    return u32(it - widgets.begin());
+}
+
+void WidgetHolder::remove(Widget& w) {
+    w.unselect();
+    auto erased = std::erase_if(widgets, [&](auto& c) { return c.get() == &w; });
+    Assert(erased == 1, "Attempted to remove non-direct child?");
+    if (auto g = dynamic_cast<Widget*>(this)) g->needs_refresh = true;
+}
+
+// =============================================================================
 //  Basic Elements
 // =============================================================================
 Throbber::Throbber(Element* parent, Position pos)
@@ -226,65 +330,6 @@ void Group::make_selectable(Selectable new_value) {
 TRIVIAL_CACHING_SETTER(Group, i32, max_gap);
 TRIVIAL_CACHING_SETTER(Group, bool, vertical);
 TRIVIAL_CACHING_SETTER(Group, i32, alignment);
-
-// =============================================================================
-//  Widget
-// =============================================================================
-auto Widget::parent_screen() -> Screen& {
-    Element* e = &parent;
-    for (;;) {
-        if (auto screen = e->cast<Screen>()) return *screen;
-        e = &e->as<Widget>().parent;
-    }
-}
-
-void Widget::unselect() {
-    if (not selected and not is<Group>()) return;
-    auto& parent = parent_screen();
-    unselect_impl(parent);
-}
-
-void Widget::unselect_impl(Screen& parent) {
-    // If this is selected, unselect it.
-    if (selected) {
-        selected = false;
-        if (parent.selected_element == this) parent.selected_element = nullptr;
-        if (parent.hovered_element == this) parent.hovered_element = nullptr;
-    }
-
-    // Otherwise, if this is a group, try to unselect all of our children;
-    // this is required if we’re e.g. deleting a group whose child needs to
-    // be untagged as the selected element.
-    else if (auto g = cast<Group>()) {
-        for (auto& ch : g->children()) ch.unselect_impl(parent);
-    }
-}
-
-void Widget::set_needs_refresh(bool new_value) {
-    // Do NOT cache this since we need to propagate changes to our
-    // parent, and that may not have been done yet because this may
-    // have already been set before we were assigned a parent if this
-    // is a new object.
-    _needs_refresh = new_value;
-
-    // Groups care about this because they need to recompute the
-    // positions of their children.
-    if (auto g = parent.cast<Group>())
-        g->needs_refresh = true;
-}
-
-auto WidgetHolder::index_of(Widget& c) -> std::optional<u32> {
-    auto it = rgs::find(widgets, &c, &std::unique_ptr<Widget>::get);
-    if (it == widgets.end()) return std::nullopt;
-    return u32(it - widgets.begin());
-}
-
-void WidgetHolder::remove(Widget& w) {
-    w.unselect();
-    auto erased = std::erase_if(widgets, [&](auto& c) { return c.get() == &w; });
-    Assert(erased == 1, "Attempted to remove non-direct child?");
-    if (auto g = dynamic_cast<Widget*>(this)) g->needs_refresh = true;
-}
 
 // =============================================================================
 //  Input Handler.

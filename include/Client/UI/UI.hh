@@ -218,14 +218,6 @@ protected:
     LIBBASE_DEBUG(bool _bb_size_initialised = false;)
 
     Element() = default;
-    void SetBoundingBox(xy origin, Size size) { SetBoundingBox(AABB{origin, size}); }
-    void SetBoundingBox(AABB aabb) {
-        LIBBASE_DEBUG(_bb_size_initialised = true;)
-        _bounding_box = aabb;
-    }
-
-    void UpdateBoundingBox(xy origin) { SetBoundingBox(origin, _bounding_box.size()); }
-    void UpdateBoundingBox(Size size) { SetBoundingBox(_bounding_box.origin(), size); }
 
 public:
     virtual ~Element() = default;
@@ -248,6 +240,12 @@ public:
 
     /// Draw this element.
     virtual void draw(Renderer& r) = 0;
+
+protected:
+    void SetBoundingBox(xy origin, Size size);
+    void SetBoundingBox(AABB aabb);
+    void UpdateBoundingBox(xy origin);
+    void UpdateBoundingBox(Size size);
 };
 
 /// Element that is not a screen.
@@ -271,24 +269,14 @@ public:
     Position pos;
 
 protected:
-    explicit Widget(Element* parent, Position pos = {})
-        : _parent(parent), pos(pos) {
-        Assert(parent, "Every widget must have a parent!");
-    }
+    explicit Widget(Element* parent, Position pos = {});
 
 public:
     /// Calculate the absolute bounding box in screen coordinates.
-    auto abox() -> AABB { return {apos(), bounding_box.size()}; }
+    auto abox() -> AABB;
 
     /// Calculate the absolute position in screen coordinates.
-    auto apos() -> xy {
-        DebugAssert(
-            _bb_size_initialised,
-            "Accessing apos() before bounding box was set! NEVER do "
-            "UpdateBoundingBox(apos()) or SetBoundingBox(apos(), ...)!"
-        );
-        return pos.relative(parent.bounding_box, bounding_box.size());
-    }
+    auto apos() -> xy;
 
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
@@ -297,22 +285,11 @@ public:
     virtual void event_input(InputSystem&) {}
 
     /// Check whether an element is a parent of this widget.
-    bool has_parent(Element* other) {
-        auto p = &parent;
-        for (;;) {
-            if (p == other) return true;
-            auto w = p->cast<Widget>();
-            if (not w) return false;
-            p = &w->parent;
-        }
-    }
+    bool has_parent(Element* other);
 
     /// Determine which of our children is being hovered, if any. Widgets
     /// that don’t have children can just return themselves.
-    virtual auto hovered_child(InputSystem&) -> HoverResult {
-        if (hoverable == Hoverable::Yes) hovered = true;
-        return HoverResult::TakeIf(this, hoverable);
-    }
+    virtual auto hovered_child(InputSystem&) -> HoverResult;
 
     /// Get the widget’s parent screen
     auto parent_screen() -> Screen&;
@@ -322,9 +299,7 @@ public:
 
     /// Determine which of our children is being selected, if any. Widgets
     /// that don’t have children can just return themselves.
-    virtual auto selected_child(InputSystem&) -> SelectResult {
-        return SelectResult::TakeIf(this, selectable);
-    }
+    virtual auto selected_child(InputSystem&) -> SelectResult;
 
     /// Unselect the element.
     void unselect();
@@ -446,22 +421,12 @@ public:
     /// The colour of the label.
     Colour colour = Colour::White;
 
-    explicit Label(Element* parent, Text text, Position pos)
-        : Widget(parent, pos), _text(std::move(text)) {}
-
-    explicit Label(
-        Element* parent,
-        std::string_view text,
-        FontSize sz,
-        Position pos
-    ) : Widget(parent, pos), _text(Renderer::current().text(text, sz)) {}
+    explicit Label(Element* parent, Text text, Position pos);
+    explicit Label(Element* parent, std::string_view text, FontSize sz, Position pos);
 
     void draw(Renderer& r) override;
     void refresh(Renderer& r) override;
-    void update_text(std::string_view new_text) {
-        _text.content = new_text;
-        needs_refresh = true;
-    }
+    void update_text(std::string_view new_text);
 };
 
 class pr::client::TextBox : public Widget {
@@ -507,32 +472,16 @@ public:
         i32 padding = 0,
         i32 min_wd = 125,
         i32 min_ht = 0
-    ) : TextBox( // clang-format off
-        parent,
-        Text(font, label),
-        std::nullopt,
-        pos,
-        padding,
-        min_wd,
-        min_ht
-    ) { // clang-format on
-        selectable = Selectable::Yes;
-    }
+    );
 
     explicit Button(
         Element* parent,
         std::string_view label,
         Position pos,
         std::function<void()> click_handler
-    ) : Button(parent, label, pos) {
-        on_click = std::move(click_handler);
-    }
+    );
 
-    void event_click(InputSystem&) override {
-        unselect();
-        if (on_click) on_click();
-    }
-
+    void event_click(InputSystem&) override;
     void draw(Renderer& r) override;
 };
 
@@ -575,31 +524,14 @@ public:
         bool hide_text = false,
         i32 min_wd = 250,
         i32 min_ht = 0
-    ) : TextBox( // clang-format off
-        parent,
-        Text(font, ""),
-        Text(font, placeholder),
-        pos,
-        padding,
-        min_wd,
-        min_ht
-    ),  hide_text{hide_text} {
-        selectable = Selectable::Yes;
-    } // clang-format on
+    );
 
     void draw(Renderer& r) override;
     void event_click(InputSystem& input) override;
     void event_input(InputSystem& input) override;
-    void set_hide_text(bool hide) {
-        hide_text = hide;
-        dirty = true;
-    }
-
-    auto value() -> std::string { return text::ToUTF8(text); }
-    void value(std::u32string new_text) {
-        text = std::move(new_text);
-        dirty = true;
-    }
+    void set_hide_text(bool hide);
+    auto value() -> std::string;
+    void value(std::u32string new_text);
 };
 
 class pr::client::Throbber : public Widget {
@@ -847,7 +779,11 @@ public:
     void add_stack(CardId c);
 
     /// Get a range containing the Ids of all topmost cards in each stack.
-    auto ids() { return children<Stack>() | vws::transform(Lambda_ids); }
+    auto ids() {
+        return children<Stack>()               //
+             | vws::transform(&Stack::get_top) //
+             | vws::transform(&Card::get_id);
+    }
 
     /// Get a stack by index.
     ///
@@ -856,7 +792,7 @@ public:
     auto index_of(Stack& c) -> std::optional<u32> { return Group::index_of(c); }
 
     /// Get a range of all the topmost cards in each stack.
-    auto top_cards() { return children() | vws::transform(Lambda_topmost); }
+    auto top_cards() { return children<Stack>() | vws::transform(&Stack::get_top); }
 
     /// Remove a stack from this group.
     void remove(Stack& s) { Group::remove(s); }
@@ -871,12 +807,6 @@ public:
 
     auto selected_child(InputSystem&) -> SelectResult override;
     void refresh(Renderer&) override;
-
-private:
-    // FIXME: these should really be lambdas, but that is currently
-    // impossible because of a Clang bug: https://github.com/llvm/llvm-project/issues/116087
-    static auto Lambda_ids(Widget& c) -> CardId { return static_cast<Stack&>(c).top.id; }
-    static auto Lambda_topmost(Widget& c) -> Card& { return static_cast<Stack&>(c).top; }
 };
 
 template <>

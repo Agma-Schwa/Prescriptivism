@@ -10,6 +10,9 @@
 using namespace pr;
 using namespace pr::client;
 
+// =============================================================================
+//  Colours
+// =============================================================================
 constexpr Colour InactiveButtonColour{55, 55, 55, 255};
 constexpr Colour DefaultButtonColour{36, 36, 36, 255};
 constexpr Colour HoverButtonColour{23, 23, 23, 255};
@@ -17,6 +20,9 @@ constexpr Colour HoverButtonColour{23, 23, 23, 255};
 constexpr Colour ButtonTextColour = Colour::White;
 constexpr Colour InactiveButtonTextColour = Colour::Grey;
 
+// =============================================================================
+//  Helpers
+// =============================================================================
 /// Compute the absolute coordinates for positioning
 /// text in the center of a box. The box must be in
 /// absolute coordinates.
@@ -62,6 +68,38 @@ auto CenterTextInBox(
     return Position::HCenter(-i32(top_offs)).relative(absolute_box, sz);
 }
 
+// =============================================================================
+//  Button
+// =============================================================================
+Button::Button(
+    Element* parent,
+    std::string_view label,
+    Position pos,
+    Font& font,
+    i32 padding,
+    i32 min_wd,
+    i32 min_ht
+) : TextBox( // clang-format off
+    parent,
+    Text(font, label),
+    std::nullopt,
+    pos,
+    padding,
+    min_wd,
+    min_ht
+) { // clang-format on
+    selectable = Selectable::Yes;
+}
+
+Button::Button(
+    Element* parent,
+    std::string_view label,
+    Position pos,
+    std::function<void()> click_handler
+) : Button(parent, label, pos) {
+    on_click = std::move(click_handler);
+}
+
 void Button::draw(Renderer& r) {
     bool active = selectable != Selectable::No;
     r.draw_rect(
@@ -73,6 +111,24 @@ void Button::draw(Renderer& r) {
 
     TextBox::draw(r, active ? ButtonTextColour : InactiveButtonTextColour);
 }
+
+void Button::event_click(InputSystem&) {
+    unselect();
+    if (on_click) on_click();
+}
+
+// =============================================================================
+//  Label
+// =============================================================================
+Label::Label(Element* parent, Text text, Position pos)
+    : Widget(parent, pos), _text(std::move(text)) {}
+
+Label::Label(
+    Element* parent,
+    std::string_view text,
+    FontSize sz,
+    Position pos
+) : Widget(parent, pos), _text(Renderer::current().text(text, sz)) {}
 
 void Label::draw(Renderer& r) {
     auto parent_box = parent.bounding_box;
@@ -97,12 +153,20 @@ void Label::refresh(Renderer&) {
     _text.desired_width = std::min(max_width, parent.bounding_box.width());
 }
 
+void Label::update_text(std::string_view new_text) {
+    _text.content = new_text;
+    needs_refresh = true;
+}
+
 TRIVIAL_CACHING_SETTER(Label, bool, reflow);
 TRIVIAL_CACHING_SETTER(Label, i32, max_width);
 TRIVIAL_CACHING_SETTER(Label, i32, fixed_height);
 CACHING_SETTER(Label, TextAlign, align, _text.align);
 CACHING_SETTER(Label, FontSize, font_size, _text.font_size);
 
+// =============================================================================
+//  TextBox
+// =============================================================================
 TextBox::TextBox(
     Element* parent,
     Text text,
@@ -162,6 +226,30 @@ void TextBox::refresh(Renderer&) {
     UpdateBoundingBox(sz);
     UpdateBoundingBox(apos());
 }
+
+// =============================================================================
+//  TextEdit
+// =============================================================================
+TextEdit::TextEdit(
+    Element* parent,
+    Position pos,
+    std::string_view placeholder,
+    Font& font,
+    i32 padding,
+    bool hide_text,
+    i32 min_wd,
+    i32 min_ht
+) : TextBox( // clang-format off
+    parent,
+    Text(font, ""),
+    Text(font, placeholder),
+    pos,
+    padding,
+    min_wd,
+    min_ht
+), hide_text{hide_text} {
+    selectable = Selectable::Yes;
+} // clang-format on
 
 void TextEdit::draw(Renderer& r) {
     if (dirty) {
@@ -354,4 +442,15 @@ void TextEdit::event_input(InputSystem& input) {
                 break;
         }
     }
+}
+
+void TextEdit::set_hide_text(bool hide) {
+    hide_text = hide;
+    dirty = true;
+}
+
+auto TextEdit::value() -> std::string { return text::ToUTF8(text); }
+void TextEdit::value(std::u32string new_text) {
+    text = std::move(new_text);
+    dirty = true;
 }
