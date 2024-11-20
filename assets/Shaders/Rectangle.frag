@@ -9,22 +9,24 @@ uniform mat4 transform;
 uniform float radius; // In pixels.
 
 // How soft the edges should be (in pixels). Higher values could be used to simulate a drop shadow.
-const float edgeSoftness = .5f;
+const float edge_softness = .5f;
 
-// From https://iquilezles.org/articles/distfunctions
-float roundedBoxSDF(vec2 CenterPosition, vec2 Size, float Radius) {
-    return length(max(abs(CenterPosition) - Size + Radius, 0.0))-Radius;
+// See https://iquilezles.org/articles/distfunctions.
+float sdf(vec2 p, vec2 sz, float r) {
+    vec2 q = abs(p) - sz + r;
+    return length(max(q, 0)) - r;
 }
 
 // Adapted from https://www.shadertoy.com/view/WtdSDs.
 void main() {
-    // Calculate distance to edge.
-    float distance = roundedBoxSDF(position - (size/2.0f), size / 2.0f, radius);
+    // Calculate the distance to the corner of our quadrant.
+    vec2 p = position - size / 2.0f;
+    float distance = sdf(p, size / 2.0f, radius);
 
     // Smooth the result (free antialiasing).
-    float smoothedAlpha =  1.0f - smoothstep(0.0f, edgeSoftness * 2.0f,distance);
+    float a =  1.0f - smoothstep(0.0f, edge_softness * 2.0f, distance);
 
     // Return the resultant shape.
-    colour = vec4(in_colour.rgb, min(smoothedAlpha, in_colour.a));
+    colour = vec4(in_colour.rgb, min(a, in_colour.a));
 }
 
