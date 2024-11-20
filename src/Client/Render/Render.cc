@@ -855,7 +855,6 @@ void Renderer::draw_outline_rect(
     auto [tx, ty] = thickness;
     use(rect_shader, pos);
     rect_shader.uniform("in_colour", c.vec4());
-    rect_shader.uniform("position", pos.vec());
     rect_shader.uniform("size", size.vec());
     rect_shader.uniform("radius", border_radius);
     VertexArrays vao{VertexLayout::Position2D};
@@ -910,7 +909,6 @@ void Renderer::draw_outline_rect(
 void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
     use(rect_shader, pos);
     rect_shader.uniform("in_colour", c.vec4());
-    rect_shader.uniform("position", pos.vec());
     rect_shader.uniform("size", size.vec());
     rect_shader.uniform("radius", border_radius);
     VertexArrays vao{VertexLayout::Position2D};
