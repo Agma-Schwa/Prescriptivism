@@ -35,8 +35,14 @@ auto CenterTextInBox(
     f32 strut = text.font.strut();
     Size sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
 
-    // Bail out if we don’t have enough space.
-    if (strut > box_height) return Position::Center().resolve(absolute_box, sz);
+    // We need to add extra space for every line beyond the first.
+    //
+    // Note: This formula is known to be correct for 1–2 lines; it has not been tested
+    // for more than 2 lines, so we might have to amend it at some point.
+    strut += ascender * (text.lines - 1);
+
+    // Bail out if we don’t have enough space or if the text is empty.
+    if (text.empty or strut > box_height) return Position::Center().resolve(absolute_box, sz);
 
     // This calculation ‘centers’ text in the box at the baseline.
     //
@@ -135,16 +141,14 @@ Label::Label(
 }
 
 void Label::draw(Renderer& r) {
-    auto parent_box = parent.bounding_box;
-    xy position;
-
     if (fixed_height != 0) {
-        position = CenterTextInBox(text, fixed_height, parent_box);
+        auto _ = PushTransform(r);
+        xy position = CenterTextInBox(text, fixed_height, bounding_box);
+        r.draw_text(text, position, colour);
     } else {
-        position = auto{pos}.voffset(i32(text.depth)).resolve(parent_box, text.text_size);
+        xy position = auto{pos}.voffset(i32(text.depth)).resolve(parent.bounding_box, text.text_size);
+        r.draw_text(text, position, colour);
     }
-
-    r.draw_text(text, position, colour);
 }
 
 void Label::refresh(Renderer&) {

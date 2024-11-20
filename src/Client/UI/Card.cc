@@ -411,8 +411,9 @@ void Card::refresh(Renderer& r) {
         // font’s strut (which *should* work for any font size), and center
         // the name vertically in that field.
         auto name_height = i32(1.75 * name.text.font.strut());
-        name.pos = Position::HCenter(i32(-Border[scale].ht - (name_height - name.text.height) / 2));
+        name.pos = Position::HCenter(i32(-Border[scale].ht));
         name.max_width = description.max_width;
+        name.fixed_height = name_height;
 
         // Position the image right below the name. Since the name field ends
         // up being larger than the height of the nam text, we don’t need to
@@ -430,6 +431,7 @@ void Card::refresh(Renderer& r) {
         code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
         name.pos = auto{code.pos}.voffset(i32(-code.text.height - 2 * Padding[scale]));
         name.max_width = CardSize[scale].wd / 3;
+        name.fixed_height = 0;
         description.pos = Position::HCenter(10 * Padding[scale]);
     }
 }

@@ -439,8 +439,11 @@ class pr::client::Text {
     /// How this text should be broken across lines.
     Property(Reflow, reflow, Reflow::None);
 
+    /// The number of lines in this text.
+    ComputedReadonly(i32, lines, _lines);
+
     /// Whether this text spans multiple lines.
-    ComputedReadonly(bool, multiline, _multiline);
+    ComputedReadonly(bool, multiline, _lines > 1);
 
     /// The style of the text (regular, bold, italic).
     ComputedProperty(TextStyle, style, font.style);
@@ -467,7 +470,7 @@ class pr::client::Text {
     /// Internal state cache.
     mutable std::optional<VertexArrays> vertices;
     mutable f32 _width{}, _height{}, _depth{};
-    mutable bool _multiline{};
+    mutable i32 _lines{};
 
 public:
     /// Use Renderer::text() instead if you want the text to be shaped

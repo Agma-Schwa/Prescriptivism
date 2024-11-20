@@ -297,7 +297,7 @@ void Font::shape(const Text& text, std::vector<TextCluster>* clusters) {
     // Reset text properties in case we end up returning early.
     text.vertices = VertexArrays{VertexLayout::PositionTexture4D};
     text._width = text._height = text._depth = 0;
-    text._multiline = false;
+    text._lines = 0;
     if (text.empty) return;
 
     // Check that this font has been fully initialised.
@@ -661,7 +661,7 @@ void Font::shape(const Text& text, std::vector<TextCluster>* clusters) {
     auto lines_to_shape = u32stream{text.content}.lines() | vws::transform(&u32stream::text) | rgs::to<std::vector>();
     if (lines_to_shape.empty()) return;
     f32 max_x = ShapeLines(lines_to_shape);
-    text._multiline = lines.size() > 1;
+    text._lines = i32(lines.size());
 
     // Rebuild the texture atlas.
     RebuildAtlas();
