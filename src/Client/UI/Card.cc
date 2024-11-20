@@ -300,17 +300,19 @@ Card::Card(
 }
 
 void Card::draw(Renderer& r) {
+    auto _ = PushTransform(r);
     auto colour = variant == Variant::Regular ? outline_colour : outline_colour.darken(.2f);
-    r.draw_rect(bounding_box, colour.lighten(.1f), BorderRadius[scale]);
+    AABB rect{{0, 0}, CardSize[scale]};
+    r.draw_rect(rect, colour.lighten(.1f), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(
-        bounding_box,
+        rect,
         CardStacks::CardGaps[scale] / 2,
         Colour{50, 50, 200, 255},
         BorderRadius[scale]
     );
 
     r.draw_outline_rect(
-        bounding_box.shrink(Border[scale].wd, Border[scale].ht),
+        rect.shrink(Border[scale].wd, Border[scale].ht),
         Size{Border[scale]},
         colour,
         BorderRadius[scale]
@@ -320,7 +322,7 @@ void Card::draw(Renderer& r) {
 
     // Draw a white rectangle on top of this card if it is inactive.
     if (overlay == Overlay::Inactive) r.draw_rect(
-        bounding_box,
+        rect,
         Colour{255, 255, 255, 200},
         BorderRadius[scale]
     );
@@ -331,7 +333,6 @@ void Card::draw(Renderer& r) {
 }
 
 void Card::DrawChildren(Renderer& r) {
-    auto _ = PushTransform(r);
     code.draw(r);
     image.draw(r);
     middle.draw(r);

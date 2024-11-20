@@ -258,18 +258,6 @@ class pr::client::Widget : public Element {
     Readonly(Element&, parent);
     Property(bool, needs_refresh, true);
 
-    class [[nodiscard]] TransformRAII {
-        friend Widget;
-        LIBBASE_IMMOVABLE(TransformRAII);
-        Renderer::MatrixRAII m;
-        AABB old_box;
-        Widget& w;
-        TransformRAII(Renderer& r, Widget& w, f32 scale);
-
-    public:
-        ~TransformRAII();
-    };
-
 public:
     bool hovered  : 1 = false; ///< Element is being hovered.
     bool selected : 1 = false; ///< Element is selected.
@@ -280,6 +268,9 @@ public:
 
     /// Position of the widget relative to its parent.
     Position pos;
+
+    /// Scale this widget (and its children) by a factor.
+    f32 ui_scale = 1;
 
 protected:
     explicit Widget(Element* parent, Position pos = {});
@@ -317,7 +308,7 @@ public:
     /// elements may end up centered incorrectly.
     ///
     /// \see Renderer::push_matrix().
-    auto PushTransform(Renderer& r, f32 scale = 1) -> TransformRAII;
+    auto PushTransform(Renderer& r) -> Renderer::MatrixRAII;
 
     /// Recompute bounding box etc.
     virtual void refresh(Renderer&) {}

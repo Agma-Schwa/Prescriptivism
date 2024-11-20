@@ -96,8 +96,8 @@ auto Widget::parent_screen() -> Screen& {
     }
 }
 
-auto Widget::PushTransform(Renderer& r, f32 scale) -> TransformRAII {
-    return TransformRAII{r, *this, scale};
+auto Widget::PushTransform(Renderer& r) -> Renderer::MatrixRAII {
+    return r.push_matrix(bounding_box.origin(), ui_scale);
 }
 
 auto Widget::rbox() -> AABB { return {rpos(), bounding_box.size()}; }
@@ -147,17 +147,6 @@ void Widget::set_needs_refresh(bool new_value) {
     // positions of their children.
     if (auto g = parent.cast<Group>())
         g->needs_refresh = true;
-}
-
-Widget::TransformRAII::TransformRAII(Renderer& r, Widget& w, f32 scale)
-    : m{r.push_matrix(w.bounding_box.origin(), scale)},
-      old_box{w.bounding_box},
-      w{w} {
-    w.SetBoundingBox(w.bounding_box.scale(scale));
-}
-
-Widget::TransformRAII::~TransformRAII() {
-    w.SetBoundingBox(old_box);
 }
 
 auto WidgetHolder::index_of(Widget& c) -> std::optional<u32> {
