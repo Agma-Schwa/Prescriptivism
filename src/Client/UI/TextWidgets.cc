@@ -103,7 +103,7 @@ Button::Button(
 void Button::draw(Renderer& r) {
     bool active = selectable != Selectable::No;
     r.draw_rect(
-        rbox(),
+        bounding_box,
         not active ? InactiveButtonColour
         : hovered  ? HoverButtonColour
                    : DefaultButtonColour
@@ -337,7 +337,7 @@ void TextEdit::draw(Renderer& r) {
 
     if (hovered) r.set_cursor(Cursor::IBeam);
 
-    r.draw_rect(rbox(), selected ? HoverButtonColour : DefaultButtonColour);
+    r.draw_rect(bounding_box, selected ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
 

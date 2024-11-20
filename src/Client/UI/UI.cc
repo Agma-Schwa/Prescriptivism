@@ -58,7 +58,6 @@ auto Position::resolve(Size parent_size, Size object_size) -> xy {
 //  Element
 // =============================================================================
 void Element::SetBoundingBox(AABB aabb) {
-    LIBBASE_DEBUG(_bb_size_initialised = true;)
     _bounding_box = aabb;
 }
 
@@ -104,16 +103,6 @@ auto Widget::position() -> xy {
 
 auto Widget::PushTransform(Renderer& r) -> Renderer::MatrixRAII {
     return r.push_matrix(scaled_bounding_box.origin(), ui_scale);
-}
-
-auto Widget::rbox() -> AABB { return {rpos(), bounding_box.size()}; }
-auto Widget::rpos() -> xy {
-    DebugAssert(
-        _bb_size_initialised,
-        "Accessing rpos() before bounding box was set! NEVER do "
-        "UpdateBoundingBox(rpos()) or SetBoundingBox(rpos(), ...)!"
-    );
-    return pos.resolve(parent.bounding_box, bounding_box.size());
 }
 
 auto Widget::selected_child(xy) -> SelectResult {
@@ -208,10 +197,10 @@ void Throbber::draw(Renderer& r) {
 }
 
 void Image::draw(Renderer& r) {
-    if (texture) r.draw_texture_sized(*texture, rbox());
+    if (texture) r.draw_texture_sized(*texture, bounding_box);
 }
 
-void Image::UpdateDimensions() {
+void Image::refresh(Renderer&) {
     if (not texture) {
         UpdateBoundingBox(Size{});
         return;
@@ -223,8 +212,8 @@ void Image::UpdateDimensions() {
     UpdateBoundingBox(sz);
 }
 
-TRIVIAL_CACHING_SETTER(Image, Size, fixed_size, UpdateDimensions());
-TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture, UpdateDimensions());
+TRIVIAL_CACHING_SETTER(Image, Size, fixed_size, );
+TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture);
 
 // =============================================================================
 //  Group

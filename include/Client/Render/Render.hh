@@ -251,6 +251,8 @@ struct pr::client::AABB {
 
     /// Get the width of this box.
     [[nodiscard]] constexpr auto width() const -> i32 { return max.x - min.x; }
+
+    constexpr bool friend operator==(const AABB&, const AABB&) = default;
 };
 
 template <>

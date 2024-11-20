@@ -404,20 +404,16 @@ void Card::refresh(Renderer& r) {
         auto ht = wd / 4 * 3; // Arbitrary aspect ratio.
         image.fixed_size = Size{wd, ht};
         image.pos = Position{Border[scale].wd, -Border[scale].ht}.voffset(-name_height);
+
+        // The description is below the image.
+        description.pos = auto{image.pos}
+            .voffset(-ht - Padding[scale])
+            .hoffset(Padding[scale]);
     } else {
         code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
         name.pos = auto{code.pos}.voffset(i32(-code.text.height - 2 * Padding[scale]));
+        description.pos = Position::HCenter(10 * Padding[scale]);
     }
-
-    // The description is either below the image, or at a fixed offset
-    // from the bottom of the card that positions it roughly below the
-    // middle text.
-    description.pos = //
-        power
-            ? auto{image.pos}
-                  .voffset(-image.bounding_box.height() - Padding[scale])
-                  .hoffset(Padding[scale])
-            : Position::HCenter(10 * Padding[scale]);
 }
 
 void Card::set_id(CardId ct) {
@@ -501,7 +497,7 @@ void CardStacks::Stack::draw(Renderer& r) {
         auto sz = LockedTexture->size * Card::IconScale[scale];
         r.draw_texture_scaled(
             *LockedTexture,
-            Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.resolve(rbox(), sz),
+            Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.resolve(bounding_box, sz),
             Card::IconScale[scale]
         );
     }

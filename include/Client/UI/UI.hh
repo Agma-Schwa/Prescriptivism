@@ -216,8 +216,6 @@ class pr::client::Element {
     Readonly(AABB, bounding_box);
 
 protected:
-    LIBBASE_DEBUG(bool _bb_size_initialised = false;)
-
     Element() = default;
 
 public:
@@ -281,12 +279,6 @@ protected:
     explicit Widget(Element* parent, Position pos = {});
 
 public:
-    /// Calculate the relative bounding box to our parent.
-    auto rbox() -> AABB;
-
-    /// Calculate the relative position to our parent.
-    auto rpos() -> xy;
-
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
 
@@ -582,9 +574,7 @@ public:
     Image(Element* parent, Position pos) : Widget(parent, pos) {}
 
     void draw(Renderer& r) override;
-
-private:
-    void UpdateDimensions();
+    void refresh(Renderer&) override;
 };
 
 class pr::client::Card : public Widget {
