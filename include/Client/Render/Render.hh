@@ -362,9 +362,7 @@ public:
     Font() = default;
 
     /// Get the size of the font texture.
-    auto atlas_height() const -> i32 {
-        return i32(atlas_rows * atlas_entry_height);
-    }
+    auto atlas_height() const -> i32;
 
     /// Get the bold variant of this font.
     auto bold() -> Font&;
@@ -373,7 +371,7 @@ public:
     auto italic() -> Font&;
 
     /// Activate the font for rendering.
-    void use() const { atlas.bind(); }
+    void use() const;
 
     /// Shape text using this font.
     ///
@@ -387,8 +385,8 @@ public:
     void shape(const Text& text, std::vector<TextCluster>* clusters);
 
     /// Get the font’s strut height.
-    auto strut() const -> i32 { return i32(strut_asc + strut_desc); }
-    auto strut_split() const -> std::pair<i32, i32> { return {strut_asc, strut_desc}; }
+    auto strut() const -> i32;
+    auto strut_split() const -> std::pair<i32, i32>;
 
 private:
     auto AllocBuffer() -> hb_buffer_t*;
@@ -457,30 +455,20 @@ public:
     /// immediately. These constructors are lazy and only shape the text
     /// when it is drawn or when the text size is queried.
     explicit Text();
-    explicit Text(Font& font, std::u32string content, TextAlign align = TextAlign::SingleLine)
-        : _align{align}, _content{std::move(content)}, _font{&font} {}
+    explicit Text(Font& font, std::u32string content, TextAlign align = TextAlign::SingleLine);
 
-    explicit Text(Font& font, std::string_view content, TextAlign align = TextAlign::SingleLine)
-        : _align{align}, _content{base::text::ToUTF32(content)}, _font{&font} {}
+    explicit Text(Font& font, std::string_view content, TextAlign align = TextAlign::SingleLine);
 
     /// Draw the vertices of this text.
-    void draw_vertices() const { reshape().vertices->draw_vertices(); }
+    void draw_vertices() const;
 
     /// Update the text.
     ///
     /// Assign to 'content' instead of calling this directly.
-    void set_content(std::string_view new_text) {
-        content = base::text::ToUTF32(new_text);
-    }
+    void set_content(std::string_view new_text);
 
 private:
-    auto reshape() const -> const Text& {
-        if (not vertices.has_value()) [[unlikely]]
-            reshape_impl();
-        return *this;
-    }
-
-    void reshape_impl() const;
+    auto reshape() const -> const Text&;
 };
 
 // =============================================================================

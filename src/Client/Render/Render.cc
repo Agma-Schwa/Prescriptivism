@@ -46,8 +46,6 @@ struct FTCallImpl {
     }
 };
 
-constexpr Colour DefaultBGColour{45, 42, 46, 255};
-
 // FIXME: Load ALL OF THIS at runtime so it’s customisable, and so
 // we can do hot reloading for shaders and fonts.
 constexpr char PrimitiveVertexShaderData[]{
@@ -121,6 +119,11 @@ constexpr std::span<const char> Fonts[]{
 };
 
 // =============================================================================
+//  Colours
+// =============================================================================
+constexpr Colour DefaultBGColour{45, 42, 46, 255};
+
+// =============================================================================
 //  Text and Fonts
 // =============================================================================
 auto DumpHBBuffer(hb_font_t* font, hb_buffer_t* buf) {
@@ -185,6 +188,10 @@ Font::Font(FT_Face ft_face, FontSize size, TextStyle style)
     }
 }
 
+auto Font::atlas_height() const -> i32 {
+    return i32(atlas_rows * atlas_entry_height);
+}
+
 auto Font::bold() -> Font& {
     if (style & TextStyle::Bold) return *this;
     return renderer.font(size, style | TextStyle::Bold);
@@ -194,6 +201,10 @@ auto Font::italic() -> Font& {
     if (style & TextStyle::Italic) return *this;
     return renderer.font(size, style | TextStyle::Italic);
 }
+void Font::use() const { atlas.bind(); }
+
+auto Font::strut() const -> i32 { return i32(strut_asc + strut_desc); }
+auto Font::strut_split() const -> std::pair<i32, i32> { return {strut_asc, strut_desc}; }
 
 auto Font::AllocBuffer() -> hb_buffer_t* {
     Assert(hb_buffers_in_use <= hb_bufs.size());
@@ -205,14 +216,30 @@ auto Font::AllocBuffer() -> hb_buffer_t* {
     return hb_bufs[hb_buffers_in_use++].get();
 }
 
-Text::Text() {
-    _align = TextAlign::SingleLine;
-    _font = &Renderer::current().font(FontSize::Normal, TextStyle::Regular);
+Text::Text()
+    : _align{TextAlign::SingleLine},
+      _font{&Renderer::current().font(FontSize::Normal, TextStyle::Regular)} {}
+
+Text::Text(Font& font, std::u32string content, TextAlign align)
+    : _align{align}, _content{std::move(content)}, _font{&font} {}
+
+Text::Text(Font& font, std::string_view content, TextAlign align)
+    : _align{align}, _content{text::ToUTF32(content)}, _font{&font} {}
+
+void Text::draw_vertices() const { reshape().vertices->draw_vertices(); }
+
+auto Text::reshape() const -> const Text& {
+    if (not vertices.has_value()) font.shape(*this, nullptr);
+    return *this;
+}
+
+void Text::set_content(std::string_view new_text) {
+    content = text::ToUTF32(new_text);
 }
 
 void Text::set_desired_width(i32 desired) {
     _desired_width = desired;
-    if (not vertices or desired < width or multiline) reshape_impl();
+    if (not vertices or desired < width or multiline) font.shape(*this, nullptr);
 }
 
 void Text::set_align(TextAlign new_value) {
@@ -237,10 +264,6 @@ void Text::set_style(TextStyle new_value) {
     if (_font->style == new_value) return;
     _font = &Renderer::current().font(_font->size, new_value);
     vertices = std::nullopt;
-}
-
-void Text::reshape_impl() const {
-    font.shape(*this, nullptr);
 }
 
 // =============================================================================
