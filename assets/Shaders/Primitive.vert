@@ -1,9 +1,9 @@
 #version 330 core
 
-layout(location = 0) in vec4 position;
+layout(location = 0) in vec4 vertex;
 
-uniform mat4 projection;
+uniform mat4 transform;
 
 void main() {
-    gl_Position = projection * position;
+    gl_Position = transform * vertex;
 }

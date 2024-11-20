@@ -834,7 +834,7 @@ void Renderer::clear(Colour c) {
 }
 
 void Renderer::draw_line(xy start, xy end, Colour c) {
-    use(primitive_shader);
+    use(primitive_shader, {});
     primitive_shader.uniform("in_colour", c.vec4());
     VertexArrays vao{VertexLayout::Position2D};
     vec2 verts[]{start.vec(), end.vec()};
@@ -853,7 +853,7 @@ void Renderer::draw_outline_rect(
     auto size = box.size();
     auto [wd, ht] = size;
     auto [tx, ty] = thickness;
-    use(rect_shader);
+    use(rect_shader, pos);
     rect_shader.uniform("in_colour", c.vec4());
     rect_shader.uniform("position", pos.vec());
     rect_shader.uniform("size", size.vec());
@@ -908,7 +908,7 @@ void Renderer::draw_outline_rect(
 }
 
 void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
-    use(rect_shader);
+    use(rect_shader, pos);
     rect_shader.uniform("in_colour", c.vec4());
     rect_shader.uniform("position", pos.vec());
     rect_shader.uniform("size", size.vec());
@@ -932,9 +932,8 @@ void Renderer::draw_text(
     if (text.empty) return;
 
     // Initialise the text shader.
-    use(text_shader);
+    use(text_shader, pos);
     text_shader.uniform("text_colour", colour.vec4());
-    text_shader.uniform("position", pos.vec());
     text_shader.uniform("atlas_height", text.font.atlas_height());
 
     // Bind the font atlas.
@@ -948,14 +947,12 @@ void Renderer::draw_texture(
     const DrawableTexture& tex,
     xy pos
 ) {
-    use(image_shader);
-    image_shader.uniform("position", pos.vec());
+    use(image_shader, pos);
     tex.draw_vertices();
 }
 
 void Renderer::draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale) {
-    use(image_shader);
-    image_shader.uniform("position", pos.vec());
+    use(image_shader, pos);
     tex.bind();
     VertexArrays vao{VertexLayout::PositionTexture4D};
     vao.add_buffer(tex.create_vertices_scaled(scale), GL_TRIANGLE_STRIP);
@@ -963,8 +960,7 @@ void Renderer::draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale
 }
 
 void Renderer::draw_texture_sized(const DrawableTexture& tex, AABB box) {
-    use(image_shader);
-    image_shader.uniform("position", box.origin().vec());
+    use(image_shader, box.origin());
     tex.bind();
     VertexArrays vao{VertexLayout::PositionTexture4D};
     vao.add_buffer(tex.create_vertices(box.size()), GL_TRIANGLE_STRIP);
@@ -972,40 +968,6 @@ void Renderer::draw_texture_sized(const DrawableTexture& tex, AABB box) {
 }
 
 void Renderer::frame_end() {
-#if 0 // FOR TESTING
-    // Draw an image.
-    static auto image = [&] {
-        auto file = File::Read<std::vector<char>>("./assets/test.webp").value();
-        int wd, ht;
-        auto data = WebPDecodeRGBA(reinterpret_cast<const u8*>(file.data()), file.size(), &wd, &ht);
-        Assert(data, "Decoding error");
-        defer { WebPFree(data); };
-        return DrawableTexture(data, wd, ht, GL_RGBA, GL_UNSIGNED_BYTE);
-    }();
-
-    draw_texture(image, 0, 0);
-
-    // Draw a triangle.
-    vec2 points[]{// clang-format off
-        {0, 0},
-        {50, 0},
-        {0, 50}
-    }; // clang-format on
-
-    auto sz = size();
-    primitive_shader.use();
-    primitive_shader.uniform("projection", glm::ortho<f32>(0, sz.x, 0, sz.y));
-    VertexArrays vao{VertexLayout::Position2D};
-    vao.add_buffer(points);
-    vao.draw();
-
-    // Draw text.
-    constexpr std::string_view InputText = "EÉÉẸ̣eééé́ẹ́ẹ́ʒffifl";
-    static ShapedText text = default_font.shape(InputText);
-    draw_text(text, 20, size().y - 200, Colour{255, 255, 255, 255});
-    draw_text(text, 20, size().y - 400, Colour{200, 120, 120, 255});
-#endif
-
     // Swap buffers.
     check SDL_GL_SwapWindow(*window);
 }
@@ -1026,10 +988,15 @@ void Renderer::frame_start() {
     }
 }
 
-void Renderer::use(ShaderProgram& shader) {
+void Renderer::use(ShaderProgram& shader, xy position) {
     auto [sx, sy] = size();
     shader.use_shader_program_dont_call_this_directly();
-    shader.uniform("projection", glm::ortho<f32>(0, sx, 0, sy));
+
+    auto m = glm::identity<mat4>();
+    m = glm::translate(m, {position.x, position.y, 0});
+    m = glm::ortho<f32>(0, sx, 0, sy) * m;
+
+    shader.uniform("transform", m);
 }
 
 // =============================================================================

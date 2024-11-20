@@ -678,7 +678,7 @@ public:
     ) -> Text;
 
     /// Set the active shader.
-    void use(ShaderProgram& shader);
+    void use(ShaderProgram& shader, xy position);
 
 private:
     /// Start/end a frame.

@@ -3,7 +3,7 @@
 layout (location = 0) in vec4 vertex; // vec2 pos
 
 uniform float r;
-uniform mat4 projection;
+uniform mat4 transform;
 uniform mat4 rotation;
 uniform vec2 position;
 
@@ -16,5 +16,5 @@ void main() {
         1.0
     );
 
-    gl_Position = projection * pos;
+    gl_Position = transform * pos;
 }

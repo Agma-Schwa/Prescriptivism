@@ -187,7 +187,7 @@ void Throbber::draw(Renderer& r) {
     xfrm = translate(xfrm, vec3(R, R, 0));
     xfrm = rotate(xfrm, rads, vec3(0, 0, 1));
 
-    r.use(r.throbber_shader);
+    r.use(r.throbber_shader, {});
     r.throbber_shader.uniform("position", at.vec());
     r.throbber_shader.uniform("rotation", xfrm);
     r.throbber_shader.uniform("r", R);

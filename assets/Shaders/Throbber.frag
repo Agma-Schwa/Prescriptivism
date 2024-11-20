@@ -8,7 +8,6 @@ in vec4 vertex_colour;
 uniform float r;
 uniform vec2 position;
 uniform mat4 rotation;
-uniform mat4 projection;
 
 void main() {
     // Reverse the positional offset we applied in the vertex shader.
