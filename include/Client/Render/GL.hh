@@ -38,7 +38,7 @@ enum class VertexLayout : u8;
 template <glm::length_t size>
 using Vertices = std::span<const vec<size, f32>>;
 
-Axis flip(Axis a);
+constexpr Axis flip(Axis a);
 } // namespace pr::client
 
 template <typename T, std::size_t n>
@@ -77,7 +77,7 @@ enum class pr::client::Axis : base::u8 {
     Y,
 };
 
-inline auto pr::client::flip(Axis a) -> Axis {
+constexpr auto pr::client::flip(Axis a) -> Axis {
     return a == Axis::X ? Axis::Y : Axis::X;
 }
 
@@ -141,49 +141,31 @@ class pr::client::VertexBuffer : Descriptor<glDeleteBuffers> {
     GLsizei size = 0;
 
     template <typename T>
-    VertexBuffer(std::span<const T> data, GLenum draw_mode) : draw_mode{draw_mode} {
-        glGenBuffers(1, &descriptor);
-        copy_data(data);
-    }
+    VertexBuffer(std::span<const T> data, GLenum draw_mode);
 
 public:
     /// Bind the buffer.
-    void bind() const { glBindBuffer(GL_ARRAY_BUFFER, descriptor); }
+    void bind() const;
 
     /// Copy data to the buffer.
-    void copy_data(Vertices<2> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
-    void copy_data(Vertices<3> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
-    void copy_data(Vertices<4> data, GLenum usage = GL_STATIC_DRAW) { CopyImpl(data, usage); }
+    void copy_data(Vertices<2> data, GLenum usage = GL_STATIC_DRAW);
+    void copy_data(Vertices<3> data, GLenum usage = GL_STATIC_DRAW);
+    void copy_data(Vertices<4> data, GLenum usage = GL_STATIC_DRAW);
 
     /// Draw the buffer.
-    void draw() const {
-        bind();
-        glDrawArrays(draw_mode, 0, size);
-    }
+    void draw() const;
 
     /// Reserve space in the buffer.
     template <typename T>
-    void reserve(std::size_t count, GLenum usage = GL_STATIC_DRAW) {
-        bind();
-        glBufferData(GL_ARRAY_BUFFER, count * sizeof(T), nullptr, usage);
-        size = GLsizei(count);
-    }
+    void reserve(std::size_t count, GLenum usage = GL_STATIC_DRAW);
 
     /// Store data into the buffer. Calling reserve() first is mandatory.
     template <typename T>
-    void store(std::span<const T> data) {
-        Assert(data.size() == size, "Data size mismatch");
-        bind();
-        glBufferSubData(GL_ARRAY_BUFFER, 0, data.size_bytes(), data.data());
-    }
+    void store(std::span<const T> data);
 
 private:
     template <typename T>
-    void CopyImpl(std::span<const T> data, GLenum usage) {
-        bind();
-        glBufferData(GL_ARRAY_BUFFER, data.size_bytes(), data.data(), usage);
-        size = GLsizei(data.size());
-    }
+    void CopyImpl(std::span<const T> data, GLenum usage);
 };
 
 class pr::client::VertexArrays : Descriptor<glDeleteVertexArrays> {
@@ -191,134 +173,46 @@ class pr::client::VertexArrays : Descriptor<glDeleteVertexArrays> {
     std::vector<VertexBuffer> buffers;
 
 public:
-    VertexArrays(VertexLayout layout)
-        : layout{layout} { glGenVertexArrays(1, &descriptor); }
+    VertexArrays(VertexLayout layout);
 
     /// Creates a new buffer and attaches it to the vertex array.
-    auto add_buffer(Vertices<2> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
-        return AddBufferImpl(data, draw_mode);
-    }
-
-    auto add_buffer(Vertices<3> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
-        return AddBufferImpl(data, draw_mode);
-    }
-
-    auto add_buffer(Vertices<4> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
-        return AddBufferImpl(data, draw_mode);
-    }
-
-    /// Creates a new buffer and attaches it to the vertex array.
-    auto add_buffer(GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer& {
-        return add_buffer(Vertices<2>{}, draw_mode);
-    }
+    auto add_buffer(Vertices<2> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer&;
+    auto add_buffer(Vertices<3> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer&;
+    auto add_buffer(Vertices<4> data, GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer&;
+    auto add_buffer(GLenum draw_mode = GL_TRIANGLES) -> VertexBuffer&;
 
     /// Binds the vertex array.
-    void bind() const { glBindVertexArray(descriptor); }
+    void bind() const;
 
     /// Draw the vertex array.
-    void draw_vertices() const {
-        bind();
-        for (const auto& vbo : buffers) vbo.draw();
-    }
+    void draw_vertices() const;
 
     /// Check if this contains no buffers.
     auto empty() const -> bool { return buffers.empty(); }
 
     /// Unbinds the vertex array.
-    void unbind() const { glBindVertexArray(0); }
+    void unbind() const;
 
 private:
     template <typename T>
-    auto AddBufferImpl(std::span<const T> verts, GLenum draw_mode) -> VertexBuffer& {
-        buffers.push_back(VertexBuffer{verts, draw_mode});
-        auto& vbo = buffers.back();
-        bind();
-        glBindBuffer(GL_ARRAY_BUFFER, vbo.descriptor);
-        ApplyLayout();
-        return vbo;
-    }
-
-    void ApplyLayout() {
-        switch (layout) {
-            case VertexLayout::Position2D:
-                glEnableVertexAttribArray(0);
-                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-                return;
-            case VertexLayout::PositionTexture4D:
-                glEnableVertexAttribArray(0);
-                glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
-                return;
-        }
-
-        Unreachable("Invalid vertex layout");
-    }
+    auto AddBufferImpl(std::span<const T> verts, GLenum draw_mode) -> VertexBuffer&;
+    void ApplyLayout();
 };
 
 class pr::client::ShaderProgram : Descriptor<glDeleteProgram> {
-    struct Shader : Descriptor<glDeleteShader> {
-        friend ShaderProgram;
-        Shader(GLenum type, std::span<const char> source) {
-            descriptor = glCreateShader(type);
-            auto size = GLint(source.size());
-            auto data = source.data();
-            glShaderSource(descriptor, 1, &data, &size);
-            glCompileShader(descriptor);
-
-            GLint success;
-            glGetShaderiv(descriptor, GL_COMPILE_STATUS, &success);
-            if (not success) {
-                // Throw this on the heap since it’s huge.
-                auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
-                glGetShaderInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
-                Log("Shader compilation failed: {}", info_log.get());
-            }
-        }
-    };
-
 public:
     ShaderProgram() = default;
     ShaderProgram(
         std::span<const char> vertex_shader_source,
         std::span<const char> fragment_shader_source
-    ) {
-        Shader vertex_shader(GL_VERTEX_SHADER, vertex_shader_source);
-        Shader fragment_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
-
-        descriptor = glCreateProgram();
-        glAttachShader(descriptor, vertex_shader.descriptor);
-        glAttachShader(descriptor, fragment_shader.descriptor);
-        glLinkProgram(descriptor);
-
-        GLint success;
-        glGetProgramiv(descriptor, GL_LINK_STATUS, &success);
-        if (not success) {
-            // Throw this on the heap since it’s huge.
-            auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
-            glGetProgramInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
-            Log("Shader program linking failed: {}", info_log.get());
-        }
-    }
+    );
 
     /// Set a uniform.
-    void uniform(ZTermString name, vec2 v) {
-        return SetUniform(name, glUniform2f, v.x, v.y);
-    }
-
-    void uniform(ZTermString name, vec4 v) {
-        return SetUniform(name, glUniform4f, v.x, v.y, v.z, v.w);
-    }
-
-    void uniform(ZTermString name, mat3 m) {
-        return SetUniform(name, glUniformMatrix3fv, 1, GL_FALSE, value_ptr(m));
-    }
-
-    void uniform(ZTermString name, mat4 m) {
-        return SetUniform(name, glUniformMatrix4fv, 1, GL_FALSE, value_ptr(m));
-    }
-
-    void uniform(ZTermString name, f32 f) {
-        return SetUniform(name, glUniform1f, f);
-    }
+    void uniform(ZTermString name, vec2 v);
+    void uniform(ZTermString name, vec4 v);
+    void uniform(ZTermString name, mat3 m);
+    void uniform(ZTermString name, mat4 m);
+    void uniform(ZTermString name, f32 f);
 
     /// Set this as the active shader.
     ///
@@ -327,11 +221,7 @@ public:
 
 private:
     template <typename... T>
-    void SetUniform(ZTermString name, auto callable, T... args) {
-        auto u = glGetUniformLocation(descriptor, name.c_str());
-        if (u == -1) return;
-        callable(u, args...);
-    }
+    void SetUniform(ZTermString name, auto callable, T... args);
 };
 
 /// This is an internal handle to texture data. You probably
@@ -360,32 +250,7 @@ public:
         GLenum target = GL_TEXTURE_2D,
         GLenum unit = GL_TEXTURE0,
         bool tile = false
-    ) : target{target},
-        unit{unit},
-        format{format},
-        type{type},
-        _width{width},
-        _height{height} {
-        glGenTextures(1, &descriptor);
-        bind();
-        glTexImage2D(
-            target,
-            0,
-            format,
-            width,
-            height,
-            0,
-            format,
-            type,
-            data
-        );
-
-        auto param = tile ? GL_REPEAT : GL_CLAMP_TO_EDGE;
-        glTexParameteri(target, GL_TEXTURE_WRAP_S, param);
-        glTexParameteri(target, GL_TEXTURE_WRAP_T, param);
-        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    }
+    );
 
     Texture(
         u32 width,
@@ -397,32 +262,13 @@ public:
     ) : Texture(nullptr, width, height, format, type, target, unit) {}
 
     /// Get the maximum texture size.
-    static auto MaxSize() -> GLint {
-        GLint max_texture_size;
-        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
-        return max_texture_size;
-    }
+    static auto MaxSize() -> GLint;
 
     /// Bind this texture and make its texture unit active.
-    void bind() const {
-        glActiveTexture(unit);
-        glBindTexture(target, descriptor);
-    }
+    void bind() const;
 
     /// Write data into the texture at a given offset.
-    void write(u32 x, u32 y, u32 width, u32 height, const void* data) {
-        glTexSubImage2D(
-            target,
-            0,
-            x,
-            y,
-            width,
-            height,
-            format,
-            type,
-            data
-        );
-    }
+    void write(u32 x, u32 y, u32 width, u32 height, const void* data);
 };
 
 class pr::client::DrawableTexture : public Texture {
@@ -438,9 +284,7 @@ public:
         GLenum target = GL_TEXTURE_2D,
         GLenum unit = GL_TEXTURE0,
         bool tile = false
-    ) : Texture(data, width, height, format, type, target, unit, tile) {
-        vao.add_buffer(create_vertices(Size{width, height}), GL_TRIANGLE_STRIP);
-    }
+    );
 
     DrawableTexture(
         const void* data,
@@ -452,14 +296,10 @@ public:
     ) : DrawableTexture(data, width, height, format, type, GL_TEXTURE_2D, GL_TEXTURE0, tile) {}
 
     /// Create triangle strip texture vertices for a given size.
-    auto create_vertices(Size size) const -> std::array<vec4, 4> {
-        return MakeVerts(size.wd, size.ht, f32(size.wd) / width, f32(size.ht) / height);
-    }
+    auto create_vertices(Size size) const -> std::array<vec4, 4>;
 
     /// Create triangle strip texture vertices for a given size.
-    auto create_vertices_scaled(f32 scale) const -> std::array<vec4, 4> {
-        return MakeVerts(f32(width) * scale, f32(height) * scale, 1, 1);
-    }
+    auto create_vertices_scaled(f32 scale) const -> std::array<vec4, 4>;
 
     /// Load a texture from a file.
     ///
@@ -471,20 +311,10 @@ public:
     /// Draw the texture.
     ///
     /// Prefer to call Renderer::draw_texture() instead.
-    void draw_vertices() const {
-        bind();
-        vao.draw_vertices();
-    }
+    void draw_vertices() const;
 
 private:
-    static auto MakeVerts(f32 wd, f32 ht, f32 u, f32 v) -> std::array<vec4, 4> {
-        return {
-            vec4{0, 0, 0, v},
-            vec4{wd, 0, u, v},
-            vec4{0, ht, 0, 0},
-            vec4{wd, ht, u, 0},
-        };
-    }
+    static auto MakeVerts(f32 wd, f32 ht, f32 u, f32 v) -> std::array<vec4, 4>;
 };
 
 #endif // PRESCRIPTIVISM_CLIENT_RENDER_GL_HH
