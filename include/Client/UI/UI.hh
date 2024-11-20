@@ -119,8 +119,10 @@ public:
     static auto TakeIf(Widget* w, Selectable s) { return s == Selectable::Yes ? Yes(w) : No(s); }
 };
 
-/// A position of an element, which may be absolute or relative
-/// to its parent element.
+/// The position of an element.
+///
+/// This class’s main purpose is to abstract away centering and anchoring
+/// calculations.
 struct pr::client::Position {
     static constexpr i32 Centered = std::numeric_limits<i32>::min();
 
