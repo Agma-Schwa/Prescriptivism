@@ -260,6 +260,12 @@ void Text::set_font_size(FontSize new_size) {
     vertices = std::nullopt;
 }
 
+void Text::set_reflow(Reflow new_value) {
+    if (_reflow == new_value) return;
+    _reflow = new_value;
+    if (desired_width != 0) vertices = std::nullopt;
+}
+
 void Text::set_style(TextStyle new_value) {
     if (_font->style == new_value) return;
     _font = &Renderer::current().font(_font->size, new_value);
@@ -306,8 +312,8 @@ void Font::shape(const Text& text, std::vector<TextCluster>* clusters) {
 
     // Refuse to go below a certain width to save us from major headaches.
     static constexpr i32 MinTextWidth = 40;
-    const bool reflow = text.desired_width != 0;
-    const f32 desired_width = text.desired_width == 0 ? 0 : std::max(text.desired_width, MinTextWidth);
+    const bool should_reflow = text.reflow != Reflow::None and text.desired_width != 0;
+    const f32 desired_width = not should_reflow ? 0 : std::max(text.desired_width, MinTextWidth);
 
     // Get the glyph information and position from a HarfBuzz buffer.
     auto GetInfo = [](hb_buffer_t* buf, i32 start = 0, i32 end = 0) -> std::pair<std::span<hb_glyph_info_t>, std::span<hb_glyph_position_t>> {
@@ -398,7 +404,7 @@ void Font::shape(const Text& text, std::vector<TextCluster>* clusters) {
 
         // If we don’t need to reflow, we’re done.
         auto max_x = rgs::max_element(lines, {}, &Line::width)->width;
-        if (not reflow or max_x <= f32(desired_width)) return max_x;
+        if (not should_reflow or max_x <= f32(desired_width)) return max_x;
 
         // Reflow each line that is too wide.
         auto old_lines = std::exchange(lines, {});
@@ -465,8 +471,9 @@ void Font::shape(const Text& text, std::vector<TextCluster>* clusters) {
 
                 // Handle the degenerate case of us shaping a *really long* word
                 // in a *really narrow* line, in which case we may have to break
-                // mid-word.
+                // mid-word. This is only allowed if hard reflow is enabled.
                 if (last_ws_cluster_index == -1) {
+                    if (text.reflow == Reflow::Soft) continue;
                     ws_width = x - adv; // Referenced by AddSubline().
                     AddSubline(
                         hb_glyph_info_get_glyph_flags(&info) & HB_GLYPH_FLAG_UNSAFE_TO_BREAK,

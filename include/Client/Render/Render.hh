@@ -34,6 +34,7 @@ enum struct FontSize : u32;
 enum struct TextAlign : u8;
 enum struct TextStyle : u8;
 enum struct Cursor : u32;
+enum struct Reflow : u8;
 } // namespace pr::client
 
 // =============================================================================
@@ -70,6 +71,13 @@ enum struct pr::client::TextStyle : base::u8 {
     Bold = 1,
     Italic = 2,
     BoldItalic = Bold | Italic,
+};
+
+/// How text should be broken across lines.
+enum struct pr::client::Reflow : base::u8 {
+    None, ///< Do not reflow the text.
+    Soft, ///< Allow breaking at whitespace only.
+    Hard, ///< Break in the middle of the word as soon as the max size is exceeded.
 };
 
 enum struct pr::client::Cursor : base::u32 {
@@ -427,6 +435,9 @@ class pr::client::Text {
 
     /// The font of the text.
     Readonly(Font&, font);
+
+    /// How this text should be broken across lines.
+    Property(Reflow, reflow, Reflow::None);
 
     /// Whether this text spans multiple lines.
     ComputedReadonly(bool, multiline, _multiline);

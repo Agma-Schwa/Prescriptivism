@@ -121,14 +121,18 @@ void Button::event_click(InputSystem&) {
 //  Label
 // =============================================================================
 Label::Label(Element* parent, Text text, Position pos)
-    : Widget(parent, pos), _text(std::move(text)) {}
+    : Widget(parent, pos), _text(std::move(text)) {
+    reflow = Reflow::Soft;
+}
 
 Label::Label(
     Element* parent,
     std::string_view text,
     FontSize sz,
     Position pos
-) : Widget(parent, pos), _text(Renderer::current().text(text, sz)) {}
+) : Widget(parent, pos), _text(Renderer::current().text(text, sz)) {
+    reflow = Reflow::Soft;
+}
 
 void Label::draw(Renderer& r) {
     auto parent_box = parent.bounding_box;
@@ -149,7 +153,7 @@ void Label::refresh(Renderer&) {
         UpdateBoundingBox(Size{sz.wd, std::max(sz.ht, fixed_height)});
     };
 
-    if (not reflow) return;
+    if (reflow == Reflow::None) return;
     _text.desired_width = std::min(max_width, parent.bounding_box.width());
 }
 
@@ -158,7 +162,12 @@ void Label::update_text(std::string_view new_text) {
     needs_refresh = true;
 }
 
-TRIVIAL_CACHING_SETTER(Label, bool, reflow);
+void Label::set_reflow(Reflow new_value) {
+    if (text.reflow == new_value) return;
+    _text.reflow = new_value;
+    needs_refresh = true;
+}
+
 TRIVIAL_CACHING_SETTER(Label, i32, max_width);
 TRIVIAL_CACHING_SETTER(Label, i32, fixed_height);
 CACHING_SETTER(Label, TextAlign, align, _text.align);

@@ -380,7 +380,6 @@ void Card::refresh(Renderer& r) {
     middle.font_size = MiddleSizes[scale];
     description.font_size = (power ? PowerDescriptionSizes : SoundDescriptionSizes)[scale];
     description.max_width = CardSize[scale].wd - 2 * Padding[scale] - 2 * Border[scale].wd;
-    name.max_width = description.max_width;
 
     // Center the middle text.
     middle.fixed_height = CardSize[scale].ht;
@@ -396,6 +395,7 @@ void Card::refresh(Renderer& r) {
         // the name vertically in that field.
         auto name_height = i32(1.75 * name.text.font.strut());
         name.pos = Position::HCenter(i32(-Border[scale].ht - (name_height - name.text.height) / 2));
+        name.max_width = description.max_width;
 
         // Position the image right below the name. Since the name field ends
         // up being larger than the height of the nam text, we don’t need to
@@ -412,6 +412,7 @@ void Card::refresh(Renderer& r) {
     } else {
         code.pos = Position{Border[scale].wd + Padding[scale], -Border[scale].ht - Padding[scale]};
         name.pos = auto{code.pos}.voffset(i32(-code.text.height - 2 * Padding[scale]));
+        name.max_width = CardSize[scale].wd / 3;
         description.pos = Position::HCenter(10 * Padding[scale]);
     }
 }
@@ -444,8 +445,7 @@ void Card::set_id(CardId ct) {
                 }), ", "));
             }), "\n")
         ); // clang-format on
-        description.reflow = false;
-        name.reflow = false;
+        description.reflow = Reflow::None;
         name.align = TextAlign::Left;
         image.texture = nullptr;
     }
@@ -458,8 +458,7 @@ void Card::set_id(CardId ct) {
         code.update_text("");
         middle.update_text("");
         description.update_text(std::string{power.rules});
-        description.reflow = true;
-        name.reflow = true;
+        description.reflow = Reflow::Soft;
         name.align = TextAlign::Center;
         image.texture = &*power.image;
     }

@@ -421,7 +421,7 @@ class pr::client::Label : public Widget {
 
     /// Whether the text should reflow onto multiple lines if it
     /// exceeds a maximum width.
-    Property(bool, reflow, true);
+    ComputedProperty(Reflow, reflow, text.reflow);
 
     /// The maximum width of this text.
     Property(i32, max_width, std::numeric_limits<i32>::max());

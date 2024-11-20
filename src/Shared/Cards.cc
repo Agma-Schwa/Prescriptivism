@@ -33,55 +33,55 @@ using enum CardType;
 const CardData impl::CardDatabaseImpl[+$$Count]{
     // clang-format off
     // CONSONANTS - M4     Count  P  M  Name                                        Center   Conversions
-    Sound(C_p,             4,     4, 4, "Voiceless\nbilabial\nstop",                "p",     {{C_m}}),
-    Sound(C_b,             2,     4, 4, "Voiced\nbilabial\nstop",                   "b",     {{C_m}}),
-    Sound(C_t,             4,     3, 4, "Voiceless\nalveolar\nstop",                "t",     {{C_n}}),
-    Sound(C_d,             2,     3, 4, "Voiced\nalveolar\nstop",                   "d",     {{C_n}}),
-    Sound(C_tʃ,            4,     2, 4, "Voiceless\npost-alveolar\naffricate",      "tʃ",    {{C_ɲ}}),
-    Sound(C_dʒ,            2,     2, 4, "Voiced\npost-alveolar\naffricate",         "dʒ",    {{C_ɲ}}),
-    Sound(C_k,             4,     1, 4, "Voiceless\nvelar\nstop",                   "k",     {{C_ŋ}}),
-    Sound(C_g,             2,     1, 4, "Voiced\nvelar\nstop",                      "g",     {{C_ŋ}}),
+    Sound(C_p,             4,     4, 4, "Voiceless bilabial stop",                "p",     {{C_m}}),
+    Sound(C_b,             2,     4, 4, "Voiced bilabial stop",                   "b",     {{C_m}}),
+    Sound(C_t,             4,     3, 4, "Voiceless alveolar stop",                "t",     {{C_n}}),
+    Sound(C_d,             2,     3, 4, "Voiced alveolar stop",                   "d",     {{C_n}}),
+    Sound(C_tʃ,            4,     2, 4, "Voiceless post-alveolar affricate",      "tʃ",    {{C_ɲ}}),
+    Sound(C_dʒ,            2,     2, 4, "Voiced post-alveolar affricate",         "dʒ",    {{C_ɲ}}),
+    Sound(C_k,             4,     1, 4, "Voiceless velar stop",                   "k",     {{C_ŋ}}),
+    Sound(C_g,             2,     1, 4, "Voiced velar stop",                      "g",     {{C_ŋ}}),
 
     // CONSONANTS - M3      Count  P  M  Name                                       Center   Conversions
-    Sound(C_f,              4,     4, 3, "Voiceless\nlabial\nfricative",            "f",     {{C_h}}),
-    Sound(C_v,              2,     4, 3, "Voiced\nlabial\nfricative",               "v",     {}),
-    Sound(C_s,              4,     3, 3, "Voiceless\nalveolar\nfricative",          "s",     {}),
-    Sound(C_z,              2,     3, 3, "Voiced\nalveolar\nfricative",             "z",     {}),
-    Sound(C_ʃ,              4,     2, 3, "Voiceless\npost-alveolar\nfricative",     "ʃ",     {}),
-    Sound(C_ʒ,              2,     2, 3, "Voiced\npost-alveolar\nfricative",        "ʒ",     {}),
-    Sound(C_h,              2,     1, 3, "Voiceless\nglottal\nfricative",           "ʒ",     {{C_f}}),
+    Sound(C_f,              4,     4, 3, "Voiceless labial fricative",            "f",     {{C_h}}),
+    Sound(C_v,              2,     4, 3, "Voiced labial fricative",               "v",     {}),
+    Sound(C_s,              4,     3, 3, "Voiceless alveolar fricative",          "s",     {}),
+    Sound(C_z,              2,     3, 3, "Voiced alveolar fricative",             "z",     {}),
+    Sound(C_ʃ,              4,     2, 3, "Voiceless post-alveolar fricative",     "ʃ",     {}),
+    Sound(C_ʒ,              2,     2, 3, "Voiced post-alveolar fricative",        "ʒ",     {}),
+    Sound(C_h,              2,     1, 3, "Voiceless glottal fricative",           "ʒ",     {{C_f}}),
 
     // CONSONANTS - M2      Count  P  M  Name                                       Center   Conversions
-    Sound(C_w,              4,     4, 2, "Voiced\nlabio-velar\napproximant",        "w",     {{C_ʟ}, {V_u, V_u}}),
-    Sound(C_r,              4,     3, 2, "Voiced\nalveolar\ntrill",                 "r",     {}),
-    Sound(C_j,              4,     2, 2, "Voiced\npalatal\napproximant",            "j",     {{V_i, V_i}}),
-    Sound(C_ʟ,              4,     1, 2, "Voiced\nvelar\napproximant",              "ʟ",     {{C_w}}),
+    Sound(C_w,              4,     4, 2, "Voiced labio-velar approximant",        "w",     {{C_ʟ}, {V_u, V_u}}),
+    Sound(C_r,              4,     3, 2, "Voiced alveolar trill",                 "r",     {}),
+    Sound(C_j,              4,     2, 2, "Voiced palatal approximant",            "j",     {{V_i, V_i}}),
+    Sound(C_ʟ,              4,     1, 2, "Voiced velar approximant",              "ʟ",     {{C_w}}),
 
     // CONSONANTS - M1      Count  P  M  Name                                       Center   Conversions
-    Sound(C_m,              4,     4, 1, "Voiced\nbilabial\nnasal",                 "m",     {{C_p}}),
-    Sound(C_n,              4,     3, 1, "Voiced\nalveolar\nnasal",                 "n",     {{C_t}}),
-    Sound(C_ɲ,              4,     2, 1, "Voiced\npalatal\nnasal",                  "ɲ",     {{C_tʃ}}),
-    Sound(C_ŋ,              4,     1, 1, "Voiced\nvelar\nnasal",                    "ŋ",     {{C_k}}),
+    Sound(C_m,              4,     4, 1, "Voiced bilabial nasal",                 "m",     {{C_p}}),
+    Sound(C_n,              4,     3, 1, "Voiced alveolar nasal",                 "n",     {{C_t}}),
+    Sound(C_ɲ,              4,     2, 1, "Voiced palatal nasal",                  "ɲ",     {{C_tʃ}}),
+    Sound(C_ŋ,              4,     1, 1, "Voiced velar nasal",                    "ŋ",     {{C_k}}),
 
     // VOWELS - O3          Count O  A  Name                                        Center Conversions
-    Sound(V_i,              7,    3, 3, "Close\nFront\nUnrounded\nVowel",           "i",   {{C_j, C_j}}),
-    Sound(V_y,              3,    3, 3, "Close\nFront\nRounded\nVowel",             "y",   {}),
-    Sound(V_ɨ,              5,    3, 2, "Close\nCentral\nUnrounded\nVowel",         "ɨ",   {}),
-    Sound(V_u,              7,    3, 1, "Close\nBack\nRounded\nVowel",              "u",   {{C_w, C_w}}),
-    Sound(V_ʊ,              3,    3, 1, "Near-Close\nNear-Back\nRounded\nVowel",    "ʊ",   {}),
+    Sound(V_i,              7,    3, 3, "Close Front Unrounded Vowel",           "i",   {{C_j, C_j}}),
+    Sound(V_y,              3,    3, 3, "Close Front Rounded Vowel",             "y",   {}),
+    Sound(V_ɨ,              5,    3, 2, "Close Central Unrounded Vowel",         "ɨ",   {}),
+    Sound(V_u,              7,    3, 1, "Close Back Rounded Vowel",              "u",   {{C_w, C_w}}),
+    Sound(V_ʊ,              3,    3, 1, "Near-Close Near-Back Rounded Vowel",    "ʊ",   {}),
 
     // VOWELS - O2          Count O  A  Name                                        Center Conversions
-    Sound(V_e,              7,    2, 3, "Close-Mid\nFront\nUnrounded\nVowel",       "e",   {}),
-    Sound(V_ɛ,              3,    2, 3, "Open-Mid\nFront\nUnrounded\nVowel",        "ɛ",   {}),
-    Sound(V_ə,              7,    2, 2, "Mid\nCentral\nVowel",                      "ə",   {}),
-    Sound(V_ɜ,              3,    2, 2, "Open-Mid\nCentral\nUnrounded\nVowel",      "ɜ",   {}),
-    Sound(V_o,              7,    2, 1, "Close-Mid\nBack\nRounded\nVowel",          "o",   {}),
-    Sound(V_ɔ,              7,    2, 1, "Open-Mid\nBack\nRounded\nVowel",           "ɔ",   {}),
+    Sound(V_e,              7,    2, 3, "Close-Mid Front Unrounded Vowel",       "e",   {}),
+    Sound(V_ɛ,              3,    2, 3, "Open-Mid Front Unrounded Vowel",        "ɛ",   {}),
+    Sound(V_ə,              7,    2, 2, "Mid Central Vowel",                      "ə",   {}),
+    Sound(V_ɜ,              3,    2, 2, "Open-Mid Central Unrounded Vowel",      "ɜ",   {}),
+    Sound(V_o,              7,    2, 1, "Close-Mid Back Rounded Vowel",          "o",   {}),
+    Sound(V_ɔ,              7,    2, 1, "Open-Mid Back Rounded Vowel",           "ɔ",   {}),
 
     // VOWELS - O1          Count O  A  Name                                        Center Conversions
-    Sound(V_æ,              5,     1, 3, "Near-Open\nNear-Front\nUnrounded\nVowel", "æ",  {}),
-    Sound(V_a,              7,     1, 2, "Open\nCentral\nUnrounded\nVowel",         "a",  {}),
-    Sound(V_ɑ,              5,     1, 1, "Open\nBack\nUnrounded\nVowel",            "ɑ",  {}),
+    Sound(V_æ,              5,     1, 3, "Near-Open Near-Front Unrounded Vowel", "æ",  {}),
+    Sound(V_a,              7,     1, 2, "Open Central Unrounded Vowel",         "a",  {}),
+    Sound(V_ɑ,              5,     1, 1, "Open Back Unrounded Vowel",            "ɑ",  {}),
 
     // POWER CARDS          Count  Name
     Power(P_Assimilation,   1,     "Assimilation"),
