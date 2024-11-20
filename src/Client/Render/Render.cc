@@ -803,6 +803,9 @@ Renderer::Renderer(int initial_wd, int initial_ht, bool set_active) {
 
     // Make this the current renderer.
     if (set_active) SetThreadRenderer(*this);
+
+    // Push initial matrix.
+    matrix_stack.push_back(mat4(1.f));
 }
 
 /// The currently active renderer; this exists because while we still
@@ -990,7 +993,7 @@ void Renderer::use(ShaderProgram& shader, xy position) {
     auto [sx, sy] = size();
     shader.use_shader_program_dont_call_this_directly();
 
-    auto m = glm::identity<mat4>();
+    auto m = matrix_stack.back();
     m = glm::translate(m, {position.x, position.y, 0});
     m = glm::ortho<f32>(0, sx, 0, sy) * m;
 
@@ -1016,6 +1019,14 @@ auto Renderer::font(FontSize size, TextStyle style) -> Font& {
 }
 
 auto Renderer::frame() -> Frame { return Frame(*this); }
+
+auto Renderer::push_matrix(xy translate, f32 scale) -> MatrixRAII {
+    auto m = matrix_stack.back();
+    m = glm::translate(m, {translate.x, translate.y, 0});
+    m = glm::scale(m, {scale, scale, 1});
+    matrix_stack.push_back(m);
+    return MatrixRAII{*this};
+}
 
 void Renderer::reload_shaders() {
     // TODO: inotify().

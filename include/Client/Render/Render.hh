@@ -522,6 +522,15 @@ class pr::client::Renderer {
     LIBBASE_MOVE_ONLY(Renderer);
 
     friend AssetLoader;
+    class [[nodiscard]] MatrixRAII {
+        LIBBASE_IMMOVABLE(MatrixRAII);
+        friend Renderer;
+        Renderer& r;
+        explicit MatrixRAII(Renderer& r) : r(r) {}
+
+    public:
+        ~MatrixRAII() { r.matrix_stack.pop_back(); }
+    };
 
     SDLWindowHandle window;
     SDLGLContextStateHandle context;
@@ -538,6 +547,7 @@ private:
     std::unordered_map<Cursor, SDL_Cursor*> cursor_cache;
     Cursor active_cursor = Cursor::Default;
     Cursor requested_cursor = Cursor::Default;
+    std::vector<mat4> matrix_stack;
 
 public:
     class Frame {
@@ -637,6 +647,20 @@ public:
 
     /// Start a new frame.
     auto frame() -> Frame;
+
+    /// Push a matrix onto the stack.
+    ///
+    /// This makes it so that the translation and scaling passed here
+    /// are applied to everything drawn until the matrix is popped. The
+    /// return value is an RAII object that pops the matrix when it goes
+    /// out of scope.
+    ///
+    /// The transformation will be applied to the previous matrix (i.e.
+    /// pushing two translation matrices will result in the sum of the
+    /// two translations).
+    ///
+    /// The bottom-most element of the matrix stack is the identity matrix.
+    auto push_matrix(xy translate, f32 scale = 1) -> MatrixRAII;
 
     /// Reload all shaders.
     ///

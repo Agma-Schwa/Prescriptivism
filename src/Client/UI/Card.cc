@@ -314,6 +314,7 @@ void Card::draw(Renderer& r) {
         BorderRadius[scale]
     );
 
+    auto _ = r.push_matrix(bounding_box.origin());
     code.draw(r);
     image.draw(r);
     middle.draw(r);
@@ -489,13 +490,14 @@ void CardStacks::Stack::draw(Renderer& r) {
     }
 
     if (locked) {
+        auto _ = r.push_matrix(bounding_box.origin());
         auto cs = Card::CardSize[scale];
         auto b = Card::Border[scale];
         auto p = Card::Padding[scale];
         auto sz = LockedTexture->size * Card::IconScale[scale];
         r.draw_texture_scaled(
             *LockedTexture,
-            Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.relative(abox(), sz),
+            Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.relative(rbox(), sz),
             Card::IconScale[scale]
         );
     }
@@ -532,8 +534,8 @@ void CardStacks::add_stack(CardId c) {
     card.id = c;
 }
 
-auto CardStacks::selected_child(InputSystem& input) -> SelectResult {
-    auto res = Group::selected_child(input);
+auto CardStacks::selected_child(xy rel_pos) -> SelectResult {
+    auto res = Group::selected_child(rel_pos);
     if (res.widget) res.widget = [&] -> Widget* {
         switch (selection_mode) {
             case SelectionMode::Stack: return &res.widget->parent.as<Stack>();

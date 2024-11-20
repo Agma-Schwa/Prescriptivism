@@ -19,14 +19,14 @@ using namespace pr::client;
 //  Helpers
 // =============================================================================
 auto Position::absolute(Size screen_size, Size object_size) -> xy {
-    return relative(vec2(), screen_size, object_size);
+    return relative(screen_size, object_size);
 }
 
 auto Position::relative(AABB parent_box, Size object_size) -> xy {
-    return relative(parent_box.origin(), parent_box.size(), object_size);
+    return relative(parent_box.size(), object_size);
 }
 
-auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
+auto Position::relative(Size parent_size, Size object_size) -> xy {
     static auto Clamp = [](i32 val, i32 obj_size, i32 total_size) -> i32 {
         if (val == Centered) return (total_size - obj_size) / 2;
         if (val < 0) return total_size + val - obj_size;
@@ -35,8 +35,8 @@ auto Position::relative(xy parent, Size parent_size, Size object_size) -> xy {
 
     auto [sx, sy] = parent_size;
     auto [obj_wd, obj_ht] = object_size;
-    auto x = i32(parent.x) + Clamp(base.x, obj_wd, sx) + xadjust;
-    auto y = i32(parent.y) + Clamp(base.y, obj_ht, sy) + yadjust;
+    auto x = Clamp(base.x, obj_wd, sx) + xadjust;
+    auto y = Clamp(base.y, obj_ht, sy) + yadjust;
 
     auto Adjust = [&](i32 xa, i32 ya) {
         if (base.x != Centered) x -= xa;
@@ -77,12 +77,12 @@ void Element::UpdateBoundingBox(Size size) { SetBoundingBox(_bounding_box.origin
 Widget::Widget(Element* parent, Position pos) : _parent(parent), pos(pos) {
     Assert(parent, "Every widget must have a parent!");
 }
-auto Widget::abox() -> AABB { return {apos(), bounding_box.size()}; }
-auto Widget::apos() -> xy {
+auto Widget::rbox() -> AABB { return {rpos(), bounding_box.size()}; }
+auto Widget::rpos() -> xy {
     DebugAssert(
         _bb_size_initialised,
-        "Accessing apos() before bounding box was set! NEVER do "
-        "UpdateBoundingBox(apos()) or SetBoundingBox(apos(), ...)!"
+        "Accessing rpos() before bounding box was set! NEVER do "
+        "UpdateBoundingBox(rpos()) or SetBoundingBox(rpos(), ...)!"
     );
     return pos.relative(parent.bounding_box, bounding_box.size());
 }
@@ -97,7 +97,7 @@ bool Widget::has_parent(Element* other) {
     }
 }
 
-auto Widget::hovered_child(InputSystem&) -> HoverResult {
+auto Widget::hovered_child(xy) -> HoverResult {
     if (hoverable == Hoverable::Yes) hovered = true;
     return HoverResult::TakeIf(this, hoverable);
 }
@@ -110,7 +110,7 @@ auto Widget::parent_screen() -> Screen& {
     }
 }
 
-auto Widget::selected_child(InputSystem&) -> SelectResult {
+auto Widget::selected_child(xy) -> SelectResult {
     return SelectResult::TakeIf(this, selectable);
 }
 
@@ -196,7 +196,7 @@ void Throbber::draw(Renderer& r) {
 }
 
 void Image::draw(Renderer& r) {
-    if (texture) r.draw_texture_sized(*texture, abox());
+    if (texture) r.draw_texture_sized(*texture, rbox());
 }
 
 void Image::UpdateDimensions() {
@@ -218,14 +218,15 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture, UpdateDimensions());
 //  Group
 // =============================================================================
 auto Group::HoverSelectHelper(
-    InputSystem& input,
-    auto (Widget::*accessor)(InputSystem&)->SelectResult,
+    xy rel_pos,
+    auto (Widget::*accessor)(xy) -> SelectResult,
     Selectable Widget::* property
 ) -> SelectResult {
     auto Get = [&]<typename T>(T&& range) -> SelectResult {
+        auto rel = rel_pos - bounding_box.origin();
         for (auto& c : std::forward<T>(range)) {
-            if (c.bounding_box.contains(input.mouse.pos)) {
-                auto res = (c.*accessor)(input);
+            if (c.bounding_box.contains(rel)) {
+                auto res = (c.*accessor)(rel);
                 if (not res.keep_searching) return res;
             }
         }
@@ -247,11 +248,12 @@ void Group::clear() {
 }
 
 void Group::draw(Renderer& r) {
+    auto _ = r.push_matrix(bounding_box.origin());
     for (auto& c : visible_elements()) c.draw(r);
 }
 
-auto Group::hovered_child(InputSystem& input) -> SelectResult {
-    return HoverSelectHelper(input, &Widget::hovered_child, &Widget::hoverable);
+auto Group::hovered_child(xy rel_pos) -> SelectResult {
+    return HoverSelectHelper(rel_pos, &Widget::hovered_child, &Widget::hoverable);
 }
 
 void Group::refresh(Renderer& r) {
@@ -308,8 +310,8 @@ void Group::refresh(Renderer& r) {
     for (auto& c : ch) c.refresh(r);
 }
 
-auto Group::selected_child(InputSystem& input) -> SelectResult {
-    return HoverSelectHelper(input, &Widget::selected_child, &Widget::selectable);
+auto Group::selected_child(xy rel_pos) -> SelectResult {
+    return HoverSelectHelper(rel_pos, &Widget::selected_child, &Widget::selectable);
 }
 
 void Group::swap(Widget* a, Widget* b) {
@@ -439,14 +441,14 @@ void Screen::tick(InputSystem& input) {
 
         // Check if this element is being hovered over.
         if (check_hover) {
-            auto res = e.hovered_child(input);
+            auto res = e.hovered_child(input.mouse.pos);
             hovered_element = res.widget;
             check_hover = res.keep_searching;
         }
 
         // If there was a click, attempt to select an element.
         if (input.mouse.left) {
-            auto res = e.selected_child(input);
+            auto res = e.selected_child(input.mouse.pos);
             selected_element = res.widget;
             defer { input.mouse.left = res.keep_searching; };
 

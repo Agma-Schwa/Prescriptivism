@@ -103,7 +103,7 @@ Button::Button(
 void Button::draw(Renderer& r) {
     bool active = selectable != Selectable::No;
     r.draw_rect(
-        abox(),
+        rbox(),
         not active ? InactiveButtonColour
         : hovered  ? HoverButtonColour
                    : DefaultButtonColour
@@ -135,7 +135,7 @@ void Label::draw(Renderer& r) {
     xy position;
 
     if (fixed_height != 0) {
-        position = CenterTextInBox(text, fixed_height, abox());
+        position = CenterTextInBox(text, fixed_height, parent_box);
     } else {
         position = auto{pos}.voffset(i32(text.depth)).relative(parent_box, text.text_size);
     }
@@ -193,7 +193,7 @@ void TextBox::update_text(Text new_text) {
 }
 
 auto TextBox::TextPos(const Text& text) -> xy {
-    return CenterTextInBox(text, bounding_box.height(), abox());
+    return CenterTextInBox(text, bounding_box.height(), bounding_box);
 }
 
 void TextBox::draw(Renderer& r) {
@@ -202,6 +202,7 @@ void TextBox::draw(Renderer& r) {
 
 void TextBox::draw(Renderer& r, Colour text_colour) {
     auto& text = label.empty and placeholder.has_value() ? *placeholder : label;
+    auto _ = r.push_matrix(bounding_box.origin());
     auto pos = TextPos(text);
     r.draw_text(text, pos, text_colour);
     if (cursor_offs != -1) {
@@ -224,7 +225,7 @@ void TextBox::refresh(Renderer&) {
     // Absolute position calculation depends on the size, so make sure
     // to initialise them in the right order.
     UpdateBoundingBox(sz);
-    UpdateBoundingBox(apos());
+    UpdateBoundingBox(rpos());
 }
 
 // =============================================================================
@@ -337,7 +338,7 @@ void TextEdit::draw(Renderer& r) {
 
     if (hovered) r.set_cursor(Cursor::IBeam);
 
-    r.draw_rect(abox(), selected ? HoverButtonColour : DefaultButtonColour);
+    r.draw_rect(rbox(), selected ? HoverButtonColour : DefaultButtonColour);
     TextBox::draw(r);
 }
 
@@ -347,7 +348,7 @@ void TextEdit::event_click(InputSystem& input) {
     // one whose offset brings us further away from the click position,
     // we stop and go back to the one before it.
     no_blink_ticks = 20;
-    i32 mx = input.mouse.pos.x;
+    i32 mx = input.mouse.pos.x - bounding_box.origin().x;
     i32 x0 = TextPos(label).x;
     i32 x1 = x0 + i32(label.width);
     if (mx < x0) cursor = 0;

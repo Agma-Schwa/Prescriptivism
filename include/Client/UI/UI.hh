@@ -172,7 +172,7 @@ struct pr::client::Position {
 
     /// Convert to a relative position.
     auto relative(AABB parent_box, Size object_size) -> xy;
-    auto relative(xy origin, Size parent_size, Size object_size) -> xy;
+    auto relative(Size parent_size, Size object_size) -> xy;
 
     /// Offset vertically.
     constexpr auto voffset(i32 offset) -> Position& {
@@ -273,11 +273,11 @@ protected:
     explicit Widget(Element* parent, Position pos = {});
 
 public:
-    /// Calculate the absolute bounding box in screen coordinates.
-    auto abox() -> AABB;
+    /// Calculate the relative bounding box to our parent.
+    auto rbox() -> AABB;
 
-    /// Calculate the absolute position in screen coordinates.
-    auto apos() -> xy;
+    /// Calculate the relative position to our parent.
+    auto rpos() -> xy;
 
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
@@ -290,7 +290,9 @@ public:
 
     /// Determine which of our children is being hovered, if any. Widgets
     /// that don’t have children can just return themselves.
-    virtual auto hovered_child(InputSystem&) -> HoverResult;
+    ///
+    /// The input is the mouse position relative to the parent element.
+    virtual auto hovered_child(xy rel_pos) -> HoverResult;
 
     /// Get the widget’s parent screen
     auto parent_screen() -> Screen&;
@@ -300,7 +302,7 @@ public:
 
     /// Determine which of our children is being selected, if any. Widgets
     /// that don’t have children can just return themselves.
-    virtual auto selected_child(InputSystem&) -> SelectResult;
+    virtual auto selected_child(xy rel_pos) -> SelectResult;
 
     /// Unselect the element.
     void unselect();
@@ -679,14 +681,14 @@ public:
     void swap(Widget* a, Widget* b);
 
     void draw(Renderer& r) override;
-    auto hovered_child(InputSystem&) -> HoverResult override;
+    auto hovered_child(xy rel_pos) -> HoverResult override;
     void refresh(Renderer&) override;
-    auto selected_child(InputSystem&) -> SelectResult override;
+    auto selected_child(xy rel_pos) -> SelectResult override;
 
 private:
     auto HoverSelectHelper(
-        InputSystem& input,
-        auto (Widget::*accessor)(InputSystem&)->SelectResult,
+        xy rel_pos,
+        auto (Widget::*accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
 };
@@ -809,7 +811,7 @@ public:
         return FWD(self).template children<Stack>();
     }
 
-    auto selected_child(InputSystem&) -> SelectResult override;
+    auto selected_child(xy rel_pos) -> SelectResult override;
     void refresh(Renderer&) override;
 };
 
