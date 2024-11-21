@@ -94,7 +94,7 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
 
     Entry(
         Descriptivism,
-        "",
+        "Break a Lock on a sound",
         ""
     ),
 

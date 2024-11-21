@@ -266,19 +266,29 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
         default:
             Log("Sorry, playing {} is not implemented yet", CardDatabase[+card.id].name);
             Kick(client, InvalidPacket);
-            break;
+            return;
+
+        case CardIdValue::P_Descriptivism: {
+            if (not validation::ValidateP_Descriptivism(ValidatorFor(*target_player), c.target_stack_index))
+                return Kick(client, InvalidPacket);
+
+            // Unlock the stack.
+            target_player->word.stacks[c.target_stack_index].locked = false;
+            Broadcast(sc::StackLockChanged{target_player->id, c.target_stack_index, false});
+        } break;
 
         case CardIdValue::P_SpellingReform: {
-            if (not validation::ValidateP_SpellingReform(ValidatorFor(*p), c.target_stack_index))
+            if (not validation::ValidateP_SpellingReform(ValidatorFor(*target_player), c.target_stack_index))
                 return Kick(client, InvalidPacket);
 
             // Lock the stack.
             target_player->word.stacks[c.target_stack_index].locked = true;
             Broadcast(sc::StackLockChanged{target_player->id, c.target_stack_index, true});
-            RemoveCard(*p, card);
-            NextPlayer();
         } break;
     }
+
+    RemoveCard(*p, card);
+    NextPlayer();
 }
 
 // =============================================================================
@@ -424,6 +434,7 @@ void Server::SetUpGame() {
         // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate a Spelling
         // Reform into the player’s hand.
         p->hand.emplace_back(CardId::P_SpellingReform);
+        p->hand.emplace_back(CardId::P_Descriptivism);
     }
     rgs::shuffle(players, rng);
 

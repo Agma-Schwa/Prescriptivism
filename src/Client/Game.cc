@@ -71,20 +71,32 @@ void GameScreen::ResetWords(
 }
 
 auto GameScreen::Targets(Card& c) -> std::generator<Target> {
-    if (c.id.is_sound()) {
+    auto YieldStacksFromAll = [&](auto pred) -> std::generator<Target> {
         for (auto p : all_players) {
-            for (auto [i, s] : p->word->stacks() | vws::enumerate) {
-                // TODO: Handle evolutions that require an extra card.
-                auto res = validation::ValidatePlaySoundCard(c.id, ValidatorFor(*p), i);
-                bool valid = res == validation::PlaySoundCardValidationResult::Valid;
-                if (valid) co_yield Target{s};
-            }
+            auto v = ValidatorFor(*p);
+            for (auto [i, s] : p->word->stacks() | vws::enumerate)
+                if (pred(v, i))
+                    co_yield Target{s};
         }
+    };
+
+#define YieldStacksFromAll(...) co_yield rgs::elements_of(YieldStacksFromAll([&](auto& v, isz i) __VA_ARGS__))
+
+    if (c.id.is_sound()) {
+        YieldStacksFromAll({
+            // TODO: Handle evolutions that require an extra card.
+            auto res = validation::ValidatePlaySoundCard(c.id, v, i);
+            return res == validation::PlaySoundCardValidationResult::Valid;
+        });
         co_return;
     }
 
     switch (c.id.value) {
         default: break;
+        case CardIdValue::P_Descriptivism:
+            YieldStacksFromAll({ return validation::ValidateP_Descriptivism(v, i); });
+            break;
+
         case CardIdValue::P_SpellingReform: {
             auto v = ValidatorFor(us);
             for (auto [i, s] : us.word->stacks() | vws::enumerate)
@@ -92,6 +104,8 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
                     co_yield Target{s};
         } break;
     }
+
+#undef YieldStacksFromAll
 }
 
 // =============================================================================
@@ -205,7 +219,10 @@ void GameScreen::TickSingleTarget() {
     // We’re playing a power card.
     if (our_selected_card->id.is_power()) {
         switch (our_selected_card->id.value) {
-            case CardIdValue::P_SpellingReform: PlaySingleTarget(); return;
+            case CardIdValue::P_Descriptivism:
+            case CardIdValue::P_SpellingReform:
+                PlaySingleTarget();
+                return;
             default:
                 Log("TODO: Implement {}", CardDatabase[+our_selected_card->id].name);
                 ClearSelection();

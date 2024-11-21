@@ -66,7 +66,12 @@ auto ValidatePlaySoundCard(CardId played, const T& on, usz at) -> PlaySoundCardV
     return Invalid;
 }
 
-/// Returns whether the spelling reform is valid.
+template <WordValidator T>
+bool ValidateP_Descriptivism(const T& on, usz at) {
+    // Descriptivism unlocks a locked stack.
+    return on.stack_is_locked(at);
+}
+
 template <WordValidator T>
 bool ValidateP_SpellingReform(const T& on, usz at) {
     // We can only play spelling reforms on our own word
