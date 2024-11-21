@@ -6,6 +6,14 @@
 
 using namespace pr;
 
+bool validation::AlwaysPlayable(CardId card) {
+    switch (card.value) {
+        default: return false;
+        case CardIdValue::P_Whorf:
+            return true;
+    }
+}
+
 auto validation::ValidateInitialWord(constants::Word word, constants::Word original)
     -> InitialWordValidationResult {
     using enum InitialWordValidationResult;

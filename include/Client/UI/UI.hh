@@ -669,8 +669,9 @@ private:
 /// refreshing, drawing, etc.).
 class pr::client::Group : public Widget
     , public WidgetHolder {
-    /// The maximum gap size; 0 means no gap; set to a large value
-    /// (e.g. INT_MAX) to use equal gaps.
+    /// The intended gap size; 0 means no gap; the layout algorithm will
+    /// try to make gaps as large as possible without exceeding this size.
+    // FIXME: Rename to just 'gap'.
     Property(i32, max_gap, 10);
 
     /// Whether the elements of this group should be laid out vertically.

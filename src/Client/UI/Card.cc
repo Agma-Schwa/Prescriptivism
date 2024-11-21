@@ -94,7 +94,7 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
 
     Entry(
         Descriptivism,
-        "Break a Lock on a sound",
+        "Break a Lock on a sound.",
         ""
     ),
 
@@ -215,7 +215,7 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
     Entry(
         SpellingReform,
         "Lock one of your sounds, or combine with a sound card to break "
-        "a lock on an adjacent sound",
+        "a lock on an adjacent sound.",
         ""
     ),
 
@@ -251,7 +251,8 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
 
     Entry(
         Whorf,
-        "",
+        "The current state of your word becomes your original word; all "
+        "cards except the top-most sound cards are removed from your word.",
         ""
     ),
 

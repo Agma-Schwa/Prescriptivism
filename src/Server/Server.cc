@@ -431,10 +431,9 @@ void Server::SetUpGame() {
         );
         deck.erase(deck.end() - HandSize, deck.end());
 
-        // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate a Spelling
-        // Reform into the player’s hand.
-        p->hand.emplace_back(CardId::P_SpellingReform);
-        p->hand.emplace_back(CardId::P_Descriptivism);
+        // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate whatever
+        // power card we’re currently testing into the player’s hand.
+        p->hand.emplace_back(CardId::P_Whorf);
     }
     rgs::shuffle(players, rng);
 

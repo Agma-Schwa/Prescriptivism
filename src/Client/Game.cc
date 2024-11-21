@@ -29,6 +29,40 @@ auto GameScreen::ValidatorFor(Player& p) -> Validator {
 }
 
 // =============================================================================
+// Screens
+// =============================================================================
+ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(pr::client::GameScreen& p) : parent{p} {
+    preview = &Create<Card>(Position::Center());
+    preview->scale = Card::Preview;
+
+    Create<Label>(
+        "Are you sure you want to play this card?",
+        FontSize::Large,
+        Position::HCenter(-100)
+    );
+
+    auto& buttons = Create<Group>(Position::HCenter(100));
+    buttons.create<Button>("Yes", Position(), [&] { Yes(); });
+    buttons.create<Button>("No", Position(), [&] { No(); });
+    buttons.max_gap = 100;
+}
+
+void ConfirmPlaySelectedScreen::on_entered() {
+    Assert(parent.our_selected_card, "No card selected?");
+    preview->id = parent.our_selected_card->id;
+}
+
+void ConfirmPlaySelectedScreen::Yes() {
+    parent.PlayCardWithoutTarget();
+    parent.client.pop_screen();
+}
+
+void ConfirmPlaySelectedScreen::No() {
+    parent.ClearSelection();
+    parent.client.pop_screen();
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
@@ -50,7 +84,7 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
 
 void GameScreen::ResetHand() {
     for (auto& c : our_hand->top_cards()) {
-        if (not Empty(Targets(c))) {
+        if (not Empty(Targets(c)) or validation::AlwaysPlayable(c.id)) {
             c.overlay = Card::Overlay::Default;
             c.selectable = Selectable::Yes;
         } else {
@@ -119,6 +153,13 @@ void GameScreen::ClearSelection(State new_state) {
     our_selected_card = nullptr;
 }
 
+void GameScreen::ClosePreview() {
+    preview->visible = false;
+
+    // Also required if this is called before we tick the preview.
+    hovered_element = nullptr;
+}
+
 void GameScreen::Discard(CardStacks::Stack& stack) {
     ClearSelection();
     our_hand->remove(stack);
@@ -142,6 +183,12 @@ void GameScreen::Pass() {
     }
 }
 
+void GameScreen::PlayCardWithoutTarget() {
+    Assert(our_selected_card, "No card selected?");
+    Log("TODO: Play {}", CardDatabase[+our_selected_card->id].name);
+    ClearSelection();
+}
+
 void GameScreen::TickNoSelection() {
     if (not selected_element) return;
     Assert(not our_selected_card, "Should not be here if a card was previously selected");
@@ -151,8 +198,16 @@ void GameScreen::TickNoSelection() {
     // Clear the selected element pointer of the screen so we can select a new card.
     selected_element = nullptr;
 
-    // TODO: Depending on what card is selected, we may want to change
-    // what we can select here.
+    // Some cards can be played without a target.
+    if (our_selected_card->id == CardId::P_Whorf) {
+        state = State::InAuxiliaryScreen;
+        ResetWords();
+        ClosePreview();
+        client.push_screen(confirm_play_selected_screen);
+        return;
+    }
+
+    // Some require exactly one target.
     state = State::SingleTarget;
 
     // If this is a sound card, make other player’s cards selectable if we can
@@ -320,6 +375,7 @@ void GameScreen::tick(InputSystem& input) {
         case State::NotOurTurn: TickNotOurTurn(); break;
         case State::Passing: TickPassing(); break;
         case State::SingleTarget: TickSingleTarget(); break;
+        case State::InAuxiliaryScreen: Unreachable("Should never get here if in auxiliary screen");
     }
 
     // Preview any card that the user is hovering over.

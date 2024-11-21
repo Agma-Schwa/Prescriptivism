@@ -33,6 +33,10 @@ concept WordValidator = requires (const T& t, usz idx) {
     { t.size() } -> std::convertible_to<usz>;
 };
 
+/// Whether a card is always playable, no matter the board state.
+bool AlwaysPlayable(CardId card);
+
+/// Validate that the initial word selection constitutes a valid word.
 auto ValidateInitialWord(constants::Word word, constants::Word original) -> InitialWordValidationResult;
 
 template <WordValidator T>

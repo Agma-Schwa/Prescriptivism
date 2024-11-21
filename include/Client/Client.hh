@@ -22,6 +22,7 @@
 
 namespace pr::client {
 class Client;
+class ConfirmPlaySelectedScreen;
 class MenuScreen;
 class ErrorScreen;
 class ConnexionScreen;
@@ -126,10 +127,27 @@ public:
     explicit Player(std::string name, u8 id) : _id{id}, _name{std::move(name)} {}
 };
 
+/// This screen is used to confirm whether the user actually wants
+/// to play a card they selected.
+class pr::client::ConfirmPlaySelectedScreen : public Screen {
+    GameScreen& parent;
+    Card* preview;
+
+public:
+    ConfirmPlaySelectedScreen(GameScreen& p);
+
+    void on_entered() override;
+
+private:
+    void Yes();
+    void No();
+};
+
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
     struct Validator;
     friend Validator;
+    friend ConfirmPlaySelectedScreen;
 
     enum struct State {
         /// The starting state. Nothing is selected.
@@ -147,6 +165,10 @@ class pr::client::GameScreen : public Screen {
         /// We pressed the pass button; prompt the user to select
         /// a card to discard.
         Passing,
+
+        /// Another screen (which is drawn on top of this one) is
+        /// currently handling user input; do nothing.
+        InAuxiliaryScreen,
     };
 
     /// A targeted card in someone’s word.
@@ -158,6 +180,7 @@ class pr::client::GameScreen : public Screen {
     };
 
     Client& client;
+    ConfirmPlaySelectedScreen confirm_play_selected_screen{*this};
 
     /// The end turn / pass / cancel button in the lower
     /// right corner of the screen.
@@ -200,10 +223,12 @@ public:
 
 private:
     void ClearSelection(State new_state = State::NoSelection);
+    void ClosePreview();
     void Discard(CardStacks::Stack& stack);
     void Pass();
     auto PlayerById(PlayerId id) -> Player&;
     auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
+    void PlayCardWithoutTarget();
     void ResetHand();
     void ResetWords(Selectable s = Selectable::No, Card::Overlay o = Card::Overlay::Default);
 
