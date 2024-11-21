@@ -13,3 +13,4 @@
 
 ## Valgrind.
 callgrind.out.*
+cachegrind.out.*

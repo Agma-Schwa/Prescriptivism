@@ -271,10 +271,14 @@ using power_card_database::PowerCardDatabase;
 /// The texture used to indicate that a stack is locked.
 LateInit<DrawableTexture> LockedTexture;
 
+/// The card shadow texture.
+LateInit<DrawableTexture> CardShadow;
+
 // This only takes a renderer to ensure that it is called
 // after the renderer has been initialised.
 void client::InitialiseUI(Renderer&) {
     LockedTexture.init(DrawableTexture::LoadFromFile("assets/locked.webp"));
+    CardShadow.init(DrawableTexture::LoadFromFile("assets/shadow.webp"));
     SilenceLog _;
     for (auto& p : PowerCardDatabase) {
         p.image.init(DrawableTexture::LoadFromFile(fs::Path{"assets/Cards"} / p.image_path));
@@ -301,6 +305,14 @@ Card::Card(
 
 void Card::draw(Renderer& r) {
     auto _ = PushTransform(r);
+
+    // Draw a drop shadow before anything else; scale it to the card size
+    // since we only have a single drop shadow texture.
+    {
+        auto _ = r.push_matrix({}, CardSize[scale].wd / f32(CardSize[Preview].wd));
+        r.draw_texture(*CardShadow, {-20, -20});
+    }
+
     auto colour = variant == Variant::Regular ? outline_colour : outline_colour.darken(.2f);
     AABB rect{{0, 0}, CardSize[scale]};
     r.draw_rect(rect, colour.lighten(.1f), BorderRadius[scale]);
