@@ -456,7 +456,7 @@ void Card::refresh(Renderer& r) {
         name.pos = auto{code.pos}.voffset(i32(-code.text.height - 2 * Padding[scale]));
         name.max_width = CardSize[scale].wd / 3;
         name.fixed_height = 0;
-        description.pos = Position::HCenter(10 * Padding[scale]);
+        description.pos = Position::HCenter(Border[scale].ht + 3 * Padding[scale]);
     }
 }
 
