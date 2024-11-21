@@ -332,9 +332,6 @@ private:
     /// Memory buffer for texture atlas allocation.
     std::vector<std::byte> atlas_buffer;
 
-    /// Whether the atlas needs to be rebuilt.
-    bool dirty = false;
-
     /// The width and height of a cell in the texture atlas.
     u32 atlas_entry_width{};
     u32 atlas_entry_height{};
