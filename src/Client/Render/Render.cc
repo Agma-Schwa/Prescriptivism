@@ -46,48 +46,6 @@ struct FTCallImpl {
     }
 };
 
-// FIXME: Load ALL OF THIS at runtime so it’s customisable, and so
-// we can do hot reloading for shaders and fonts.
-constexpr char PrimitiveVertexShaderData[]{
-#embed "Shaders/Primitive.vert"
-};
-
-constexpr char PrimitiveFragmentShaderData[]{
-#embed "Shaders/Primitive.frag"
-};
-
-constexpr char TextVertexShaderData[]{
-#embed "Shaders/Text.vert"
-};
-
-constexpr char TextFragmentShaderData[]{
-#embed "Shaders/Text.frag"
-};
-
-constexpr char ImageVertexShaderData[]{
-#embed "Shaders/Image.vert"
-};
-
-constexpr char ImageFragmentShaderData[]{
-#embed "Shaders/Image.frag"
-};
-
-constexpr char ThrobberVertexShaderData[]{
-#embed "Shaders/Throbber.vert"
-};
-
-constexpr char ThrobberFragmentShaderData[]{
-#embed "Shaders/Throbber.frag"
-};
-
-constexpr char RectangleVertexShaderData[]{
-#embed "Shaders/Rectangle.vert"
-};
-
-constexpr char RectangleFragmentShaderData[]{
-#embed "Shaders/Rectangle.frag"
-};
-
 constexpr char DefaultFontRegular[]{
 #embed "Fonts/Regular.ttf"
 };
@@ -779,30 +737,7 @@ Renderer::Renderer(int initial_wd, int initial_ht, bool set_active) {
     check SDL_GL_SetSwapInterval(1);
 
     // Load shaders.
-    primitive_shader = ShaderProgram(
-        std::span{PrimitiveVertexShaderData},
-        std::span{PrimitiveFragmentShaderData}
-    );
-
-    text_shader = ShaderProgram(
-        std::span{TextVertexShaderData},
-        std::span{TextFragmentShaderData}
-    );
-
-    image_shader = ShaderProgram(
-        std::span{ImageVertexShaderData},
-        std::span{ImageFragmentShaderData}
-    );
-
-    throbber_shader = ShaderProgram(
-        std::span{ThrobberVertexShaderData},
-        std::span{ThrobberFragmentShaderData}
-    );
-
-    rect_shader = ShaderProgram(
-        std::span{RectangleVertexShaderData},
-        std::span{RectangleFragmentShaderData}
-    );
+    reload_shaders();
 
     // Enable blending.
     glEnable(GL_BLEND);
@@ -1040,9 +975,12 @@ void Renderer::reload_shaders() {
     auto Reload = [&](ShaderProgram& program, std::string_view shader_name) {
         auto vert = File::Read(std::format("./assets/Shaders/{}.vert", shader_name)).value();
         auto frag = File::Read(std::format("./assets/Shaders/{}.frag", shader_name)).value();
-        program = ShaderProgram{vert.view(), frag.view()};
+        auto sh = ShaderProgram::Compile(vert.view(), frag.view());
+        if (not sh) Log("Error: {}", sh.error());
+        else program = std::move(sh.value());
     };
 
+    Log("Loading shaders...");
     Reload(primitive_shader, "Primitive");
     Reload(text_shader, "Text");
     Reload(image_shader, "Image");

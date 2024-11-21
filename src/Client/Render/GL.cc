@@ -73,24 +73,30 @@ void DrawableTexture::draw_vertices() const {
 
 struct Shader : Descriptor<glDeleteShader> {
     friend ShaderProgram;
-    Shader(GLenum type, std::span<const char> source);
+    static auto Compile(GLenum type, std::span<const char> source) -> Result<Shader>;
+
+private:
+    Shader() = default;
 };
 
-Shader::Shader(GLenum type, std::span<const char> source) {
-    descriptor = glCreateShader(type);
+auto Shader::Compile(GLenum type, std::span<const char> source) -> Result<Shader> {
+    Shader shader;
+    shader.descriptor = glCreateShader(type);
     auto size = GLint(source.size());
     auto data = source.data();
-    glShaderSource(descriptor, 1, &data, &size);
-    glCompileShader(descriptor);
+    glShaderSource(shader.descriptor, 1, &data, &size);
+    glCompileShader(shader.descriptor);
 
     GLint success;
-    glGetShaderiv(descriptor, GL_COMPILE_STATUS, &success);
+    glGetShaderiv(shader.descriptor, GL_COMPILE_STATUS, &success);
     if (not success) {
         // Throw this on the heap since it’s huge.
         auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
-        glGetShaderInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
-        Log("Shader compilation failed: {}", info_log.get());
+        glGetShaderInfoLog(shader.descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
+        return Error("Shader compilation failed: {}", info_log.get());
     }
+
+    return std::move(shader);
 }
 
 template <typename... T>
@@ -100,26 +106,29 @@ void ShaderProgram::SetUniform(ZTermString name, auto callable, T... args) {
     callable(u, args...);
 }
 
-ShaderProgram::ShaderProgram(
+auto ShaderProgram::Compile(
     std::span<const char> vertex_shader_source,
     std::span<const char> fragment_shader_source
-) {
-    Shader vertex_shader(GL_VERTEX_SHADER, vertex_shader_source);
-    Shader fragment_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
+) -> Result<ShaderProgram> {
+    auto vertex_shader = Try(Shader::Compile(GL_VERTEX_SHADER, vertex_shader_source));
+    auto fragment_shader = Try(Shader::Compile(GL_FRAGMENT_SHADER, fragment_shader_source));
 
-    descriptor = glCreateProgram();
-    glAttachShader(descriptor, vertex_shader.descriptor);
-    glAttachShader(descriptor, fragment_shader.descriptor);
-    glLinkProgram(descriptor);
+    ShaderProgram program;
+    program.descriptor = glCreateProgram();
+    glAttachShader(program.descriptor, vertex_shader.descriptor);
+    glAttachShader(program.descriptor, fragment_shader.descriptor);
+    glLinkProgram(program.descriptor);
 
     GLint success;
-    glGetProgramiv(descriptor, GL_LINK_STATUS, &success);
+    glGetProgramiv(program.descriptor, GL_LINK_STATUS, &success);
     if (not success) {
         // Throw this on the heap since it’s huge.
         auto info_log = std::make_unique<char[]>(+GL_INFO_LOG_LENGTH);
-        glGetProgramInfoLog(descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
-        Log("Shader program linking failed: {}", info_log.get());
+        glGetProgramInfoLog(program.descriptor, +GL_INFO_LOG_LENGTH, nullptr, info_log.get());
+        return Error("Shader program linking failed: {}", info_log.get());
     }
+
+    return std::move(program);
 }
 
 void ShaderProgram::uniform(ZTermString name, vec2 v) {

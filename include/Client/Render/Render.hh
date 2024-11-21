@@ -701,8 +701,6 @@ public:
     auto push_matrix(xy translate, f32 scale = 1) -> MatrixRAII;
 
     /// Reload all shaders.
-    ///
-    /// ONLY USED DURING DEVELOPMENT!!!
     void reload_shaders();
 
     /// Set the active cursor.

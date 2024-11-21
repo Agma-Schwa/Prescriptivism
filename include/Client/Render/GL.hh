@@ -202,10 +202,12 @@ private:
 class pr::client::ShaderProgram : Descriptor<glDeleteProgram> {
 public:
     ShaderProgram() = default;
-    ShaderProgram(
+
+    /// Compile a shader.
+    static auto Compile(
         std::span<const char> vertex_shader_source,
         std::span<const char> fragment_shader_source
-    );
+    ) -> Result<ShaderProgram>;
 
     /// Set a uniform.
     void uniform(ZTermString name, vec2 v);
