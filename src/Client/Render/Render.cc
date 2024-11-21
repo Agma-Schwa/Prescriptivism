@@ -971,13 +971,16 @@ auto Renderer::push_matrix(xy translate, f32 scale) -> MatrixRAII {
 }
 
 void Renderer::reload_shaders() {
-    // TODO: inotify().
+    auto ReloadImpl = [&](ShaderProgram& program, std::string_view shader_name) -> Result<> {
+        auto vert = Try(File::Read(std::format("./assets/Shaders/{}.vert", shader_name)));
+        auto frag = Try(File::Read(std::format("./assets/Shaders/{}.frag", shader_name)));
+        program = Try(ShaderProgram::Compile(vert.view(), frag.view()));
+        return {};
+    };
+
     auto Reload = [&](ShaderProgram& program, std::string_view shader_name) {
-        auto vert = File::Read(std::format("./assets/Shaders/{}.vert", shader_name)).value();
-        auto frag = File::Read(std::format("./assets/Shaders/{}.frag", shader_name)).value();
-        auto sh = ShaderProgram::Compile(vert.view(), frag.view());
-        if (not sh) Log("Error: {}", sh.error());
-        else program = std::move(sh.value());
+        auto res = ReloadImpl(program, shader_name);
+        if (not res) Log("Error loading shader '{}': {}", shader_name, res.error());
     };
 
     Log("Loading shaders...");
