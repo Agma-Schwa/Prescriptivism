@@ -23,12 +23,14 @@
     X(Draw)             \
     X(StartGame)        \
     X(AddSoundToStack)  \
-    X(StackLockChanged)
+    X(StackLockChanged) \
+    X(WordChanged)      \
 
 #define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
     X(Login)             \
     X(PlaySingleTarget)  \
+    X(PlayNoTarget)      \
     X(Pass)
 
 namespace pr {
@@ -226,6 +228,20 @@ DefinePacket(StackLockChanged) {
     /// Whether the stack is locked or unlocked.
     bool locked;
 };
+
+DefinePacket(WordChanged) {
+    Ctor(WordChanged)(PlayerId player, std::vector<std::vector<CardId>> new_word)
+        : player(player),
+          new_word(std::move(new_word)) {}
+
+    Serialisable(player, new_word);
+
+    /// The player whose word is being changed.
+    PlayerId player;
+
+    /// The new word.
+    std::vector<std::vector<CardId>> new_word;
+};
 } // namespace pr::packets::sc
 
 // =============================================================================
@@ -268,6 +284,14 @@ DefinePacket(PlaySingleTarget) {
     /// The index of the card on the player’s word on which
     /// this one is played.
     u32 target_stack_index;
+};
+
+DefinePacket(PlayNoTarget) {
+    Ctor(PlayNoTarget)(u32 card_index) : card_index(card_index) {}
+    Serialisable(card_index);
+
+    /// The index of the card in hand to play.
+    u32 card_index;
 };
 
 DefinePacket(Pass) {

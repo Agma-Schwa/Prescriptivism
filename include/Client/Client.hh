@@ -220,11 +220,13 @@ public:
     void on_refresh(Renderer& r) override;
     void start_turn();
     void tick(InputSystem& input) override;
+    void update_word(PlayerId player, std::span<const std::vector<CardId>> new_word);
 
 private:
     void ClearSelection(State new_state = State::NoSelection);
     void ClosePreview();
     void Discard(CardStacks::Stack& stack);
+    auto GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32>;
     void Pass();
     auto PlayerById(PlayerId id) -> Player&;
     auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.

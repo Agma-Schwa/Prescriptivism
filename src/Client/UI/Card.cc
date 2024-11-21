@@ -572,8 +572,12 @@ void CardStacks::Stack::set_overlay(Card::Overlay new_value) {
 // =============================================================================
 //  CardStacks
 // =============================================================================
+auto CardStacks::add_stack() -> Stack& {
+    return create<Stack>(Position());
+}
+
 void CardStacks::add_stack(CardId c) {
-    auto& card = create<Stack>(Position()).create<Card>(Position());
+    auto& card = add_stack().create<Card>(Position());
     card.id = c;
 }
 

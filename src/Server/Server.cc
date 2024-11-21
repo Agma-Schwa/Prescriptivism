@@ -231,19 +231,70 @@ void Server::handle(net::TCPConnexion& client, cs::Pass pass) {
     NextPlayer();
 }
 
-void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
+void Server::handle(net::TCPConnexion& client, packets::cs::PlayNoTarget packet) {
+    // Check that the player is the current player.
+    auto& p = player_map[client];
+    if (p->id != current_player) return Kick(client, UnexpectedPacket);
+
+    // Check that the card index is valid.
+    if (packet.card_index >= p->hand.size()) return Kick(client, InvalidPacket);
+
+    // Only power cards are allowed here.
+    auto& card = p->hand[packet.card_index];
+    switch (card.id.value) {
+        default:
+            Log("Sorry, playing {} is not implemented yet", CardDatabase[+card.id].name);
+            Kick(client, InvalidPacket);
+            return;
+
+        // Always playable.
+        case CardId::P_Whorf: {
+            Word new_word;
+            usz deck_size = deck.size();
+            for (auto& s : p->word.stacks) {
+                // Empty stacks can simply be ignored here.
+                if (s.cards.empty()) continue;
+
+                // Keep the topmost card.
+                new_word.add_stack(std::move(s.cards.back()));
+
+                // All cards except the topmost one are placed at
+                // the bottom of the deck.
+                for (auto& c : s.cards | vws::take(s.cards.size() - 1))
+                    deck.push_back(std::move(c));
+            }
+
+            // All cards so added are shuffled.
+            rgs::shuffle(deck.begin() + deck_size, deck.end(), rng);
+
+            // Replace the word and broadcast the change.
+            p->word = std::move(new_word);
+            std::vector<std::vector<CardId>> ids;
+            for (auto& s : p->word.stacks) {
+                auto& v = ids.emplace_back();
+                for (auto& c : s.cards) v.push_back(c.id);
+            }
+            Broadcast(sc::WordChanged{p->id, ids});
+        } break;
+    }
+
+    RemoveCard(*p, card);
+    NextPlayer();
+}
+
+void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
     // Check that the player is the current player.
     auto& p = player_map[client];
     if (p->id != current_player) return Kick(client, UnexpectedPacket);
 
     /// Check that the player index is valid.
-    if (c.player >= players.size()) return Kick(client, InvalidPacket);
+    if (packet.player >= players.size()) return Kick(client, InvalidPacket);
 
     // Check that the card indices are valid.
-    auto& target_player = players[c.player];
+    auto& target_player = players[packet.player];
     if (
-        c.card_index >= p->hand.size() or
-        c.target_stack_index >= target_player->word.stacks.size()
+        packet.card_index >= p->hand.size() or
+        packet.target_stack_index >= target_player->word.stacks.size()
     ) return Kick(client, InvalidPacket);
 
     // Now that we have checked that all indices are valid and that it’s
@@ -253,12 +304,12 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
     // player to take an invalid action.
     //
     // The card is a sound card.
-    auto& card = p->hand[c.card_index];
+    auto& card = p->hand[packet.card_index];
     if (card.id.is_sound()) return HandlePlaySoundCard(
         client,
         card,
         *target_player,
-        c.target_stack_index
+        packet.target_stack_index
     );
 
     // The card is a power card.
@@ -269,21 +320,21 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget c) {
             return;
 
         case CardIdValue::P_Descriptivism: {
-            if (not validation::ValidateP_Descriptivism(ValidatorFor(*target_player), c.target_stack_index))
+            if (not validation::ValidateP_Descriptivism(ValidatorFor(*target_player), packet.target_stack_index))
                 return Kick(client, InvalidPacket);
 
             // Unlock the stack.
-            target_player->word.stacks[c.target_stack_index].locked = false;
-            Broadcast(sc::StackLockChanged{target_player->id, c.target_stack_index, false});
+            target_player->word.stacks[packet.target_stack_index].locked = false;
+            Broadcast(sc::StackLockChanged{target_player->id, packet.target_stack_index, false});
         } break;
 
         case CardIdValue::P_SpellingReform: {
-            if (not validation::ValidateP_SpellingReform(ValidatorFor(*target_player), c.target_stack_index))
+            if (not validation::ValidateP_SpellingReform(ValidatorFor(*target_player), packet.target_stack_index))
                 return Kick(client, InvalidPacket);
 
             // Lock the stack.
-            target_player->word.stacks[c.target_stack_index].locked = true;
-            Broadcast(sc::StackLockChanged{target_player->id, c.target_stack_index, true});
+            target_player->word.stacks[packet.target_stack_index].locked = true;
+            Broadcast(sc::StackLockChanged{target_player->id, packet.target_stack_index, true});
         } break;
     }
 
@@ -363,6 +414,8 @@ void Server::SendGameState(Player& p) {
     // it’s sent so rarely (once at the start of the game and once
     // every time someone rejoins), that it’s not really worth moving
     // this into a separate function.
+    //
+    // TODO: Send *entire* stacks, not just the topmost card in each stack.
     std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
     for (auto [i, p] : players | vws::enumerate) {
         player_infos[i].name = p->name;

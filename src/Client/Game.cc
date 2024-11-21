@@ -165,6 +165,13 @@ void GameScreen::Discard(CardStacks::Stack& stack) {
     our_hand->remove(stack);
 }
 
+auto GameScreen::GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32> {
+    auto& our_stack = card.parent.as<CardStacks::Stack>();
+    auto idx = our_hand->index_of(our_stack);
+    Assert(idx.has_value(), "Card not in hand?");
+    return {our_stack, *idx};
+}
+
 void GameScreen::Pass() {
     ClearSelection(state == State::Passing ? State::NoSelection : State::Passing);
 
@@ -185,8 +192,9 @@ void GameScreen::Pass() {
 
 void GameScreen::PlayCardWithoutTarget() {
     Assert(our_selected_card, "No card selected?");
-    Log("TODO: Play {}", CardDatabase[+our_selected_card->id].name);
-    ClearSelection();
+    auto [stack, idx] = GetStackInHand(*our_selected_card);
+    client.server_connexion.send(packets::cs::PlayNoTarget{idx});
+    Discard(stack);
 }
 
 void GameScreen::TickNoSelection() {
@@ -223,10 +231,9 @@ void GameScreen::TickNotOurTurn() {}
 
 void GameScreen::TickPassing() {
     if (not selected_element) return;
-    auto& our_stack = selected_element->as<Card>().parent.as<CardStacks::Stack>();
-    auto idx = our_hand->index_of(our_stack);
-    client.server_connexion.send(packets::cs::Pass{*idx});
-    Discard(our_stack);
+    auto [stack, idx] = GetStackInHand(selected_element->as<Card>());
+    client.server_connexion.send(packets::cs::Pass{idx});
+    Discard(stack);
     end_turn_button->update_text("Pass");
 
     /// Make sure the user can’t press the pass button again (and the server
@@ -296,6 +303,14 @@ void GameScreen::add_card(PlayerId id, u32 stack_idx, CardId card) {
 
 void GameScreen::add_card_to_hand(CardId id) {
     our_hand->add_stack(id);
+}
+
+void GameScreen::end_turn() {
+    state = State::NotOurTurn;
+    end_turn_button->selectable = Selectable::No;
+    our_hand->make_selectable(Selectable::No);
+    our_hand->set_overlay(Card::Overlay::Inactive);
+    ClearSelection();
 }
 
 void GameScreen::enter(packets::sc::StartGame sg) {
@@ -398,10 +413,14 @@ void GameScreen::start_turn() {
     // TODO: Automatically go into passing mode if we cannot play anything in our hand.
 }
 
-void GameScreen::end_turn() {
-    state = State::NotOurTurn;
-    end_turn_button->selectable = Selectable::No;
-    our_hand->make_selectable(Selectable::No);
-    our_hand->set_overlay(Card::Overlay::Inactive);
-    ClearSelection();
+void GameScreen::update_word(
+    pr::PlayerId player,
+    std::span<const std::vector<CardId>> new_word
+) {
+    auto& p = PlayerById(player);
+    p.word->clear();
+    for (auto& s : new_word) {
+        auto& stack = p.word->add_stack();
+        for (auto c : s) stack.push(c);
+    }
 }

@@ -38,6 +38,8 @@ public:
 };
 
 class pr::server::Stack {
+    // FIXME: This doesn’t handle empty stacks, which will be a problem
+    // as soon as we introduce deleting entire stacks.
     ComputedReadonly(CardId, top, cards.back().id);
     ComputedReadonly(bool, full, cards.size() == constants::MaxSoundStackSize);
 

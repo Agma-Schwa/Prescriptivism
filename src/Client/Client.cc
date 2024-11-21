@@ -308,6 +308,10 @@ void Client::handle(sc::StackLockChanged lock) {
     game_screen.lock_changed(lock.player, lock.stack_index, lock.locked);
 }
 
+void Client::handle(packets::sc::WordChanged wc) {
+    game_screen.update_word(wc.player, wc.new_word);
+}
+
 void Client::TickNetworking() {
     if (server_connexion.disconnected) return;
     server_connexion.receive([&](net::ReceiveBuffer& buf) {

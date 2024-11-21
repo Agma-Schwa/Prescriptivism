@@ -808,6 +808,9 @@ public:
         return static_cast<Stack&>(*widgets[i]);
     }
 
+    /// Add an empty stack.
+    auto add_stack() -> Stack&;
+
     /// Add a stack of cards containing a single card with the given Id.
     void add_stack(CardId c);
 
