@@ -313,7 +313,10 @@ void Card::draw(Renderer& r) {
         r.draw_texture(*CardShadow, {-20, -20});
     }
 
-    auto colour = variant == Variant::Regular ? outline_colour : outline_colour.darken(.2f);
+    auto colour = variant == Variant::Regular ? outline_colour
+                : variant == Variant::Ghost   ? Colour{222, 222, 222, 255}
+                                              : outline_colour.darken(.2f);
+
     AABB rect{{0, 0}, CardSize[scale]};
     r.draw_rect(rect, colour.lighten(.1f), BorderRadius[scale]);
     if (selected) r.draw_outline_rect(

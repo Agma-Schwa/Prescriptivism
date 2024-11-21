@@ -607,6 +607,9 @@ public:
 
         /// Used for the topmost card in a full stack.
         FullStackTop,
+
+        /// Used for sounds that have been removed from a word.
+        Ghost,
     };
 
     static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
