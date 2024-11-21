@@ -5,12 +5,14 @@
 
 ## Build files.
 /out/
+/out-sanitise/
 /start
 /Prescriptivism
 /PrescriptivismServer
 /Prescriptivism.exe
 /PrescriptivismServer.exe
 
-## Valgrind.
-callgrind.out.*
-cachegrind.out.*
+## Profiling.
+/callgrind.out.*
+/cachegrind.out.*
+/perf.data
