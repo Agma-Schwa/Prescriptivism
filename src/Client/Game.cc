@@ -44,7 +44,7 @@ ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(pr::client::GameScreen& p) 
     auto& buttons = Create<Group>(Position::HCenter(100));
     buttons.create<Button>("Yes", Position(), [&] { Yes(); });
     buttons.create<Button>("No", Position(), [&] { No(); });
-    buttons.max_gap = 100;
+    buttons.gap = 100;
 }
 
 void ConfirmPlaySelectedScreen::on_entered() {
@@ -310,7 +310,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
             us.word = &Create<CardStacks>(Position(), p.word);
             our_hand = &Create<CardStacks>(Position(), sg.hand);
             our_hand->scale = Card::Hand;
-            our_hand->max_gap = -Card::CardSize[Card::Hand].wd / 2;
+            our_hand->gap = -Card::CardSize[Card::Hand].wd / 2;
             our_hand->selection_mode = CardStacks::SelectionMode::Card;
             us.word->alignment = -5;
             continue;
@@ -360,7 +360,7 @@ void GameScreen::on_refresh(Renderer& r) {
 
     // Position the other players’ words at the top of the screen.
     other_words->pos = Position::HCenter(-100);
-    other_words->max_gap = 100;
+    other_words->gap = 100;
 }
 
 void GameScreen::tick(InputSystem& input) {

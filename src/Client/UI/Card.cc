@@ -555,7 +555,7 @@ void CardStacks::Stack::push(CardId card) {
 
 void CardStacks::Stack::refresh(Renderer& r) {
     for (auto& c : cards()) c.scale = scale;
-    max_gap = -Card::CardSize[scale].ht + 2 * Card::Border[scale].ht;
+    gap = -Card::CardSize[scale].ht + 2 * Card::Border[scale].ht;
     Group::refresh(r);
 }
 

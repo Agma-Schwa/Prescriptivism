@@ -671,8 +671,9 @@ class pr::client::Group : public Widget
     , public WidgetHolder {
     /// The intended gap size; 0 means no gap; the layout algorithm will
     /// try to make gaps as large as possible without exceeding this size.
-    // FIXME: Rename to just 'gap'.
-    Property(i32, max_gap, 10);
+    ///
+    /// The gap can be negative, in which case the elements will overlap.
+    Property(i32, gap, 10);
 
     /// Whether the elements of this group should be laid out vertically.
     Property(bool, vertical, false);

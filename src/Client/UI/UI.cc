@@ -240,7 +240,7 @@ auto Group::HoverSelectHelper(
     // the maximum gap is negative (which means that the widgets may
     // overlap with widgets on the right being above), in which case
     // we pick the last one.
-    return max_gap < 0 ? Get(children() | vws::reverse) : Get(children());
+    return gap < 0 ? Get(children() | vws::reverse) : Get(children());
 }
 
 void Group::clear() {
@@ -280,31 +280,31 @@ void Group::refresh(Renderer& r) {
 
         // If the gap is *negative*, i.e. we’re supposed to overlap
         // elements, factor it into the calculation.
-        if (max_gap < 0) total_extent += max_gap;
+        if (gap < 0) total_extent += gap;
     }
 
     // Compute gap size.
     auto parent_extent = parent.bounding_box.extent(a);
-    i32 gap = 0;
+    i32 g = 0;
     if (total_extent < parent_extent and ch.size() > 1) {
-        gap = std::min(
-            max_gap,
+        g = std::min(
+            gap,
             i32((parent_extent - total_extent) / (ch.size() - 1))
         );
-    } else if (max_gap < 0) {
-        gap = max_gap;
+    } else if (gap < 0) {
+        g = gap;
     }
 
     // Position the children.
     i32 offset = 0;
     for (auto& c : ch) {
         c.pos = Position(flip(a), alignment, offset);
-        offset += c.bounding_box.extent(a) + gap;
+        offset += c.bounding_box.extent(a) + g;
     }
 
     // Update our bounding box.
     auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.extent(flip(a)); }));
-    auto sz = Size{a, offset - gap, max};
+    auto sz = Size{a, offset - g, max};
     UpdateBoundingBox(sz);
 
     // And refresh the children again now that we know where everything is.
@@ -330,7 +330,7 @@ void Group::make_selectable(Selectable new_value) {
     }
 }
 
-TRIVIAL_CACHING_SETTER(Group, i32, max_gap);
+TRIVIAL_CACHING_SETTER(Group, i32, gap);
 TRIVIAL_CACHING_SETTER(Group, bool, vertical);
 TRIVIAL_CACHING_SETTER(Group, i32, alignment);
 
