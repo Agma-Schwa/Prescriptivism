@@ -172,9 +172,16 @@ public:
         return {h, s, l};
     }
 
+    constexpr auto invert() const -> Colour { return {255 - r8, 255 - g8, 255 - b8, a8}; }
+
     constexpr auto lighten(f32 amount) const -> Colour {
         auto [h, s, l] = hsl();
         return HSLA(h, s, std::min(1.f, l + amount), a);
+    }
+
+    constexpr auto luminosity_invert() const -> Colour {
+        auto [h, s, l] = hsl();
+        return HSLA(h, s, 1 - l, a);
     }
 
     constexpr auto vec4() const -> glm::vec4 { return {r, g, b, a}; }

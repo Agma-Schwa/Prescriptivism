@@ -19,6 +19,13 @@ constexpr auto VowelColour = Colour::RGBA(0xfad3'84ff);
 constexpr auto PowerColour = Colour::RGBA(0xb2ce'feff);
 constexpr auto UniquePowerColour = Colour::RGBA(0xd0bc'f3ff);
 
+// The inverted versions of the power card colours happen to be pretty, so
+// use them for extra consonants and vowels.
+//
+// FIXME: Not constexpr because __builtin_fmodf is apparently not constexpr yet.
+const auto ExtraConsonantColour = PowerColour.invert().luminosity_invert();
+const auto ExtraVowelColour = UniquePowerColour.invert().luminosity_invert();
+
 // =============================================================================
 //  Card Data
 // =============================================================================
@@ -314,6 +321,7 @@ void Card::draw(Renderer& r) {
     }
 
     auto colour = variant == Variant::Regular ? outline_colour
+                : variant == Variant::Added   ? alternate_colour
                 : variant == Variant::Ghost   ? Colour{222, 222, 222, 255}
                                               : outline_colour.darken(.2f);
 
@@ -463,6 +471,7 @@ void Card::set_id(CardId ct) {
     // Sound card properties.
     if (ct.type() == CardType::SoundCard) {
         outline_colour = ct.is_consonant() ? ConsonantColour : VowelColour;
+        alternate_colour = ct.is_consonant() ? ExtraConsonantColour : ExtraVowelColour;
         code.update_text(std::format( //
             "{}{}{}{}",
             ct.is_consonant() ? 'P' : 'F',

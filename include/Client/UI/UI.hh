@@ -610,6 +610,9 @@ public:
 
         /// Used for sounds that have been removed from a word.
         Ghost,
+
+        /// Used for sounds that have been added to a word.
+        Added,
     };
 
     static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
@@ -639,6 +642,7 @@ private:
     Label middle;
     Label description;
     Colour outline_colour;
+    Colour alternate_colour;
     Image image;
 
 public:
