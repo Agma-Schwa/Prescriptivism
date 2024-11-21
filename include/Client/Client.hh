@@ -247,7 +247,7 @@ public:
     net::TCPConnexion server_connexion;
 
 private:
-    Screen* current_screen = nullptr;
+    std::vector<Screen*> screen_stack;
 
     explicit Client(Renderer r);
 
@@ -262,8 +262,17 @@ public:
         std::string password
     );
 
-    /// Enter a screen.
-    void enter_screen(Screen& s);
+    /// Pop the topmost screen off the stack. The screen below it is
+    /// *not* reentered.
+    void pop_screen();
+
+    /// Push a screen onto the stack. The topmost screen is responsible for
+    /// handling user input. Screens below it will still be drawn and refreshed,
+    /// but will not be ticked or receive input.
+    void push_screen(Screen& s);
+
+    /// Swap out the topmost screen on the screen stack for the given screen.
+    void set_screen(Screen& s);
 
     /// Show an error to the user.
     void show_error(std::string error, Screen& return_to);

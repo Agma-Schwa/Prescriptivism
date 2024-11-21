@@ -426,16 +426,22 @@ void Screen::refresh(Renderer& r) {
 }
 
 void Screen::tick(InputSystem& input) {
-    hovered_element = nullptr;
+    // Reset the currently hovered element since we always recompute
+    // this; we also need to make sure to clear its hovered flag here.
+    if (hovered_element) {
+        hovered_element->hovered = false;
+        hovered_element = nullptr;
+    }
 
     // Deselect the currently selected element if there was a click.
     if (input.mouse.left and selected_element) selected_element->unselect();
 
-    // First, reset all children’s properties.
-    for (auto& e : visible_elements()) e.hovered = false;
+    // Whether we need to keep searching for the hovered element; this
+    // needs to be a separate flag since we may want to continue searching
+    // even if we’ve already found a hovered element, and vice versa.
+    bool check_hover = true;
 
     // Then, find the hovered/selected element.
-    bool check_hover = true;
     for (auto& e : visible_elements()) {
         if (not check_hover and not input.mouse.left) break;
         if (not e.bounding_box.contains(input.mouse.pos)) continue;

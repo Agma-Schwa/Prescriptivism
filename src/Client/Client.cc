@@ -18,6 +18,9 @@ using namespace pr::client;
 namespace sc = packets::sc;
 namespace cs = packets::cs;
 
+// Colour used to draw a veil on top of a screen if it is not the topmost one.
+static constexpr Colour Veil = Colour{0, 0, 0, 200};
+
 // =============================================================================
 //  Error Screen
 // =============================================================================
@@ -28,14 +31,14 @@ ErrorScreen::ErrorScreen(Client& c) {
     Create<Button>(
         "Back",
         Position::HCenter(150),
-        [&] { c.enter_screen(*return_screen); }
+        [&] { c.set_screen(*return_screen); }
     );
 }
 
 void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
     msg->update_text(std::move(t));
     return_screen = &return_to;
-    c.enter_screen(*this);
+    c.set_screen(*this);
 }
 
 // =============================================================================
@@ -111,7 +114,7 @@ void ConnexionScreen::enter(std::string addr, std::string name, std::string pass
     address = std::move(addr);
     username = std::move(name);
     password = std::move(pass);
-    client.enter_screen(*this);
+    client.set_screen(*this);
 }
 
 void ConnexionScreen::tick(InputSystem& input) {
@@ -119,7 +122,7 @@ void ConnexionScreen::tick(InputSystem& input) {
     switch (st) {
         case State::Aborted:
             connexion_thread.stop_and_release();
-            client.enter_screen(client.menu_screen);
+            client.set_screen(client.menu_screen);
             break;
 
         case State::Connecting: {
@@ -138,7 +141,7 @@ void ConnexionScreen::tick(InputSystem& input) {
             // We do! Tell the server who we are and switch to game screen.
             client.server_connexion = std::move(conn.value());
             client.server_connexion.send(packets::cs::Login(std::move(username), std::move(password)));
-            client.enter_screen(client.waiting_screen);
+            client.set_screen(client.waiting_screen);
             return;
         }
 
@@ -186,7 +189,7 @@ void WordChoiceScreen::SendWord() {
     // Validate the word; if it is valid, submit it.
     if (validation::ValidateInitialWord(a, original_word) == Valid) {
         client.server_connexion.send(cs::WordChoice{a});
-        client.enter_screen(client.waiting_screen);
+        client.set_screen(client.waiting_screen);
         return;
     }
 
@@ -222,7 +225,7 @@ void WordChoiceScreen::enter(const constants::Word& word) {
     cards->clear();
     for (auto s : word) cards->add_stack(s);
     cards->make_selectable();
-    client.enter_screen(*this);
+    client.set_screen(*this);
 }
 
 void WordChoiceScreen::on_refresh(Renderer& r) {
@@ -286,12 +289,10 @@ void Client::handle(sc::Draw dr) {
 }
 
 void Client::handle(sc::StartTurn) {
-    Assert(current_screen == &game_screen, "StartTurn should only happen after StartGame");
     game_screen.start_turn();
 }
 
 void Client::handle(sc::EndTurn) {
-    Assert(current_screen == &game_screen, "StartTurn should only happen after StartGame");
     game_screen.end_turn();
 }
 
@@ -339,7 +340,7 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
     sc::StartGame sg{pi, {CardId::P_SpellingReform, CardId::P_Chomsky, CardId::V_u}, 0};
     game_screen.enter(sg);
     */
-    enter_screen(menu_screen);
+    push_screen(menu_screen);
 }
 
 void Client::Run() {
@@ -357,8 +358,20 @@ void Client::RunAndConnect(std::string address, std::string username, std::strin
     c.RunGame();
 }
 
-void Client::enter_screen(Screen& s) {
-    current_screen = &s;
+void Client::pop_screen() {
+    Assert(screen_stack.size() > 1, "Screen stack underflow");
+    screen_stack.pop_back();
+}
+
+void Client::push_screen(pr::client::Screen& s) {
+    screen_stack.emplace_back();
+    set_screen(s);
+}
+
+void Client::set_screen(Screen& s) {
+    Assert(not screen_stack.empty(), "To set the initial screen, use push_screen() instead");
+    Assert(not rgs::contains(screen_stack, &s), "Cannot enter a screen that has already been entered");
+    screen_stack.back() = &s;
     s.refresh(renderer);
     s.on_entered();
 }
@@ -371,13 +384,16 @@ void Client::Tick() {
     Renderer::Frame _ = renderer.frame();
 
     // Refresh screen info.
-    current_screen->refresh(renderer);
+    for (auto s : screen_stack) s->refresh(renderer);
 
     // Tick the screen.
-    current_screen->tick(input_system);
+    screen_stack.back()->tick(input_system);
 
     // Draw it.
-    current_screen->draw(renderer);
+    for (auto s : screen_stack) {
+        s->draw(renderer);
+        if (s != screen_stack.back()) renderer.draw_rect(xy{}, renderer.size(), Veil);
+    }
 }
 
 void Client::RunGame() {

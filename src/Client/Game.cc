@@ -286,7 +286,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
 
     // Finally, ‘end’ our turn to reset everything.
     end_turn();
-    client.enter_screen(*this);
+    client.set_screen(*this);
 }
 
 void GameScreen::lock_changed(PlayerId player, u32 stack_index, bool locked) {
