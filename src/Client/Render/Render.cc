@@ -778,7 +778,52 @@ void Renderer::clear(Colour c) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
+void Renderer::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
+    use(primitive_shader, {});
+    primitive_shader.uniform("in_colour", c.vec4());
+
+    // A thickness of 1 doesn’t work w/ our algorithm that extrudes
+    // halfway to either side, so clamp it to at least 2.
+    thickness = std::max(thickness, 2);
+
+    // Compute the points for the arrow head, taking into account
+    // the thickness of the line. For this, we compute perpendicular
+    // vectors, extrude outwards, and then back towards the start
+    // position.
+    //
+    // Furthermore, the tip of the arrow has to extrude outwards
+    // from the actual arrow head since it tapers off.
+    static constexpr f32 HeadSz = 2.f;
+    auto start = start_pos.vec();
+    auto end = end_pos.vec();
+    auto dir = glm::normalize(end - start);
+    auto head_end = end + dir * (thickness * HeadSz);
+    auto n1 = glm::vec2(-dir.y, dir.x);
+    auto n2 = glm::vec2(dir.y, -dir.x);
+    auto h1 = end + n1 * (thickness * HeadSz) - dir * (thickness * HeadSz);
+    auto h2 = end + n2 * (thickness * HeadSz) - dir * (thickness * HeadSz);
+
+    // We use a rectangle instead of a GL line for the shaft because
+    // this makes drawing the arrow head easier.
+    auto a1 = start + n1 * (thickness / 2.f);
+    auto a2 = start + n2 * (thickness / 2.f);
+    auto a3 = end + n2 * (thickness / 2.f);
+    auto a4 = end + n1 * (thickness / 2.f);
+    VertexArrays vao{VertexLayout::Position2D};
+    vec2 verts[] {
+        // start -> end
+        a1, a2, a3,
+        a3, a4, a1,
+        // head
+        head_end, h1, h2,
+    };
+
+    vao.add_buffer(verts, GL_TRIANGLES);
+    vao.draw_vertices();
+}
+
 void Renderer::draw_line(xy start, xy end, Colour c) {
+    glLineWidth(1);
     use(primitive_shader, {});
     primitive_shader.uniform("in_colour", c.vec4());
     VertexArrays vao{VertexLayout::Position2D};

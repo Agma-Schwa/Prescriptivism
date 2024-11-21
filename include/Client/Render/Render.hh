@@ -605,6 +605,9 @@ public:
     /// Clear the screen.
     void clear(Colour c = Colour::White);
 
+    /// Draw an arrow from one point to another.
+    void draw_arrow(xy start, xy end, i32 thickness = 2, Colour c = Colour::White);
+
     /// Draw a line between two points.
     void draw_line(xy start, xy end, Colour c = Colour::White);
 
