@@ -681,23 +681,44 @@ Renderer::Renderer(int initial_wd, int initial_ht, bool set_active) {
         check SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         check SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
         check SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
+        // Enable multisampling.
+        check SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     });
 
-    // Create the window.
-    window = check SDL_CreateWindow(
-        "Prescriptivism, the Game",
-        initial_wd,
-        initial_ht,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
-    );
+    // We want to set the sample count to the maximum value the GPU supports,
+    // but to query the value, we need to create a window first! In conclusion,
+    // we need to create the window and context twice here.
+    auto CreateWindowAndContext = [&](bool hidden) {
+        auto flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+        if (hidden) flags |= SDL_WINDOW_HIDDEN;
 
-    // Create the OpenGL context.
-    context = check SDL_GL_CreateContext(*window);
+        // Create the window.
+        window = check SDL_CreateWindow(
+            "Prescriptivism, the Game",
+            initial_wd,
+            initial_ht,
+            flags
+        );
 
-    // Initialise OpenGL.
-    check SDL_GL_MakeCurrent(*window, *context);
+        // Create the OpenGL context.
+        context = check SDL_GL_CreateContext(*window);
+
+        // Initialise OpenGL.
+        check SDL_GL_MakeCurrent(*window, *context);
+    };
+
+    // Create a dummy window and context to query the sample count.
+    CreateWindowAndContext(true);
     glbinding::useCurrentContext();
     glbinding::initialize(SDL_GL_GetProcAddress);
+    GLint max_samples{};
+    glGetIntegerv(GL_MAX_SAMPLES, &max_samples);
+
+    // Now that we have the sample count, create the actual window and context.
+    Log("Using {}x multisampling", max_samples);
+    check SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, max_samples);
+    CreateWindowAndContext(false);
 
     // After every gl function call (except 'glGetError'), log
     // if there was an error.
@@ -739,8 +760,10 @@ Renderer::Renderer(int initial_wd, int initial_ht, bool set_active) {
     // Load shaders.
     reload_shaders();
 
-    // Enable blending.
+    // Enable blending, smooth lines, and multisampling.
     glEnable(GL_BLEND);
+    glEnable(GL_LINE_SMOOTH);
+    glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Make this the current renderer.
