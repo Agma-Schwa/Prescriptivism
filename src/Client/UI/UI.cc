@@ -122,17 +122,17 @@ void Widget::unselect() {
 }
 
 void Widget::unselect_impl(Screen& parent) {
+    // ALWAYS check these since we may be about to delete this widget.
+    if (parent.hovered_element == this) parent.hovered_element = nullptr;
+    if (parent.selected_element == this) parent.selected_element = nullptr;
+
     // If this is selected, unselect it.
-    if (selected) {
-        selected = false;
-        if (parent.selected_element == this) parent.selected_element = nullptr;
-        if (parent.hovered_element == this) parent.hovered_element = nullptr;
-    }
+    if (selected) selected = false;
 
     // Otherwise, if this is a group, try to unselect all of our children;
     // this is required if we’re e.g. deleting a group whose child needs to
     // be untagged as the selected element.
-    else if (auto g = cast<Group>()) {
+    if (auto g = cast<Group>()) {
         for (auto& ch : g->children()) ch.unselect_impl(parent);
     }
 }

@@ -25,6 +25,7 @@
     X(AddSoundToStack)  \
     X(StackLockChanged) \
     X(WordChanged)      \
+    X(DiscardAll)
 
 #define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
@@ -242,6 +243,9 @@ DefinePacket(WordChanged) {
     /// The new word.
     std::vector<std::vector<CardId>> new_word;
 };
+
+DefinePacket(DiscardAll) { Serialisable(); };
+
 } // namespace pr::packets::sc
 
 // =============================================================================

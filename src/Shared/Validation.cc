@@ -9,6 +9,7 @@ using namespace pr;
 bool validation::AlwaysPlayable(CardId card) {
     switch (card.value) {
         default: return false;
+        case CardIdValue::P_Babel:
         case CardIdValue::P_Whorf:
             return true;
     }

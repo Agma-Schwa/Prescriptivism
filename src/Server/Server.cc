@@ -248,6 +248,18 @@ void Server::handle(net::TCPConnexion& client, packets::cs::PlayNoTarget packet)
             return;
 
         // Always playable.
+        case CardId::P_Babel: {
+            Broadcast(sc::DiscardAll{});
+            for (auto& player : players) {
+                rgs::move(player->hand, std::back_inserter(discard));
+                player->hand.clear();
+                Draw(*player, HandSize);
+            }
+
+            // Do NOT remove the card here since it’s already been discarded.
+        } break;
+
+        // Always playable.
         case CardId::P_Whorf: {
             Word new_word;
             usz deck_size = deck.size();
@@ -274,11 +286,12 @@ void Server::handle(net::TCPConnexion& client, packets::cs::PlayNoTarget packet)
                 auto& v = ids.emplace_back();
                 for (auto& c : s.cards) v.push_back(c.id);
             }
+
             Broadcast(sc::WordChanged{p->id, ids});
+            RemoveCard(*p, card);
         } break;
     }
 
-    RemoveCard(*p, card);
     NextPlayer();
 }
 
@@ -486,7 +499,7 @@ void Server::SetUpGame() {
 
         // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate whatever
         // power card we’re currently testing into the player’s hand.
-        p->hand.emplace_back(CardId::P_Whorf);
+        p->hand.emplace_back(CardId::P_Babel);
     }
     rgs::shuffle(players, rng);
 

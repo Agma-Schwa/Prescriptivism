@@ -214,6 +214,7 @@ public:
     explicit GameScreen(Client& c);
     void add_card(PlayerId id, u32 stack_idx, CardId card);
     void add_card_to_hand(CardId id);
+    void discard(u32 amount);
     void enter(packets::sc::StartGame sg);
     void end_turn();
     void lock_changed(PlayerId player, u32 stack_index, bool locked);

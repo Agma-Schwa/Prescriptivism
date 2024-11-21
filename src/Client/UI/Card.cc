@@ -64,7 +64,7 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
 
     Entry(
         Babel,
-        "",
+        "Each player discards their hand, then draws 7 cards.",
         ""
     ),
 

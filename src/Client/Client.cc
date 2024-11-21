@@ -312,6 +312,10 @@ void Client::handle(packets::sc::WordChanged wc) {
     game_screen.update_word(wc.player, wc.new_word);
 }
 
+void Client::handle(packets::sc::DiscardAll) {
+    game_screen.discard(0);
+}
+
 void Client::TickNetworking() {
     if (server_connexion.disconnected) return;
     server_connexion.receive([&](net::ReceiveBuffer& buf) {

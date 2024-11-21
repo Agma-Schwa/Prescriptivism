@@ -207,12 +207,16 @@ void GameScreen::TickNoSelection() {
     selected_element = nullptr;
 
     // Some cards can be played without a target.
-    if (our_selected_card->id == CardId::P_Whorf) {
-        state = State::InAuxiliaryScreen;
-        ResetWords();
-        ClosePreview();
-        client.push_screen(confirm_play_selected_screen);
-        return;
+    switch (our_selected_card->id.value) {
+        default: break;
+        case CardId::P_Babel:
+        case CardId::P_Whorf: {
+            state = State::InAuxiliaryScreen;
+            ResetWords();
+            ClosePreview();
+            client.push_screen(confirm_play_selected_screen);
+            return;
+        }
     }
 
     // Some require exactly one target.
@@ -303,6 +307,12 @@ void GameScreen::add_card(PlayerId id, u32 stack_idx, CardId card) {
 
 void GameScreen::add_card_to_hand(CardId id) {
     our_hand->add_stack(id);
+}
+
+void GameScreen::discard(base::u32 amount) {
+    // 0 means discard the entire hand.
+    if (amount == 0) our_hand->clear();
+    else Log("TODO: Implement discarding {} cards", amount);
 }
 
 void GameScreen::end_turn() {
