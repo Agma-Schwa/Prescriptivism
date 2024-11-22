@@ -1,6 +1,7 @@
 #ifndef PRESCRIPTIVISM_CLIENT_CLIENT_HH
 #define PRESCRIPTIVISM_CLIENT_CLIENT_HH
 
+#include <Client/Game.hh>
 #include <Client/Render/GL.hh>
 #include <Client/Render/Render.hh>
 #include <Client/UI/UI.hh>
@@ -22,14 +23,11 @@
 
 namespace pr::client {
 class Client;
-class ConfirmPlaySelectedScreen;
 class MenuScreen;
 class ErrorScreen;
 class ConnexionScreen;
 class WaitingScreen;
 class WordChoiceScreen;
-class GameScreen;
-class Player;
 } // namespace pr::client
 
 // =============================================================================
@@ -105,156 +103,6 @@ public:
     void enter(const constants::Word& word);
     void on_refresh(Renderer& r) override;
     void tick(InputSystem& input) override;
-};
-
-// =============================================================================
-//  In-game Screens
-// =============================================================================
-class pr::client::Player {
-    LIBBASE_MOVE_ONLY(Player);
-
-    /// The server-side player id.
-    Readonly(u8, id);
-
-    /// The player name.
-    Readonly(std::string, name);
-
-public:
-    /// The current word of this player.
-    CardStacks* word{};
-
-    /// The name widget of this player. This is null if the player is us.
-    Label* name_widget{};
-
-    explicit Player() = default;
-    explicit Player(std::string name, u8 id) : _id{id}, _name{std::move(name)} {}
-};
-
-/// This screen is used to confirm whether the user actually wants
-/// to play a card they selected.
-class pr::client::ConfirmPlaySelectedScreen : public Screen {
-    GameScreen& parent;
-    Card* preview;
-
-public:
-    ConfirmPlaySelectedScreen(GameScreen& p);
-
-    void on_entered() override;
-
-private:
-    void Yes();
-    void No();
-};
-
-/// This screen renders the actual game.
-class pr::client::GameScreen : public Screen {
-    struct Validator;
-    friend Validator;
-    friend ConfirmPlaySelectedScreen;
-
-    enum struct State {
-        /// The starting state. Nothing is selected.
-        NoSelection,
-
-        /// It is not our turn. User interaction is passed.
-        NotOurTurn,
-
-        /// A card in hand is selected, and we are waiting for
-        /// the user to select a target for it.
-        ///
-        /// 'our_selected_card' holds the selected sound card.
-        SingleTarget,
-
-        /// Same as 'SingleTarget', but we need to select a player
-        /// instead.
-        PlayerTarget,
-
-        /// We pressed the pass button; prompt the user to select
-        /// a card to discard.
-        Passing,
-
-        /// Another screen (which is drawn on top of this one) is
-        /// currently handling user input; do nothing.
-        InAuxiliaryScreen,
-    };
-
-    /// A targeted card in someone’s word.
-    struct Target {
-        CardStacks::Stack* stack;
-        std::optional<u32> card_idx;
-
-        explicit Target(CardStacks::Stack& s) : stack{&s} {}
-    };
-
-    Client& client;
-    ConfirmPlaySelectedScreen confirm_play_selected_screen{*this};
-
-    /// The end turn / pass / cancel button in the lower
-    /// right corner of the screen.
-    Button* end_turn_button;
-
-    /// The other players in the game.
-    std::vector<Player> other_players;
-
-    /// All players, including us.
-    std::vector<Player*> all_players;
-
-    /// Our player object.
-    Player us;
-
-    /// The cards in our hand.
-    CardStacks* our_hand{};
-
-    /// The words and names of other players.
-    Group* other_words{};
-
-    /// The card widget used to preview a card.
-    Card* preview{};
-
-    /// The last card that was selected by the player
-    Card* our_selected_card{};
-
-    /// The current game state.
-    State state = State::NotOurTurn;
-
-public:
-    explicit GameScreen(Client& c);
-    void add_card(PlayerId id, u32 stack_idx, CardId card);
-    void add_card_to_hand(CardId id);
-    void discard(u32 amount);
-    void enter(packets::sc::StartGame sg);
-    void end_turn();
-    void handle_challenge(packets::CardChoiceChallenge c);
-    void lock_changed(PlayerId player, u32 stack_index, bool locked);
-    void on_refresh(Renderer& r) override;
-    void start_turn();
-    void tick(InputSystem& input) override;
-    void update_word(PlayerId player, std::span<const std::vector<CardId>> new_word);
-
-private:
-    void ClearSelection(State new_state = State::NoSelection);
-    void ClosePreview();
-    void Discard(CardStacks::Stack& stack);
-    auto GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32>;
-    void SetPlayerNamesSelectable(Selectable s = Selectable::No);
-    void Pass();
-    auto PlayerById(PlayerId id) -> Player&;
-    auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
-    void PlayCardWithoutTarget();
-    void ResetHand();
-    void ResetWords(Selectable s = Selectable::No, Card::Overlay o = Card::Overlay::Default);
-    auto SelectedPlayer() -> Player&;
-    void SwapSelectedCard();
-
-    /// Get all valid targets for the card at this index, assuming it is in our hand.
-    auto Targets(Card& c) -> std::generator<Target>;
-
-    void TickNoSelection();
-    void TickNotOurTurn();
-    void TickPassing();
-    void TickPlayerTarget();
-    void TickSingleTarget();
-    auto ValidatorFor(Player& p) -> Validator;
 };
 
 // =============================================================================

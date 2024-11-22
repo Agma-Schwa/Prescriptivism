@@ -111,7 +111,7 @@ COMMON_PACKETS(X)
 // =============================================================================
 namespace pr::packets {
 struct CardChoiceChallenge {
-    PR_SERIALISE(cards, count, mode);
+    PR_SERIALISE(title, cards, count, mode);
     enum struct Mode {
         Exact,   ///< Choose exactly `count` cards.
         AtMost,  ///< Choose at most `count` cards.

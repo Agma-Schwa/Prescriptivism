@@ -323,7 +323,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::PlayPlayerTarget pac
 
             // Show the target player’s hand to the player.
             p->challenge = packets::CardChoiceChallenge{
-                .title = std::format("{}’s Hand", target_player->name),
+                .title = std::format("from {}’s Hand", target_player->name),
                 .cards = target_player->hand | vws::transform(&Card::id) | rgs::to<std::vector>(),
                 .count = 1,
                 .mode = packets::CardChoiceChallenge::Mode::AtMost,

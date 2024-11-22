@@ -1,4 +1,5 @@
 #include <Client/Client.hh>
+#include <Client/Game.hh>
 
 #include <Shared/Validation.hh>
 
@@ -29,7 +30,7 @@ auto GameScreen::ValidatorFor(Player& p) -> Validator {
 }
 
 // =============================================================================
-// Screens
+// Play Confirmation Screen
 // =============================================================================
 ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(pr::client::GameScreen& p) : parent{p} {
     preview = &Create<Card>(Position::Center());
@@ -60,6 +61,48 @@ void ConfirmPlaySelectedScreen::Yes() {
 void ConfirmPlaySelectedScreen::No() {
     parent.ClearSelection();
     parent.client.pop_screen();
+}
+
+// =============================================================================
+// Card Choice Challenge Screen
+// =============================================================================
+CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : parent{p} {
+    message = &Create<Label>("", FontSize::Medium, Position::HCenter(-150));
+    cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
+    cards->autoscale = true;
+
+    auto& buttons = Create<Group>(Position::HCenter(150));
+    buttons.create<Button>("Confirm", Position(), [&] { Confirm(); });
+    pass_button = &buttons.create<Button>("Pass", Position(), [&] { Pass(); });
+    buttons.gap = 100;
+}
+
+void CardChoiceChallengeScreen::enter(packets::CardChoiceChallenge c) {
+    message->update_text(std::format(
+        "{} {}{} card{} {}",
+        c.mode == Exact ? "Choose"sv : "You may choose"sv,
+        c.mode == Exact     ? ""
+        : c.mode == AtLeast ? "at least "sv
+                            : "up to "sv,
+        c.count,
+        c.count == 1 ? ""sv : "s"sv,
+        c.title
+    ));
+
+    pass_button->selectable = c.mode == Exact ? Selectable::No : Selectable::Yes;
+    count = c.count;
+    mode = c.mode;
+    cards->clear();
+    for (auto id : c.cards) cards->add_stack(id);
+    parent.client.push_screen(*this);
+}
+
+void CardChoiceChallengeScreen::Confirm() {
+    Log("TODO: Confirm");
+}
+
+void CardChoiceChallengeScreen::Pass() {
+    Log("TODO: Pass");
 }
 
 // =============================================================================
@@ -424,7 +467,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
 }
 
 void GameScreen::handle_challenge(packets::CardChoiceChallenge c) {
-    Log("TODO: Handle card choice challenge");
+    card_choice_challenge_screen.enter(std::move(c));
 }
 
 void GameScreen::lock_changed(PlayerId player, u32 stack_index, bool locked) {
