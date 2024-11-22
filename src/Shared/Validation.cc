@@ -11,6 +11,7 @@ bool validation::AlwaysPlayable(CardId card) {
         default: return false;
         case CardIdValue::P_Babel:
         case CardIdValue::P_Whorf:
+        case CardIdValue::P_Superstratum:
             return true;
     }
 }

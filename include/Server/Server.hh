@@ -82,6 +82,9 @@ public:
     /// the game.
     net::TCPConnexion client_connexion;
 
+    /// The current pending challenge for the player, if any.
+    Variant<std::monostate, packets::CardChoiceChallenge> challenge = std::monostate{};
+
     /// The player's name.
     std::string name;
 
@@ -117,6 +120,13 @@ class pr::server::Server : net::TCPServerCallbacks {
     struct PendingConnexion {
         net::TCPConnexion conn;
         chr::steady_clock::time_point established;
+    };
+
+    struct CanPlayCardResult {
+        Player* p{};
+        Card* card{};
+        Player* target{};
+        explicit operator bool() { return p != nullptr; }
     };
 
     enum struct State {
@@ -190,6 +200,18 @@ private:
     void Broadcast(const T& packet) {
         for (auto& p : players) p->send(packet);
     }
+
+    /// Perform basic checks to see if a play is valid:
+    ///
+    /// - Is it the player’s turn?
+    /// - Is the card index valid?
+    /// - Is the target player index valid?
+    /// - Does the player have a pending challenge?
+    auto CanPlayCard(
+        net::TCPConnexion& client,
+        std::optional<u32> card_index = std::nullopt,
+        std::optional<PlayerId> target_player = std::nullopt
+    ) -> CanPlayCardResult;
 
     void Draw(Player& p, usz count = 1);
 

@@ -149,6 +149,12 @@ void Label::draw(Renderer& r) {
         xy position = auto{pos}.voffset(i32(text.depth)).resolve(parent.bounding_box, text.text_size);
         r.draw_text(text, position, colour);
     }
+
+    if (selectable == Selectable::Yes) r.draw_outline_rect(
+        bounding_box.grow(5),
+        3,
+        Colour::RGBA(0xa4dc'a0ff)
+    );
 }
 
 void Label::refresh(Renderer&) {

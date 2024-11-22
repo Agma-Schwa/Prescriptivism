@@ -227,7 +227,8 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
 
     Entry(
         Superstratum,
-        "",
+        "Choose a player and look at their hand; you may choose a card "
+        "from and add it to your hand.",
         ""
     ),
 

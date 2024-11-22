@@ -25,8 +25,8 @@ namespace {
 constexpr usz PlayersNeeded = pr::constants::PlayersPerGame;
 constexpr usz HandSize = 7;
 constexpr u32 PacketsPerTick = 10;
-constexpr u32 MaxReceiveBufferSize = 40 * 1024;
-constexpr u32 MaxPacketSize = 10 * 1024;
+constexpr u32 MaxReceiveBufferSize = 40 * 1'024;
+constexpr u32 MaxPacketSize = 10 * 1'024;
 }
 
 // ============================================================================
@@ -220,7 +220,13 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
 
                 case State::Running:
                     SendGameState(*p);
-                    if (current_player == p->id) p->send(sc::StartTurn{});
+                    if (current_player == p->id) {
+                        p->send(sc::StartTurn{});
+                        p->challenge.visit(utils::Overloaded{
+                            [&](std::monostate) {},
+                            [&](packets::CardChoiceChallenge c) { p->send(sc::CardChoice(std::move(c))); }
+                        });
+                    }
                     break;
             }
             return;
@@ -236,31 +242,20 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
 }
 
 void Server::handle(net::TCPConnexion& client, cs::Pass pass) {
-    // Check that the player is the current player.
-    auto& p = player_map[client];
-    if (p->id != current_player) return Kick(client, UnexpectedPacket);
-
-    // Check that the card index is valid.
-    if (pass.card_index >= p->hand.size()) return Kick(client, InvalidPacket);
-
-    // Discard the card and end the player’s turn.
-    RemoveCard(*p, p->hand[pass.card_index]);
+    auto res = CanPlayCard(client, pass.card_index);
+    if (not res) return;
+    auto [p, card, _] = res;
+    RemoveCard(*p, *card);
     NextPlayer();
 }
 
 void Server::handle(net::TCPConnexion& client, packets::cs::PlayNoTarget packet) {
-    // Check that the player is the current player.
-    auto& p = player_map[client];
-    if (p->id != current_player) return Kick(client, UnexpectedPacket);
-
-    // Check that the card index is valid.
-    if (packet.card_index >= p->hand.size()) return Kick(client, InvalidPacket);
-
-    // Only power cards are allowed here.
-    auto& card = p->hand[packet.card_index];
-    switch (card.id.value) {
+    auto res = CanPlayCard(client, packet.card_index);
+    if (not res) return;
+    auto [p, card, _] = res;
+    switch (card->id.value) {
         default:
-            Log("Sorry, playing {} is not implemented yet", CardDatabase[+card.id].name);
+            Log("Sorry, playing {} is not implemented yet", CardDatabase[+card->id].name);
             Kick(client, InvalidPacket);
             return;
 
@@ -305,27 +300,50 @@ void Server::handle(net::TCPConnexion& client, packets::cs::PlayNoTarget packet)
             }
 
             Broadcast(sc::WordChanged{p->id, ids});
-            RemoveCard(*p, card);
+            RemoveCard(*p, *card);
         } break;
     }
 
     NextPlayer();
 }
 
+void Server::handle(net::TCPConnexion& client, packets::cs::PlayPlayerTarget packet) {
+    auto res = CanPlayCard(client, packet.card_index, packet.player);
+    if (not res) return;
+    auto [p, card, target_player] = res;
+    switch (card->id.value) {
+        default:
+            Log("Sorry, playing {} is not implemented yet", CardDatabase[+card->id].name);
+            Kick(client, InvalidPacket);
+            return;
+
+        case CardId::P_Superstratum: {
+            // We can’t target ourselves with this.
+            if (p == target_player) return Kick(client, InvalidPacket);
+
+            // Show the target player’s hand to the player.
+            p->challenge = packets::CardChoiceChallenge{
+                .title = std::format("{}’s Hand", target_player->name),
+                .cards = target_player->hand | vws::transform(&Card::id) | rgs::to<std::vector>(),
+                .count = 1,
+                .mode = packets::CardChoiceChallenge::Mode::AtMost,
+            };
+
+            p->send(sc::CardChoice{p->challenge.get<packets::CardChoiceChallenge>()});
+        } break;
+    }
+
+    RemoveCard(*p, *card);
+}
+
 void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
-    // Check that the player is the current player.
-    auto& p = player_map[client];
-    if (p->id != current_player) return Kick(client, UnexpectedPacket);
+    auto res = CanPlayCard(client, packet.card_index, packet.player);
+    if (not res) return;
+    auto [p, card, target_player] = res;
 
-    /// Check that the player index is valid.
-    if (packet.player >= players.size()) return Kick(client, InvalidPacket);
-
-    // Check that the card indices are valid.
-    auto& target_player = players[packet.player];
-    if (
-        packet.card_index >= p->hand.size() or
-        packet.target_stack_index >= target_player->word.stacks.size()
-    ) return Kick(client, InvalidPacket);
+    // Check that the target card index is valid.
+    if (packet.target_stack_index >= target_player->word.stacks.size())
+        return Kick(client, InvalidPacket);
 
     // Now that we have checked that all indices are valid and that it’s
     // this player’s turn, validate the action itself. Any code below this
@@ -334,18 +352,17 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
     // player to take an invalid action.
     //
     // The card is a sound card.
-    auto& card = p->hand[packet.card_index];
-    if (card.id.is_sound()) return HandlePlaySoundCard(
+    if (card->id.is_sound()) return HandlePlaySoundCard(
         client,
-        card,
+        *card,
         *target_player,
         packet.target_stack_index
     );
 
     // The card is a power card.
-    switch (card.id.value) {
+    switch (card->id.value) {
         default:
-            Log("Sorry, playing {} is not implemented yet", CardDatabase[+card.id].name);
+            Log("Sorry, playing {} is not implemented yet", CardDatabase[+card->id].name);
             Kick(client, InvalidPacket);
             return;
 
@@ -371,7 +388,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
         } break;
     }
 
-    RemoveCard(*p, card);
+    RemoveCard(*p, *card);
     NextPlayer();
 }
 
@@ -407,6 +424,43 @@ void Server::HandlePlaySoundCard(
 // =============================================================================
 //  General Game Logic
 // =============================================================================
+auto Server::CanPlayCard(
+    net::TCPConnexion& client,
+    std::optional<u32> card_index,
+    std::optional<PlayerId> target_player
+) -> CanPlayCardResult {
+    // Check that the player is the current player.
+    auto& p = player_map[client];
+    if (p->id != current_player) {
+        Kick(client, UnexpectedPacket);
+        return {};
+    }
+
+    /// Check that the player does not have a pending challenge.
+    if (not p->challenge.is<std::monostate>()) {
+        Kick(client, UnexpectedPacket);
+        return {};
+    }
+
+    /// Check that the card index is valid.
+    if (card_index and *card_index >= p->hand.size()) {
+        Kick(client, InvalidPacket);
+        return {};
+    }
+
+    /// Check that the player index is valid.
+    if (target_player and *target_player >= players.size()) {
+        Kick(client, InvalidPacket);
+        return {};
+    }
+
+    return {
+        p,
+        card_index ? &p->hand[*card_index] : nullptr,
+        target_player ? players[*target_player].get() : nullptr
+    };
+}
+
 void Server::Draw(Player& p, usz count) {
     for (usz i = 0; i < count; ++i) {
         if (deck.empty()) {
@@ -519,7 +573,7 @@ void Server::SetUpGame() {
 
         // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate whatever
         // power card we’re currently testing into the player’s hand.
-        p->hand.emplace_back(CardId::P_Babel);
+        p->hand.emplace_back(CardId::P_Superstratum);
     }
     rgs::shuffle(players, rng);
 

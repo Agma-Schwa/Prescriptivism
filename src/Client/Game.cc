@@ -69,6 +69,13 @@ GameScreen::GameScreen(Client& c) : client(c) {
     // UI is set up in enter().
 }
 
+auto GameScreen::GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32> {
+    auto& our_stack = card.parent.as<CardStacks::Stack>();
+    auto idx = our_hand->index_of(our_stack);
+    Assert(idx.has_value(), "Card not in hand?");
+    return {our_stack, *idx};
+}
+
 auto GameScreen::PlayerById(PlayerId id) -> Player& {
     auto p = rgs::find(all_players, id, &Player::get_id);
     Assert(p != all_players.end(), "Player {} not found?", id);
@@ -102,6 +109,29 @@ void GameScreen::ResetWords(
         p->word->make_selectable(s);
         p->word->set_overlay(o);
     }
+}
+
+auto GameScreen::SelectedPlayer() -> Player& {
+    Assert(selected_element, "No element selected");
+    auto& l = selected_element->as<Label>();
+    for (auto& p : other_players)
+        if (p.name_widget == &l)
+            return p;
+    Unreachable();
+}
+
+void GameScreen::SetPlayerNamesSelectable(Selectable s) {
+    for (auto& p : other_players) p.name_widget->selectable = s;
+}
+
+void GameScreen::SwapSelectedCard() {
+    Assert(our_selected_card, "No card selected?");
+    Assert(selected_element, "No card to swap to?");
+    SetPlayerNamesSelectable();
+    if (selected_element == our_selected_card) return ClearSelection();
+    our_selected_card->unselect();
+    our_selected_card = nullptr;
+    return TickNoSelection();
 }
 
 auto GameScreen::Targets(Card& c) -> std::generator<Target> {
@@ -147,6 +177,7 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
 // =============================================================================
 void GameScreen::ClearSelection(State new_state) {
     ResetWords();
+    SetPlayerNamesSelectable();
     state = new_state;
     if (selected_element) selected_element->unselect();
     if (our_selected_card) our_selected_card->unselect();
@@ -163,13 +194,6 @@ void GameScreen::ClosePreview() {
 void GameScreen::Discard(CardStacks::Stack& stack) {
     ClearSelection();
     our_hand->remove(stack);
-}
-
-auto GameScreen::GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32> {
-    auto& our_stack = card.parent.as<CardStacks::Stack>();
-    auto idx = our_hand->index_of(our_stack);
-    Assert(idx.has_value(), "Card not in hand?");
-    return {our_stack, *idx};
 }
 
 void GameScreen::Pass() {
@@ -206,9 +230,10 @@ void GameScreen::TickNoSelection() {
     // Clear the selected element pointer of the screen so we can select a new card.
     selected_element = nullptr;
 
-    // Some cards can be played without a target.
     switch (our_selected_card->id.value) {
         default: break;
+
+        // Some cards can be played without a target.
         case CardId::P_Babel:
         case CardId::P_Whorf: {
             state = State::InAuxiliaryScreen;
@@ -217,9 +242,17 @@ void GameScreen::TickNoSelection() {
             client.push_screen(confirm_play_selected_screen);
             return;
         }
+
+        // Some cards target a player.
+        case CardId::P_Superstratum: {
+            state = State::PlayerTarget;
+            ResetWords();
+            SetPlayerNamesSelectable(Selectable::Yes);
+            return;
+        }
     }
 
-    // Some require exactly one target.
+    // Others require exactly one target.
     state = State::SingleTarget;
 
     // If this is a sound card, make other player’s cards selectable if we can
@@ -245,6 +278,29 @@ void GameScreen::TickPassing() {
     end_turn();
 }
 
+void GameScreen::TickPlayerTarget() {
+    if (not selected_element) return;
+    Assert(our_selected_card, "We should have selected one of our cards");
+
+    // We selected a different card in hand.
+    if (selected_element->has_parent(our_hand)) return SwapSelectedCard();
+
+    // At this point, the only thing that is selectable should be a player.
+    auto& p = SelectedPlayer();
+    switch (our_selected_card->id.value) {
+        default:
+            Log("TODO: Implement {}", CardDatabase[+our_selected_card->id].name);
+            ClearSelection();
+            break;
+
+        case CardIdValue::P_Superstratum: {
+            auto [stack, idx] = GetStackInHand(*our_selected_card);
+            client.server_connexion.send(packets::cs::PlayPlayerTarget{idx, p.id});
+            Discard(stack);
+        } break;
+    }
+}
+
 void GameScreen::TickSingleTarget() {
     if (not selected_element) return;
     Assert(our_selected_card, "We should have selected one of our cards");
@@ -268,13 +324,8 @@ void GameScreen::TickSingleTarget() {
         Discard(our_stack);
     };
 
-    // We selected one of our own cards while we already had one selected.
-    if (selected_element->has_parent(our_hand)) {
-        if (selected_element == our_selected_card) return ClearSelection();
-        our_selected_card->unselect();
-        our_selected_card = nullptr;
-        return TickNoSelection();
-    }
+    // We selected a different card in hand.
+    if (selected_element->has_parent(our_hand)) return SwapSelectedCard();
 
     // We’re playing a sound card on a sound card.
     if (our_selected_card->id.is_sound()) {
@@ -343,11 +394,11 @@ void GameScreen::enter(packets::sc::StartGame sg) {
 
         auto& op = other_players.emplace_back(std::move(p.name), u8(i));
         auto& word_and_name = other_words->create<Group>(Position());
+        word_and_name.vertical = true;
         op.word = &word_and_name.create<CardStacks>(Position(), p.word);
         op.word->scale = Card::OtherPlayer;
         op.word->alignment = -5;
-        word_and_name.vertical = true;
-        word_and_name.create<Label>(op.name, FontSize::Medium, Position());
+        op.name_widget = &word_and_name.create<Label>(op.name, FontSize::Medium, Position());
     }
 
     // Build the player map *after* creating all the players, since they
@@ -370,6 +421,10 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     // Finally, ‘end’ our turn to reset everything.
     end_turn();
     client.set_screen(*this);
+}
+
+void GameScreen::handle_challenge(packets::CardChoiceChallenge c) {
+    Log("TODO: Handle card choice challenge");
 }
 
 void GameScreen::lock_changed(PlayerId player, u32 stack_index, bool locked) {
@@ -403,6 +458,7 @@ void GameScreen::tick(InputSystem& input) {
         case State::NotOurTurn: TickNotOurTurn(); break;
         case State::Passing: TickPassing(); break;
         case State::SingleTarget: TickSingleTarget(); break;
+        case State::PlayerTarget: TickPlayerTarget(); break;
         case State::InAuxiliaryScreen: Unreachable("Should never get here if in auxiliary screen");
     }
 

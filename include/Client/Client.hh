@@ -123,6 +123,9 @@ public:
     /// The current word of this player.
     CardStacks* word{};
 
+    /// The name widget of this player. This is null if the player is us.
+    Label* name_widget{};
+
     explicit Player() = default;
     explicit Player(std::string name, u8 id) : _id{id}, _name{std::move(name)} {}
 };
@@ -161,6 +164,10 @@ class pr::client::GameScreen : public Screen {
         ///
         /// 'our_selected_card' holds the selected sound card.
         SingleTarget,
+
+        /// Same as 'SingleTarget', but we need to select a player
+        /// instead.
+        PlayerTarget,
 
         /// We pressed the pass button; prompt the user to select
         /// a card to discard.
@@ -217,6 +224,7 @@ public:
     void discard(u32 amount);
     void enter(packets::sc::StartGame sg);
     void end_turn();
+    void handle_challenge(packets::CardChoiceChallenge c);
     void lock_changed(PlayerId player, u32 stack_index, bool locked);
     void on_refresh(Renderer& r) override;
     void start_turn();
@@ -228,12 +236,15 @@ private:
     void ClosePreview();
     void Discard(CardStacks::Stack& stack);
     auto GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32>;
+    void SetPlayerNamesSelectable(Selectable s = Selectable::No);
     void Pass();
     auto PlayerById(PlayerId id) -> Player&;
     auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
     void PlayCardWithoutTarget();
     void ResetHand();
     void ResetWords(Selectable s = Selectable::No, Card::Overlay o = Card::Overlay::Default);
+    auto SelectedPlayer() -> Player&;
+    void SwapSelectedCard();
 
     /// Get all valid targets for the card at this index, assuming it is in our hand.
     auto Targets(Card& c) -> std::generator<Target>;
@@ -241,6 +252,7 @@ private:
     void TickNoSelection();
     void TickNotOurTurn();
     void TickPassing();
+    void TickPlayerTarget();
     void TickSingleTarget();
     auto ValidatorFor(Player& p) -> Validator;
 };

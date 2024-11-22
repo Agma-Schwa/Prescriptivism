@@ -381,6 +381,10 @@ void Client::handle(packets::sc::DiscardAll) {
     game_screen.discard(0);
 }
 
+void Client::handle(packets::sc::CardChoice c) {
+    game_screen.handle_challenge(std::move(c.challenge));
+}
+
 void Client::TickNetworking() {
     if (server_connexion.disconnected) return;
     server_connexion.receive([&](net::ReceiveBuffer& buf) {

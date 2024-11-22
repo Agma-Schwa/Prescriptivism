@@ -25,12 +25,14 @@
     X(AddSoundToStack)  \
     X(StackLockChanged) \
     X(WordChanged)      \
-    X(DiscardAll)
+    X(DiscardAll)       \
+    X(CardChoice)
 
 #define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
     X(Login)             \
     X(PlaySingleTarget)  \
+    X(PlayPlayerTarget)  \
     X(PlayNoTarget)      \
     X(Pass)
 
@@ -103,6 +105,32 @@ enum struct ID : std::underlying_type_t<common::ID> {
 COMMON_PACKETS(X)
 #undef X
 } // namespace pr::packets::cs
+
+// =============================================================================
+//  Common Types
+// =============================================================================
+namespace pr::packets {
+struct CardChoiceChallenge {
+    PR_SERIALISE(cards, count, mode);
+    enum struct Mode {
+        Exact,   ///< Choose exactly `count` cards.
+        AtMost,  ///< Choose at most `count` cards.
+        AtLeast, ///< Choose at least `count` cards.
+    };
+
+    /// The title of the challenge.
+    std::string title;
+
+    /// The cards to choose from.
+    std::vector<CardId> cards;
+
+    /// The number of cards to choose.
+    u32 count;
+
+    /// The mode of the choice.
+    Mode mode;
+};
+}
 
 // =============================================================================
 //  Common Packets
@@ -248,6 +276,15 @@ DefinePacket(WordChanged) {
 
 DefinePacket(DiscardAll) { Serialisable(); };
 
+DefinePacket(CardChoice) {
+    Ctor(CardChoice)(CardChoiceChallenge challenge)
+        : challenge(std::move(challenge)) {}
+
+    Serialisable(challenge);
+
+    /// The challenge.
+    CardChoiceChallenge challenge;
+};
 } // namespace pr::packets::sc
 
 // =============================================================================
@@ -271,6 +308,20 @@ DefinePacket(Login) {
 
     std::string name;
     std::string password;
+};
+
+DefinePacket(PlayPlayerTarget) {
+    Ctor(PlayPlayerTarget)(u32 card_index, PlayerId player)
+        : card_index(card_index),
+          player(player) {}
+
+    Serialisable(card_index, player);
+
+    /// The index of the card in hand to play.
+    u32 card_index;
+
+    /// The player that this card is played on.
+    PlayerId player;
 };
 
 DefinePacket(PlaySingleTarget) {
