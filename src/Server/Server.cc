@@ -346,6 +346,9 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
                 return Kick(client, InvalidPacket);
 
             // Lock the stack.
+            //
+            // TODO: The Spelling Reform *is* the lock, so it should only go
+            //       back into the discard pile when the lock is removed.
             target_player->word.stacks[packet.target_stack_index].locked = true;
             Broadcast(sc::StackLockChanged{target_player->id, packet.target_stack_index, true});
         } break;
