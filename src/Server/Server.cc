@@ -150,13 +150,16 @@ void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buf) {
 }
 
 // =============================================================================
-//  Packet Handlers
+//  General Packet Handlers
 // =============================================================================
 void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
     Log("Client {} disconnected", client.address);
     client.disconnect();
 }
 
+// =============================================================================
+//  Login and Setup Packet Handlers
+// =============================================================================
 void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
     // Player has already submitted a word.
     if (not player_map.contains(client) or player_map[client]->submitted_word) {
@@ -224,7 +227,7 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
                         p->send(sc::StartTurn{});
                         p->challenge.visit(utils::Overloaded{
                             [&](std::monostate) {},
-                            [&](packets::CardChoiceChallenge c) { p->send(sc::CardChoice(std::move(c))); }
+                            [&](const challenge::CardChoice& c) { p->send(sc::CardChoice(c.data)); }
                         });
                     }
                     break;
@@ -241,6 +244,9 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
     if (players.size() == PlayersNeeded) SetUpGame();
 }
 
+// =============================================================================
+//  Game Packet Handlers
+// =============================================================================
 void Server::handle(net::TCPConnexion& client, cs::Pass pass) {
     auto res = CanPlayCard(client, pass.card_index);
     if (not res) return;
@@ -322,14 +328,17 @@ void Server::handle(net::TCPConnexion& client, packets::cs::PlayPlayerTarget pac
             if (p == target_player) return Kick(client, InvalidPacket);
 
             // Show the target player’s hand to the player.
-            p->challenge = packets::CardChoiceChallenge{
-                .title = std::format("from {}’s hand", target_player->name),
-                .cards = target_player->hand | vws::transform(&Card::id) | rgs::to<std::vector>(),
-                .count = 1,
-                .mode = packets::CardChoiceChallenge::Mode::AtMost,
+            p->challenge = challenge::CardChoice{
+                .target_player = target_player->id,
+                .data = {
+                    .title = std::format("from {}’s hand", target_player->name),
+                    .cards = target_player->hand | vws::transform(&Card::id) | rgs::to<std::vector>(),
+                    .count = 1,
+                    .mode = packets::CardChoiceChallenge::Mode::AtMost,
+                }
             };
 
-            p->send(sc::CardChoice{p->challenge.get<packets::CardChoiceChallenge>()});
+            p->send(sc::CardChoice{p->challenge.get<challenge::CardChoice>().data});
         } break;
     }
 
@@ -390,6 +399,51 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
 
     RemoveCard(*p, *card);
     NextPlayer();
+}
+
+// =============================================================================
+//  Challenge Packet Handlers
+// =============================================================================
+void Server::handle(net::TCPConnexion& client, packets::cs::CardChoiceReply packet) {
+    auto& p = player_map[client];
+    auto c = p->challenge.get_if<challenge::CardChoice>();
+    if (not c) return Kick(client, UnexpectedPacket);
+
+    // All indices must be in bounds and unique.
+    rgs::sort(packet.card_indices);
+    if (
+        rgs::any_of(packet.card_indices, [&](auto i) { return i >= c->data.cards.size(); }) or
+        rgs::adjacent_find(packet.card_indices) != packet.card_indices.end()
+    ) return Kick(client, InvalidPacket);
+
+    // Check constraints on the count and mode.
+    auto ok = [&] {
+        using Mode = packets::CardChoiceChallenge::Mode;
+        switch (c->data.mode) {
+            case Mode::Exact: return packet.card_indices.size() == c->data.count;
+            case Mode::AtLeast: return packet.card_indices.size() >= c->data.count;
+            case Mode::AtMost: return packet.card_indices.size() < c->data.count;
+        }
+        Unreachable();
+    }();
+    if (not ok) return Kick(client, InvalidPacket);
+
+    // Add the selected cards to the player’s hand.
+    for (auto i : packet.card_indices) {
+        p->hand.push_back(Card{c->data.cards[i]});
+        p->send(sc::Draw{c->data.cards[i]});
+    }
+
+    // And delete them from the target player’s hand.
+    //
+    // Note: The indices are sorted, so deleting them in reverse order
+    // does the expected thing here.
+    auto& target = players[c->target_player];
+    for (auto i : packet.card_indices | vws::reverse)
+        RemoveCard(*target, target->hand[i]);
+
+    // Finally, clear the challenge.
+    p->challenge = std::monostate{};
 }
 
 // =============================================================================

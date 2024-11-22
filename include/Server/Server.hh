@@ -70,6 +70,14 @@ public:
     auto ids() const { return stacks | vws::transform(&Stack::get_top); }
 };
 
+namespace pr::server::challenge {
+/// Currently, this is only used for Substratum.
+struct CardChoice {
+    PlayerId target_player; // Player whose hand to take the cards from.
+    packets::CardChoiceChallenge data;
+};
+}
+
 class pr::server::Player {
     LIBBASE_IMMOVABLE(Player);
 
@@ -89,7 +97,7 @@ public:
     /// client (except disconnection and logging back in) until the
     /// challenge is resolved. Attempts to do something else will
     /// result in the client being disconnected.
-    Variant<std::monostate, packets::CardChoiceChallenge> challenge = std::monostate{};
+    Variant<std::monostate, challenge::CardChoice> challenge = std::monostate{};
 
     /// The player's name.
     std::string name;

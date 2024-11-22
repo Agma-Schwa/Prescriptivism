@@ -126,6 +126,7 @@ void CardChoiceChallengeScreen::enter(packets::CardChoiceChallenge c) {
         c.title
     ));
 
+    selected.clear();
     pass_button->selectable = c.mode == Exact ? Selectable::No : Selectable::Yes;
     count = c.count;
     mode = c.mode;
@@ -144,7 +145,8 @@ void CardChoiceChallengeScreen::Confirm() {
 }
 
 void CardChoiceChallengeScreen::Pass() {
-    Log("TODO: Pass");
+    parent.client.server_connexion.send(packets::cs::CardChoiceReply{{}});
+    parent.client.pop_screen();
 }
 
 // =============================================================================

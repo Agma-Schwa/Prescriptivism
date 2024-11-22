@@ -80,6 +80,7 @@ class pr::client::CardChoiceChallengeScreen : public Screen {
     CardStacks* cards;
     Button* pass_button;
     CardPreview* preview{};
+    std::vector<Card*> selected{};
     packets::CardChoiceChallenge::Mode mode;
     u32 count;
 

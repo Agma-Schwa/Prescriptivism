@@ -34,7 +34,8 @@
     X(PlaySingleTarget)  \
     X(PlayPlayerTarget)  \
     X(PlayNoTarget)      \
-    X(Pass)
+    X(Pass)              \
+    X(CardChoiceReply)
 
 namespace pr {
 using PlayerId = u8;
@@ -358,6 +359,17 @@ DefinePacket(Pass) {
     /// The index of the card in hand that is discarded.
     u32 card_index;
 };
+
+DefinePacket(CardChoiceReply) {
+    Ctor(CardChoiceReply)(std::vector<u32> card_indices)
+        : card_indices(std::move(card_indices)) {}
+
+    Serialisable(card_indices);
+
+    /// The indices of the cards chosen.
+    std::vector<u32> card_indices;
+};
+
 } // namespace pr::packets::cs
 
 // =============================================================================
