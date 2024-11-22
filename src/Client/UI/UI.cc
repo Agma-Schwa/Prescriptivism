@@ -419,6 +419,9 @@ void Screen::refresh(Renderer& r) {
 
     // Size hasn’t changed. Still update any elements that
     // requested a refresh. Also ignore visibility here.
+    //
+    // Always clear out the refresh flag first since an element
+    // may set it back to true immediately.
     if (prev_size == r.size()) {
         for (auto& e : children()) {
             if (e.needs_refresh) {

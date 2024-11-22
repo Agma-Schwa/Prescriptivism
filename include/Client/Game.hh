@@ -22,6 +22,7 @@ class ConfirmPlaySelectedScreen;
 class CardChoiceChallengeScreen;
 class GameScreen;
 class Player;
+class CardPreview;
 }
 
 class pr::client::Player {
@@ -42,6 +43,16 @@ public:
 
     explicit Player() = default;
     explicit Player(std::string name, u8 id) : _id{id}, _name{std::move(name)} {}
+};
+
+/// Widget that shows the hovered card of the parent screen.
+class pr::client::CardPreview : public Widget {
+    Card card;
+
+public:
+    CardPreview(Screen* parent, Position p = Position::VCenter(-100));
+    void refresh(Renderer &r) override;
+    void draw(Renderer &r) override;
 };
 
 /// This screen is used to confirm whether the user actually wants
@@ -68,6 +79,7 @@ class pr::client::CardChoiceChallengeScreen : public Screen {
     Label* message;
     CardStacks* cards;
     Button* pass_button;
+    CardPreview* preview{};
     packets::CardChoiceChallenge::Mode mode;
     u32 count;
 
@@ -146,7 +158,7 @@ class pr::client::GameScreen : public Screen {
     Group* other_words{};
 
     /// The card widget used to preview a card.
-    Card* preview{};
+    CardPreview* preview{};
 
     /// The last card that was selected by the player
     Card* our_selected_card{};

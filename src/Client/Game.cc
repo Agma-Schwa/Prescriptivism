@@ -30,6 +30,42 @@ auto GameScreen::ValidatorFor(Player& p) -> Validator {
 }
 
 // =============================================================================
+// Card Preview.
+// =============================================================================
+CardPreview::CardPreview(Screen* parent, Position p) : Widget(parent), card{this, Position()} {
+    pos = p;
+    visible = false;
+    hoverable = Hoverable::Transparent;
+    selectable = Selectable::Transparent;
+    card.scale = Card::Preview;
+}
+
+void CardPreview::draw(Renderer& r) {
+    auto _ = PushTransform(r);
+    card.draw(r);
+}
+
+void CardPreview::refresh(Renderer& r) {
+    // Always refresh this element.
+    needs_refresh = true;
+
+    // If there is no selected element, make the card invisible.
+    auto& s = static_cast<Screen&>(parent);
+    if (not s.hovered_element or not s.hovered_element->is<Card>()) {
+        visible = false;
+        return;
+    }
+
+    // Otherwise, make it visible and set the card id.
+    visible = true;
+    card.id = s.hovered_element->as<Card>().id;
+    if (card.needs_refresh) {
+        card.refresh(r);
+        UpdateBoundingBox(card.bounding_box.size());
+    }
+}
+
+// =============================================================================
 // Play Confirmation Screen
 // =============================================================================
 ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(pr::client::GameScreen& p) : parent{p} {
@@ -69,7 +105,8 @@ void ConfirmPlaySelectedScreen::No() {
 CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : parent{p} {
     message = &Create<Label>("", FontSize::Medium, Position::HCenter(-150));
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
-    cards->autoscale = true;
+    cards->scale = Card::Hand;
+    cards->gap = -Card::CardSize[Card::Hand].wd / 2;
 
     auto& buttons = Create<Group>(Position::HCenter(150));
     buttons.create<Button>("Confirm", Position(), [&] { Confirm(); });
@@ -95,6 +132,11 @@ void CardChoiceChallengeScreen::enter(packets::CardChoiceChallenge c) {
     cards->clear();
     for (auto id : c.cards) cards->add_stack(id);
     parent.client.push_screen(*this);
+
+    // Recreate the preview so it’s drawn last.
+    // TODO: Z order in the UI maybe?
+    if (preview) remove(*preview);
+    preview = &Create<CardPreview>();
 }
 
 void CardChoiceChallengeScreen::Confirm() {
@@ -229,8 +271,6 @@ void GameScreen::ClearSelection(State new_state) {
 
 void GameScreen::ClosePreview() {
     preview->visible = false;
-
-    // Also required if this is called before we tick the preview.
     hovered_element = nullptr;
 }
 
@@ -456,10 +496,7 @@ void GameScreen::enter(packets::sc::StartGame sg) {
 
     // The preview must be created at the end so it’s drawn
     // above everything else.
-    preview = &Create<Card>(Position::VCenter(-100));
-    preview->visible = false;
-    preview->hoverable = Hoverable::Transparent;
-    preview->scale = Card::Preview;
+    preview = &Create<CardPreview>();
 
     // Finally, ‘end’ our turn to reset everything.
     end_turn();
@@ -503,18 +540,6 @@ void GameScreen::tick(InputSystem& input) {
         case State::SingleTarget: TickSingleTarget(); break;
         case State::PlayerTarget: TickPlayerTarget(); break;
         case State::InAuxiliaryScreen: Unreachable("Should never get here if in auxiliary screen");
-    }
-
-    // Preview any card that the user is hovering over.
-    auto c = dynamic_cast<Card*>(hovered_element);
-    if (c) {
-        preview->visible = true;
-        preview->id = c->id;
-
-        // Refresh the card now to prevent weird rendering artefacts.
-        if (preview->needs_refresh) preview->refresh(client.renderer);
-    } else {
-        preview->visible = false;
     }
 }
 

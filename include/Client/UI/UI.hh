@@ -378,13 +378,13 @@ protected:
     /// The selected element.
     Widget* selected_element = nullptr;
 
-    /// The hovered element.
-    Widget* hovered_element = nullptr;
-
     /// Delete all children of this screen.
     void DeleteAllChildren();
 
 public:
+    /// The hovered element.
+    Widget* hovered_element = nullptr;
+
     Screen() = default;
 
     /// Create an element with this as its parent.
