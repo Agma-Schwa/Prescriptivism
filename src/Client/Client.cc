@@ -197,9 +197,9 @@ public:
 
 private:
     auto Tick() -> Coroutine {
-        auto start = std::chrono::steady_clock::now();
+        auto start = chr::steady_clock::now();
         for (;;) {
-            auto now = std::chrono::steady_clock::now();
+            auto now = chr::steady_clock::now();
             if (now - start > Duration) break;
             auto t = (f32(chr::duration_cast<chr::milliseconds>(now - start).count()) / Duration.count());
             c1pos = lerp_smooth(c1orig, c2orig, t);
@@ -232,19 +232,19 @@ WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
 
 void WordChoiceScreen::SendWord() {
     using enum validation::InitialWordValidationResult;
-    constants::Word a;
-    for (auto [a, c] : vws::zip(a, cards->top_cards())) a = c.id;
+    constants::Word w;
+    for (auto [a, c] : vws::zip(w, cards->top_cards())) a = c.id;
 
     // Validate the word; if it is valid, submit it.
-    if (validation::ValidateInitialWord(a, original_word) == Valid) {
-        client.server_connexion.send(cs::WordChoice{a});
+    if (validation::ValidateInitialWord(w, original_word) == Valid) {
+        client.server_connexion.send(cs::WordChoice{w});
         client.set_screen(client.waiting_screen);
         return;
     }
 
     // If not, tell the user why it wasn’t valid.
     auto msg = [&] -> std::string {
-        switch (validation::ValidateInitialWord(a, original_word)) {
+        switch (validation::ValidateInitialWord(w, original_word)) {
             case Valid: break;
             case NotAPermutation:
                 return "Error: Not a permutation. This shouldn’t happen; please file a "
