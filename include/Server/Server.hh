@@ -83,6 +83,12 @@ public:
     net::TCPConnexion client_connexion;
 
     /// The current pending challenge for the player, if any.
+    ///
+    /// A 'challenge' is a message sent to a client for which the
+    /// server expects a reply; no other action may be taken by the
+    /// client (except disconnection and logging back in) until the
+    /// challenge is resolved. Attempts to do something else will
+    /// result in the client being disconnected.
     Variant<std::monostate, packets::CardChoiceChallenge> challenge = std::monostate{};
 
     /// The player's name.
