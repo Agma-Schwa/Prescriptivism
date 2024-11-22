@@ -270,6 +270,8 @@ void Client::handle(sc::Disconnect packet) {
             case Reason::UsernameInUse: return "Disconnected: User name already in use";
             case Reason::WrongPassword: return "Disconnected: Invalid Password";
             case Reason::UnexpectedPacket: return "Disconnected: Unexpected Packet";
+            case Reason::PacketTooLarge: return "Disconnected: Packet too large";
+            case Reason::BufferFull: return "Disconnected: Data limit exceeded";
             default: return "Disconnected: <<<Invalid>>>";
         }
     }();

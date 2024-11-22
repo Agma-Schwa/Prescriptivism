@@ -20,9 +20,14 @@ namespace cs = packets::cs;
 // ============================================================================
 // Constants
 // ============================================================================
+using enum DisconnectReason;
+namespace {
 constexpr usz PlayersNeeded = pr::constants::PlayersPerGame;
 constexpr usz HandSize = 7;
-using enum DisconnectReason;
+constexpr u32 PacketsPerTick = 10;
+constexpr u32 MaxReceiveBufferSize = 40 * 1024;
+constexpr u32 MaxPacketSize = 10 * 1024;
+}
 
 // ============================================================================
 // Helpers
@@ -118,7 +123,12 @@ bool Server::accept(net::TCPConnexion& connexion) {
 }
 
 void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buf) {
-    while (not client.disconnected and not buf.empty()) {
+    // If there’s too much data, kick the client.
+    if (buf.size() > MaxReceiveBufferSize) return Kick(client, BufferFull);
+
+    // Limit how many packets we’re willing to process per tick per connexion.
+    u32 count = 0;
+    while (not client.disconnected and not buf.empty() and count++ < PacketsPerTick) {
         auto res = packets::HandleServerSidePacket(*this, client, buf);
 
         // If there was an error, close the connexion.
@@ -127,8 +137,15 @@ void Server::receive(net::TCPConnexion& client, net::ReceiveBuffer& buf) {
             return Kick(client, InvalidPacket);
         }
 
-        // And stop if the packet was incomplete.
-        if (not res.value()) break;
+        // The packet was incomplete.
+        if (not res.value()) {
+            // Conversely, any data left is a *single* incomplete packet, so
+            // kick the client if it is too large.
+            if (buf.size() > MaxPacketSize) Kick(client, PacketTooLarge);
+
+            // Stop processing packets until we have more data.
+            return;
+        }
     }
 }
 

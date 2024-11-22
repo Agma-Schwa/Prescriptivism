@@ -117,6 +117,8 @@ DefinePacket(Disconnect) {
         UsernameInUse,    ///< Username is already in use.
         WrongPassword,    ///< The password was incorrect.
         UnexpectedPacket, ///< That packet wasn’t supposed to be sent at that point.
+        PacketTooLarge,   ///< Packet was too large.
+        BufferFull,       ///< Data limit exceeded.
     };
 
     Ctor(Disconnect)(Reason reason) : reason(reason) {}
