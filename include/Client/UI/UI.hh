@@ -3,6 +3,7 @@
 
 #include <Client/Render/GL.hh>
 #include <Client/Render/Render.hh>
+#include <Client/UI/Animations.hh>
 
 #include <Shared/Cards.hh>
 #include <Shared/Constants.hh>
@@ -278,12 +279,19 @@ public:
 protected:
     explicit Widget(Element* parent, Position pos = {});
 
+
 public:
+    /// Compute the absolute position of this element.
+    auto absolute_position() -> xy;
+
     /// Event handler for when the mouse is clicked on this element.
     virtual void event_click(InputSystem&) {}
 
     /// Event handler for when a selected element is given text input.
     virtual void event_input(InputSystem&) {}
+
+    /// Draw this widget at a fixed position.
+    void draw_absolute(Renderer& r, xy pos);
 
     /// Check whether an element is a parent of this widget.
     bool has_parent(Element* other);
@@ -296,9 +304,6 @@ public:
 
     /// Get the widget’s parent screen
     auto parent_screen() -> Screen&;
-
-    /// Resolve the position of this element.
-    auto position() -> xy;
 
     /// Set the origin and scale used to draw the children of this widget;
     /// this *must* be called before any children are drawn, otherwise, the
@@ -366,6 +371,9 @@ class pr::client::Screen : public Element
     /// Previous size so we don’t refresh every frame.
     Size prev_size = {};
 
+    /// Animations that are currently in flight.
+    std::vector<std::unique_ptr<Animation>> animations;
+
 protected:
     /// The selected element.
     Widget* selected_element = nullptr;
@@ -386,6 +394,12 @@ public:
         auto& ref = *el;
         widgets.push_back(std::move(el));
         return ref;
+    }
+
+    /// Queue a new animation.
+    template <typename Anim, typename ...Args>
+    void Queue(Args&& ...args) {
+        animations.push_back(std::make_unique<Anim>(std::forward<Args>(args)...));
     }
 
     /// Code to run to reset a screen when it is entered.
@@ -715,7 +729,7 @@ public:
 private:
     auto HoverSelectHelper(
         xy rel_pos,
-        auto (Widget::*accessor)(xy)->SelectResult,
+        auto (Widget::* accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
 };

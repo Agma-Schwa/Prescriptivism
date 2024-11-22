@@ -74,6 +74,25 @@ Widget::Widget(Element* parent, Position pos) : _parent(parent), pos(pos) {
     Assert(parent, "Every widget must have a parent!");
 }
 
+auto Widget::absolute_position() -> xy {
+    auto p = scaled_bounding_box.origin();
+    auto e = &parent;
+    for (;;) {
+        if (auto w = e->cast<Widget>()) {
+            p += w->scaled_bounding_box.origin();
+            e = &w->parent;
+        } else {
+            return p;
+        }
+    }
+}
+
+void Widget::draw_absolute(Renderer& r, xy a) {
+    auto _ = r.push_matrix(a);
+    auto _ = r.push_matrix(-scaled_bounding_box.origin());
+    draw(r);
+}
+
 bool Widget::has_parent(Element* other) {
     auto p = &parent;
     for (;;) {
@@ -95,10 +114,6 @@ auto Widget::parent_screen() -> Screen& {
         if (auto screen = e->cast<Screen>()) return *screen;
         e = &e->as<Widget>().parent;
     }
-}
-
-auto Widget::position() -> xy {
-    return pos.resolve(parent.bounding_box, bounding_box.size() * ui_scale);
 }
 
 auto Widget::PushTransform(Renderer& r) -> Renderer::MatrixRAII {
@@ -395,6 +410,7 @@ void Screen::DeleteAllChildren() {
 void Screen::draw(Renderer& r) {
     r.set_cursor(Cursor::Default);
     for (auto& e : visible_elements()) e.draw(r);
+    for (auto& a : animations) a->draw(r);
 }
 
 void Screen::refresh(Renderer& r) {
@@ -426,6 +442,22 @@ void Screen::refresh(Renderer& r) {
 }
 
 void Screen::tick(InputSystem& input) {
+    // Tick animations.
+    bool block_user_interaction = false;
+    for (auto& a : animations) {
+        a->tick();
+        if (not a->done()) {
+            if (a->blocking) block_user_interaction = true;
+            if (a->exclusive) break;
+        }
+    }
+
+    // Remove any that are done.
+    std::erase_if(animations, [](auto& a) { return a->done(); });
+
+    // Do not do anything if we’re blocking user interaction.
+    if (block_user_interaction) return;
+
     // Reset the currently hovered element since we always recompute
     // this; we also need to make sure to clear its hovered flag here.
     if (hovered_element) {

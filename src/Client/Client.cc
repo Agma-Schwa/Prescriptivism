@@ -168,6 +168,55 @@ WaitingScreen::WaitingScreen(Client&) {
     );
 }
 
+// =============================================================================
+//  Word Choice Screen
+// =============================================================================
+class SwapAnimation : public Animation {
+    static constexpr auto Duration = 350ms;
+
+    CardStacks::Stack* c1;
+    CardStacks::Stack* c2;
+    xy c1orig, c2orig;
+    xy c1pos, c2pos;
+
+public:
+    SwapAnimation(
+        CardStacks::Stack& card1,
+        CardStacks::Stack& card2
+    ) : Animation{Tick()}, c1{&card1}, c2{&card2} {
+        blocking = true;
+        c1->visible = false;
+        c2->visible = false;
+        c1orig = c1->absolute_position();
+        c2orig = c2->absolute_position();
+        if (c1orig.x > c2orig.x) {
+            std::swap(c1, c2);
+            std::swap(c1orig, c2orig);
+        }
+    }
+
+private:
+    auto Tick() -> Coroutine {
+        auto start = std::chrono::steady_clock::now();
+        for (;;) {
+            auto now = std::chrono::steady_clock::now();
+            if (now - start > Duration) break;
+            auto t = (f32(chr::duration_cast<chr::milliseconds>(now - start).count()) / Duration.count());
+            c1pos = lerp_smooth(c1orig, c2orig, t);
+            c2pos = lerp_smooth(c2orig, c1orig, t);
+            co_yield {};
+        }
+
+        c1->visible = true;
+        c2->visible = true;
+    }
+
+    void draw(Renderer& r) override {
+        c1->draw_absolute(r, c1pos);
+        c2->draw_absolute(r, c2pos);
+    }
+};
+
 WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->autoscale = true;
@@ -249,6 +298,7 @@ void WordChoiceScreen::tick(InputSystem& input) {
 
     // Otherwise, swap the cards and unselect both.
     else {
+        Queue<SwapAnimation>(*selected, selected_element->as<CardStacks::Stack>());
         cards->swap(selected, selected_element);
         selected->unselect();
         selected_element->unselect();

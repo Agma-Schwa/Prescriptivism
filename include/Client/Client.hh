@@ -275,6 +275,7 @@ public:
     net::TCPConnexion server_connexion;
 
 private:
+    /// Screens that are currently open.
     std::vector<Screen*> screen_stack;
 
     explicit Client(Renderer r);

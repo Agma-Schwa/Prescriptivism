@@ -35,6 +35,9 @@ enum struct TextAlign : u8;
 enum struct TextStyle : u8;
 enum struct Cursor : u32;
 enum struct Reflow : u8;
+
+template <typename T>
+auto lerp_smooth(T a, T b, f32 t) -> T;
 } // namespace pr::client
 
 // =============================================================================
@@ -213,9 +216,15 @@ struct pr::client::xy {
 
 private:
     friend constexpr bool operator==(xy, xy) = default;
+    friend constexpr xy operator-(xy a) { return {-a.x, -a.y}; }
     friend constexpr xy operator+(xy a, xy b) { return {a.x + b.x, a.y + b.y}; }
     friend constexpr xy operator-(xy a, xy b) { return {a.x - b.x, a.y - b.y}; }
     friend constexpr xy operator*(xy a, f32 b) { return {i32(a.x * b), i32(a.y * b)}; }
+    friend constexpr xy operator/(xy a, f32 b) { return {i32(a.x / b), i32(a.y / b)}; }
+    friend constexpr xy& operator+=(xy& a, xy b) { return a = a + b; }
+    friend constexpr xy& operator-=(xy& a, xy b) { return a = a - b; }
+    friend constexpr xy& operator*=(xy& a, f32 b) { return a = a * b; }
+    friend constexpr xy& operator/=(xy& a, f32 b) { return a = a / b; }
 };
 
 /// Axis-aligned bounding box.
@@ -269,6 +278,12 @@ struct pr::client::AABB {
 
     constexpr bool friend operator==(const AABB&, const AABB&) = default;
 };
+
+template <typename T>
+auto pr::client::lerp_smooth(T a, T b, base::f32 t) -> T {
+    t = t * t * (3 - 2 * t);
+    return a * (1 - t) + b * t;
+}
 
 template <>
 struct std::formatter<pr::client::Size> : std::formatter<std::string> {
