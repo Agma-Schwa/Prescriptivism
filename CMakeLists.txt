@@ -26,11 +26,13 @@ endif()
 ## ============================================================================
 ##  Compiler options.
 ## ============================================================================
+set(LIBBASE_CXXFLAGS "-fno-exceptions")
 add_library(options INTERFACE)
 target_compile_options(options INTERFACE
     -fms-extensions
     -fdeclspec
-     -ftemplate-backtrace-limit=0
+    -ftemplate-backtrace-limit=0
+    -fno-exceptions
 
     ## Warnings.
     -Wall -Wextra     # Enable ‘all’ warnings.
