@@ -198,7 +198,7 @@ class pr::client::GameScreen : public Screen {
     /// The cards in our hand.
     CardStacks* our_hand{};
 
-    /// The words of other players.
+    /// The words and names of other players.
     Group* other_words{};
 
     /// The card widget used to preview a card.

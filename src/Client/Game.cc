@@ -342,9 +342,12 @@ void GameScreen::enter(packets::sc::StartGame sg) {
         }
 
         auto& op = other_players.emplace_back(std::move(p.name), u8(i));
-        op.word = &other_words->create<CardStacks>(Position(), p.word);
+        auto& word_and_name = other_words->create<Group>(Position());
+        op.word = &word_and_name.create<CardStacks>(Position(), p.word);
         op.word->scale = Card::OtherPlayer;
         op.word->alignment = -5;
+        word_and_name.vertical = true;
+        word_and_name.create<Label>(op.name, FontSize::Medium, Position());
     }
 
     // Build the player map *after* creating all the players, since they
