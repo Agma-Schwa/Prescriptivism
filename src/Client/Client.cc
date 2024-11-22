@@ -178,8 +178,13 @@ class SwapAnimation : public Animation {
     CardStacks::Stack* c2;
     xy c1orig, c2orig;
     xy c1pos, c2pos;
+    bool flipped = false;
 
 public:
+    // Swaps the position of two cards; this is merely graphical and does
+    // not affect the actual card positions! The actual positions should be
+    // swapped before this is run. When the two cards overlap, the first
+    // element is drawn on top.
     SwapAnimation(
         CardStacks::Stack& card1,
         CardStacks::Stack& card2
@@ -192,6 +197,7 @@ public:
         if (c1orig.x > c2orig.x) {
             std::swap(c1, c2);
             std::swap(c1orig, c2orig);
+            flipped = true;
         }
     }
 
@@ -212,8 +218,15 @@ private:
     }
 
     void draw(Renderer& r) override {
-        c1->draw_absolute(r, c1pos);
-        c2->draw_absolute(r, c2pos);
+        // Render everything in such a way that the card the user
+        // clicked on is always on top.
+        if (flipped) {
+            c1->draw_absolute(r, c1pos);
+            c2->draw_absolute(r, c2pos);
+        } else {
+            c2->draw_absolute(r, c2pos);
+            c1->draw_absolute(r, c1pos);
+        }
     }
 };
 
