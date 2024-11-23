@@ -11,6 +11,9 @@
 using namespace pr;
 using namespace pr::client;
 
+namespace sc = packets::sc;
+namespace cs = packets::cs;
+
 // =============================================================================
 // Validation
 // =============================================================================
@@ -172,19 +175,44 @@ void CardChoiceChallengeScreen::tick(InputSystem& input) {
     confirm_button->selectable = valid ? Selectable::Yes : Selectable::No;
 }
 
-void CardChoiceChallengeScreen::Confirm() {
-    packets::cs::CardChoiceReply choice = selected
+void CardChoiceChallengeScreen::Confirm() { // clang-format off
+    cs::CardChoiceReply choice = selected
         | vws::transform([&](Card* c) { return cards->index_of(c->parent.as<CardStacks::Stack>()).value(); })
         | rgs::to<std::vector>();
     parent.client.server_connexion.send(choice);
     parent.client.pop_screen();
-}
+} // clang-format on
 
 // =============================================================================
 // Helpers
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
     // UI is set up in enter().
+}
+
+void GameScreen::ClearSelection(State new_state) {
+    ResetWords();
+    SetPlayerNamesSelectable();
+    state = new_state;
+    if (selected_element) selected_element->unselect();
+    if (our_selected_card) our_selected_card->unselect();
+    our_selected_card = nullptr;
+}
+
+void GameScreen::ClosePreview() {
+    preview->visible = false;
+    hovered_element = nullptr;
+}
+
+void GameScreen::Discard(base::u32 amount) {
+    // 0 means discard the entire hand.
+    if (amount == 0) our_hand->clear();
+    else Log("TODO: Implement discarding {} cards", amount);
+}
+
+void GameScreen::Discard(CardStacks::Stack& stack) {
+    ClearSelection();
+    our_hand->remove(stack);
 }
 
 auto GameScreen::GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32> {
@@ -291,25 +319,76 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
 }
 
 // =============================================================================
+// Packet Handlers
+// =============================================================================
+void GameScreen::handle(sc::AddSoundToStack add) {
+    auto& player = PlayerById(add.player);
+    player.word->stacks()[add.stack_index].push(add.card);
+}
+
+void GameScreen::handle(sc::CardChoice c) {
+    packets::CardChoiceChallenge c1 = std::move(c.challenge);
+    card_choice_challenge_screen.enter(std::move(c1));
+}
+
+void GameScreen::handle(sc::Draw dr) {
+    our_hand->add_stack(dr.card);
+    ResetHand();
+}
+
+void GameScreen::handle(sc::DiscardAll) {
+    Discard(0);
+}
+
+void GameScreen::handle(sc::EndTurn) {
+    EndTurn();
+}
+
+void GameScreen::handle(sc::RemoveCard r) {
+    // TODO: Show message to the user. This is only used when a card
+    //       is removed via some effect, so show e.g. ‘One of your cards has
+    //       been stolen!’ on the screen or sth like that.
+    //
+    //       In general, we need some API for flashing a message on the screen
+    //       above everything else (including every open screen). Probably put
+    //       that in the Client class.
+    our_hand->remove(r.card_index);
+}
+
+void GameScreen::handle(sc::StackLockChanged lock) {
+    auto& p = PlayerById(lock.player);
+    p.word->stacks()[lock.stack_index].locked = lock.locked;
+}
+
+void GameScreen::handle(sc::StartTurn) {
+    state = State::NoSelection;
+    end_turn_button->selectable = Selectable::Yes;
+    ResetHand();
+    // TODO: Automatically go into passing mode if we cannot play anything in our hand.
+}
+
+void GameScreen::handle(sc::WordChanged wc) {
+    auto& p = PlayerById(wc.player);
+    p.word->clear();
+    for (auto& s : wc.new_word) {
+        auto& stack = p.word->add_stack();
+        for (auto c : s) stack.push(c);
+    }
+}
+
+void GameScreen::handle(sc::PromptNegation p) {
+    Log("TODO: Prompt negation");
+}
+
+// =============================================================================
 //  Game Logic
 // =============================================================================
-void GameScreen::ClearSelection(State new_state) {
-    ResetWords();
-    SetPlayerNamesSelectable();
-    state = new_state;
-    if (selected_element) selected_element->unselect();
-    if (our_selected_card) our_selected_card->unselect();
-    our_selected_card = nullptr;
-}
-
-void GameScreen::ClosePreview() {
-    preview->visible = false;
-    hovered_element = nullptr;
-}
-
-void GameScreen::Discard(CardStacks::Stack& stack) {
+void GameScreen::EndTurn() {
+    state = State::NotOurTurn;
+    end_turn_button->selectable = Selectable::No;
+    our_hand->make_selectable(Selectable::No);
+    our_hand->set_overlay(Card::Overlay::Inactive);
     ClearSelection();
-    our_hand->remove(stack);
 }
 
 void GameScreen::Pass() {
@@ -333,7 +412,7 @@ void GameScreen::Pass() {
 void GameScreen::PlayCardWithoutTarget() {
     Assert(our_selected_card, "No card selected?");
     auto [stack, idx] = GetStackInHand(*our_selected_card);
-    client.server_connexion.send(packets::cs::PlayNoTarget{idx});
+    client.server_connexion.send(cs::PlayNoTarget{idx});
     Discard(stack);
 }
 
@@ -385,13 +464,13 @@ void GameScreen::TickNotOurTurn() {}
 void GameScreen::TickPassing() {
     if (not selected_element) return;
     auto [stack, idx] = GetStackInHand(selected_element->as<Card>());
-    client.server_connexion.send(packets::cs::Pass{idx});
+    client.server_connexion.send(cs::Pass{idx});
     Discard(stack);
     end_turn_button->update_text("Pass");
 
     /// Make sure the user can’t press the pass button again (and the server
     /// is going to send an end turn packet anyway), so end the turn now.
-    end_turn();
+    EndTurn();
 }
 
 void GameScreen::TickPlayerTarget() {
@@ -411,7 +490,7 @@ void GameScreen::TickPlayerTarget() {
 
         case CardIdValue::P_Superstratum: {
             auto [stack, idx] = GetStackInHand(*our_selected_card);
-            client.server_connexion.send(packets::cs::PlayPlayerTarget{idx, p.id});
+            client.server_connexion.send(cs::PlayPlayerTarget{idx, p.id});
             Discard(stack);
         } break;
     }
@@ -430,7 +509,7 @@ void GameScreen::TickSingleTarget() {
         auto& our_stack = our_selected_card->parent.as<CardStacks::Stack>();
         auto card_in_hand_index = our_hand->index_of(our_stack);
         auto selected_card_index = owner->word->index_of(stack);
-        client.server_connexion.send(packets::cs::PlaySingleTarget{
+        client.server_connexion.send(cs::PlaySingleTarget{
             card_in_hand_index.value(),
             owner->id,
             selected_card_index.value(),
@@ -464,34 +543,7 @@ void GameScreen::TickSingleTarget() {
     }
 }
 
-// =============================================================================
-//  API
-// =============================================================================
-void GameScreen::add_card(PlayerId id, u32 stack_idx, CardId card) {
-    auto& player = PlayerById(id);
-    player.word->stacks()[stack_idx].push(card);
-}
-
-void GameScreen::add_card_to_hand(CardId id) {
-    our_hand->add_stack(id);
-    ResetHand();
-}
-
-void GameScreen::discard(base::u32 amount) {
-    // 0 means discard the entire hand.
-    if (amount == 0) our_hand->clear();
-    else Log("TODO: Implement discarding {} cards", amount);
-}
-
-void GameScreen::end_turn() {
-    state = State::NotOurTurn;
-    end_turn_button->selectable = Selectable::No;
-    our_hand->make_selectable(Selectable::No);
-    our_hand->set_overlay(Card::Overlay::Inactive);
-    ClearSelection();
-}
-
-void GameScreen::enter(packets::sc::StartGame sg) {
+void GameScreen::enter(sc::StartGame sg) {
     DeleteAllChildren();
 
     end_turn_button = &Create<Button>("Pass", Position(-50, 50), [&] { Pass(); });
@@ -533,17 +585,8 @@ void GameScreen::enter(packets::sc::StartGame sg) {
     preview = &Create<CardPreview>();
 
     // Finally, ‘end’ our turn to reset everything.
-    end_turn();
+    EndTurn();
     client.set_screen(*this);
-}
-
-void GameScreen::handle_challenge(packets::CardChoiceChallenge c) {
-    card_choice_challenge_screen.enter(std::move(c));
-}
-
-void GameScreen::lock_changed(PlayerId player, u32 stack_index, bool locked) {
-    auto& p = PlayerById(player);
-    p.word->stacks()[stack_index].locked = locked;
 }
 
 void GameScreen::on_refresh(Renderer& r) {
@@ -560,17 +603,6 @@ void GameScreen::on_refresh(Renderer& r) {
     other_words->gap = 100;
 }
 
-void GameScreen::remove_card(u32 card_index) {
-    // TODO: Show message to the user. This is only used when a card
-    //       is removed via some effect, so show e.g. ‘One of your cards has
-    //       been stolen!’ on the screen or sth like that.
-    //
-    //       In general, we need some API for flashing a message on the screen
-    //       above everything else (including every open screen). Probably put
-    //       that in the Client class.
-    our_hand->remove(card_index);
-}
-
 void GameScreen::tick(InputSystem& input) {
     if (client.server_connexion.disconnected) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
@@ -585,24 +617,5 @@ void GameScreen::tick(InputSystem& input) {
         case State::SingleTarget: TickSingleTarget(); break;
         case State::PlayerTarget: TickPlayerTarget(); break;
         case State::InAuxiliaryScreen: Unreachable("Should never get here if in auxiliary screen");
-    }
-}
-
-void GameScreen::start_turn() {
-    state = State::NoSelection;
-    end_turn_button->selectable = Selectable::Yes;
-    ResetHand();
-    // TODO: Automatically go into passing mode if we cannot play anything in our hand.
-}
-
-void GameScreen::update_word(
-    pr::PlayerId player,
-    std::span<const std::vector<CardId>> new_word
-) {
-    auto& p = PlayerById(player);
-    p.word->clear();
-    for (auto& s : new_word) {
-        auto& stack = p.word->add_stack();
-        for (auto c : s) stack.push(c);
     }
 }

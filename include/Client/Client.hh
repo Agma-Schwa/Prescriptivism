@@ -167,8 +167,7 @@ public:
     void show_error(std::string error, Screen& return_to);
 
 #define X(name) void handle(packets::sc::name);
-    COMMON_PACKETS(X)
-    SC_PACKETS(X)
+    SC_CONFIG_PACKETS(X)
 #undef X
 
 private:

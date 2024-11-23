@@ -229,7 +229,6 @@ public:
     [[noreturn]] void Run();
 
 #define X(name) void handle(net::TCPConnexion& client, packets::cs::name);
-    COMMON_PACKETS(X)
     CS_PACKETS(X)
 #undef X
 

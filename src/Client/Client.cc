@@ -345,59 +345,14 @@ void Client::handle(sc::HeartbeatRequest req) {
     server_connexion.send(cs::HeartbeatResponse{req.seq_no});
 }
 
-void Client::handle(sc::WordChoice wc) {
-    word_choice_screen.enter(wc.word);
-}
-
-void Client::handle(sc::Draw dr) {
-    game_screen.add_card_to_hand(dr.card);
-}
-
-void Client::handle(sc::StartTurn) {
-    game_screen.start_turn();
-}
-
-void Client::handle(sc::EndTurn) {
-    game_screen.end_turn();
-}
-
-void Client::handle(sc::StartGame sg) {
-    game_screen.enter(std::move(sg));
-}
-
-void Client::handle(sc::AddSoundToStack add) {
-    game_screen.add_card(add.player, add.stack_index, add.card);
-}
-
-void Client::handle(sc::StackLockChanged lock) {
-    game_screen.lock_changed(lock.player, lock.stack_index, lock.locked);
-}
-
-void Client::handle(sc::WordChanged wc) {
-    game_screen.update_word(wc.player, wc.new_word);
-}
-
-void Client::handle(sc::DiscardAll) {
-    game_screen.discard(0);
-}
-
-void Client::handle(sc::CardChoice c) {
-    game_screen.handle_challenge(std::move(c.challenge));
-}
-
-void Client::handle(sc::RemoveCard r) {
-    game_screen.remove_card(r.card_index);
-}
-
-void Client::handle(sc::PromptNegation p) {
-    Log("TODO: Prompt negation");
-}
+void Client::handle(sc::StartGame sg) { game_screen.enter(std::move(sg)); }
+void Client::handle(sc::WordChoice wc) { word_choice_screen.enter(wc.word); }
 
 void Client::TickNetworking() {
     if (server_connexion.disconnected) return;
     server_connexion.receive([&](net::ReceiveBuffer& buf) {
         while (not server_connexion.disconnected and not buf.empty()) {
-            auto res = packets::HandleClientSidePacket(*this, buf);
+            auto res = packets::HandleClientSidePacket(*this, game_screen, buf);
 
             // If there was an error, close the connexion.
             if (not res) {

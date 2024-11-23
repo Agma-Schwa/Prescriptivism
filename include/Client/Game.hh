@@ -169,23 +169,20 @@ class pr::client::GameScreen : public Screen {
 
 public:
     explicit GameScreen(Client& c);
-    void add_card(PlayerId id, u32 stack_idx, CardId card);
-    void add_card_to_hand(CardId id);
-    void discard(u32 amount);
     void enter(packets::sc::StartGame sg);
-    void end_turn();
-    void handle_challenge(packets::CardChoiceChallenge c);
-    void lock_changed(PlayerId player, u32 stack_index, bool locked);
     void on_refresh(Renderer& r) override;
-    void remove_card(u32 card_index);
-    void start_turn();
     void tick(InputSystem& input) override;
-    void update_word(PlayerId player, std::span<const std::vector<CardId>> new_word);
+
+#define X(name) void handle(packets::sc::name);
+    SC_PLAY_PACKETS(X)
+#undef X
 
 private:
     void ClearSelection(State new_state = State::NoSelection);
     void ClosePreview();
+    void Discard(u32 amount);
     void Discard(CardStacks::Stack& stack);
+    void EndTurn();
     auto GetStackInHand(Card& card) -> std::pair<CardStacks::Stack&, u32>;
     void SetPlayerNamesSelectable(Selectable s = Selectable::No);
     void Pass();

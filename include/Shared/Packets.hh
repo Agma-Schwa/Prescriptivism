@@ -16,27 +16,41 @@
     X(Disconnect)         \
     X(WordChoice)
 
-#define SC_PACKETS(X)   \
-    X(HeartbeatRequest) \
-    X(StartTurn)        \
-    X(EndTurn)          \
-    X(Draw)             \
-    X(StartGame)        \
-    X(AddSoundToStack)  \
-    X(StackLockChanged) \
-    X(WordChanged)      \
-    X(DiscardAll)       \
-    X(CardChoice)       \
-    X(RemoveCard)       \
+#define SC_PACKETS(X)    \
+    SC_CONFIG_PACKETS(X) \
+    SC_PLAY_PACKETS(X)
+
+#define SC_CONFIG_PACKETS(X) \
+    COMMON_PACKETS(X)        \
+    X(HeartbeatRequest)      \
+    X(StartGame)
+
+#define SC_PLAY_PACKETS(X) \
+    X(StartTurn)           \
+    X(EndTurn)             \
+    X(Draw)                \
+    X(AddSoundToStack)     \
+    X(StackLockChanged)    \
+    X(WordChanged)         \
+    X(DiscardAll)          \
+    X(CardChoice)          \
+    X(RemoveCard)          \
     X(PromptNegation)
 
 #define CS_PACKETS(X)    \
-    X(HeartbeatResponse) \
-    X(Login)             \
-    X(PlaySingleTarget)  \
-    X(PlayPlayerTarget)  \
-    X(PlayNoTarget)      \
-    X(Pass)              \
+    CS_CONFIG_PACKETS(X) \
+    CS_PLAY_PACKETS(X)
+
+#define CS_CONFIG_PACKETS(X) \
+    COMMON_PACKETS(X)        \
+    X(HeartbeatResponse)     \
+    X(Login)
+
+#define CS_PLAY_PACKETS(X) \
+    X(PlaySingleTarget)    \
+    X(PlayPlayerTarget)    \
+    X(PlayNoTarget)        \
+    X(Pass)                \
     X(CardChoiceReply)
 
 namespace pr {
@@ -86,8 +100,7 @@ COMMON_PACKETS(X)
 namespace pr::packets::sc {
 enum struct ID : std::underlying_type_t<common::ID> {
 #define X(name) name,
-    COMMON_PACKETS(X)
-        SC_PACKETS(X)
+    SC_PACKETS(X)
 #undef X
 };
 
@@ -99,8 +112,7 @@ COMMON_PACKETS(X)
 namespace pr::packets::cs {
 enum struct ID : std::underlying_type_t<common::ID> {
 #define X(name) name,
-    COMMON_PACKETS(X)
-        CS_PACKETS(X)
+    CS_PACKETS(X)
 #undef X
 };
 
@@ -133,7 +145,7 @@ struct CardChoiceChallenge {
     /// The mode of the choice.
     Mode mode;
 };
-}
+} // namespace pr::packets
 
 // =============================================================================
 //  Common Packets
@@ -414,15 +426,18 @@ auto Dispatch(Handler& h, net::ReceiveBuffer& buf, Args&&... args) -> Result<boo
 /// we should close the connexion) or a bool indicating whether the packet
 /// is complete (if this is false, stop processing packets until we have
 /// more data).
-template <typename Handler>
-auto HandleClientSidePacket(Handler& h, net::ReceiveBuffer& buf) -> Result<bool> {
+template <typename ConfigHandler, typename PlayHandler>
+auto HandleClientSidePacket(ConfigHandler& ch, PlayHandler& ph, net::ReceiveBuffer& buf) -> Result<bool> {
     Assert(not buf.empty(), "No packet to handle?");
     switch (auto ty = buf.peek<sc::ID>().value()) {
         default: return Error("Server sent unrecognised packet: {}", +ty);
 #define X(name) \
-    case pr::packets::sc::ID::name: return Dispatch<pr::packets::sc::name>(h, buf);
-            COMMON_PACKETS(X)
-            SC_PACKETS(X)
+    case pr::packets::sc::ID::name: return Dispatch<pr::packets::sc::name>(ch, buf);
+            SC_CONFIG_PACKETS(X)
+#undef X
+#define X(name) \
+    case pr::packets::sc::ID::name: return Dispatch<pr::packets::sc::name>(ph, buf);
+            SC_PLAY_PACKETS(X)
 #undef X
     }
 }
@@ -440,7 +455,6 @@ auto HandleServerSidePacket(Handler& h, net::TCPConnexion& client, net::ReceiveB
         default: return Error("Client sent unrecognised packet: {}", +ty);
 #define X(name) \
     case pr::packets::cs::ID::name: return Dispatch<pr::packets::cs::name>(h, buf, client);
-            COMMON_PACKETS(X)
             CS_PACKETS(X)
 #undef X
     }
