@@ -389,6 +389,10 @@ void Client::handle(sc::RemoveCard r) {
     game_screen.remove_card(r.card_index);
 }
 
+void Client::handle(sc::PromptNegation p) {
+    Log("TODO: Prompt negation");
+}
+
 void Client::TickNetworking() {
     if (server_connexion.disconnected) return;
     server_connexion.receive([&](net::ReceiveBuffer& buf) {

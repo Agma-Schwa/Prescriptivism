@@ -76,7 +76,17 @@ struct CardChoice {
     PlayerId target_player; // Player whose hand to take the cards from.
     packets::CardChoiceChallenge data;
 };
-}
+
+/// Used to prompt a player to negate an effect.
+struct NegatePowerCard {
+    CardId id;
+};
+
+using Challenge = Variant< // clang-format off
+        challenge::CardChoice,
+        challenge::NegatePowerCard
+    >; // clang-format on
+} // namespace pr::server::challenge
 
 class pr::server::Player {
     LIBBASE_IMMOVABLE(Player);
@@ -84,20 +94,23 @@ class pr::server::Player {
     ComputedReadonly(bool, connected, not client_connexion.disconnected);
     ComputedReadonly(bool, disconnected, not connected);
 
-public:
-    /// The connexion for this player, if there is an established
-    /// one. This may be unset if the player has (temporarily) left
-    /// the game.
-    net::TCPConnexion client_connexion;
-
-    /// The current pending challenge for the player, if any.
+    /// The currently pending challenges for the player, if any.
     ///
     /// A 'challenge' is a message sent to a client for which the
     /// server expects a reply; no other action may be taken by the
     /// client (except disconnection and logging back in) until the
     /// challenge is resolved. Attempts to do something else will
     /// result in the client being disconnected.
-    Variant<std::monostate, challenge::CardChoice> challenge = std::monostate{};
+    ///
+    /// Challenges are processed one-by-one, i.e. after one has been
+    /// resolved, the next one is sent and so on.
+    Queue<challenge::Challenge> challenges;
+
+public:
+    /// The connexion for this player, if there is an established
+    /// one. This may be unset if the player has (temporarily) left
+    /// the game.
+    net::TCPConnexion client_connexion;
 
     /// The player's name.
     std::string name;
@@ -119,9 +132,28 @@ public:
         : client_connexion(std::move(client_connexion)),
           name(std::move(name)) {}
 
+    /// Add a challenge to the player.
+    void add_challenge(challenge::Challenge c);
+
+    /// Remove the currently active challenge.
+    void clear_active_challenge();
+
+    /// Check if this player has a pending challenge.
+    auto has_active_challenge() -> bool { return not challenges.empty(); }
+
+    /// Get the current challenge, provided it is of the given type.
+    template <typename T>
+    auto get_active_challenge() -> T* {
+        if (challenges.empty()) return nullptr;
+        return challenges.front().get_if<T>();
+    }
+
     /// Send a packet to the player.
     template <typename T>
     void send(const T& t) { client_connexion.send(t); }
+
+    /// Send the active challenge, if any.
+    void send_active_challenge();
 };
 
 /// Prescriptivism server instance.
@@ -227,6 +259,8 @@ private:
         std::optional<PlayerId> target_player = std::nullopt
     ) -> CanPlayCardResult;
 
+    void DoP_Babel(Player& p);
+
     void Draw(Player& p, usz count = 1);
 
     void HandlePlaySoundCard(
@@ -246,6 +280,7 @@ private:
         p.hand.erase(it);
     }
 
+    bool PromptNegation(Player& p, CardId power_card);
     void SendGameState(Player& p);
     void SetUpGame();
     void Tick();

@@ -27,7 +27,8 @@
     X(WordChanged)      \
     X(DiscardAll)       \
     X(CardChoice)       \
-    X(RemoveCard)
+    X(RemoveCard)       \
+    X(PromptNegation)
 
 #define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
@@ -298,6 +299,14 @@ DefinePacket(RemoveCard) {
 
     /// The index of the card to remove.
     u32 card_index;
+};
+
+DefinePacket(PromptNegation) {
+    Ctor(PromptNegation)(CardId card_id) : card_id(card_id) {}
+    Serialisable(id);
+
+    // The card to negate.
+    CardId card_id;
 };
 } // namespace pr::packets::sc
 

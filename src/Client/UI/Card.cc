@@ -148,7 +148,8 @@ const PowerCardData Database[+$$PowersEnd - +$$PowersStart + 1]{
 
     Entry(
         Negation,
-        "",
+        "Protect yourself from the effects of a card. This card can "
+        "be played at any time, even if it’s not your turn.",
         ""
     ),
 

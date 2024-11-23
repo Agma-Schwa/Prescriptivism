@@ -52,6 +52,28 @@ auto Server::ValidatorFor(Player& p) -> Validator {
 }
 
 // =============================================================================
+//  Player
+// =============================================================================
+void Player::add_challenge(challenge::Challenge c) {
+    challenges.push(std::move(c));
+    if (challenges.size() == 1) send_active_challenge();
+}
+
+void Player::clear_active_challenge() {
+    if (challenges.empty()) return;
+    challenges.pop();
+    send_active_challenge();
+}
+
+void Player::send_active_challenge() {
+    if (challenges.empty()) return;
+    challenges.front().visit(utils::Overloaded{
+        [&](const challenge::CardChoice& c) { send(sc::CardChoice(c.data)); },
+        [&](challenge::NegatePowerCard n) { send(sc::PromptNegation{n.id}); }
+    });
+}
+
+// =============================================================================
 //  Networking
 // =============================================================================
 void Server::Kick(net::TCPConnexion& client, DisconnectReason reason, std::source_location sloc) {
@@ -225,10 +247,7 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
                     SendGameState(*p);
                     if (current_player == p->id) {
                         p->send(sc::StartTurn{});
-                        p->challenge.visit(utils::Overloaded{
-                            [&](std::monostate) {},
-                            [&](const challenge::CardChoice& c) { p->send(sc::CardChoice(c.data)); }
-                        });
+                        p->send_active_challenge();
                     }
                     break;
             }
@@ -267,14 +286,11 @@ void Server::handle(net::TCPConnexion& client, cs::PlayNoTarget packet) {
 
         // Always playable.
         case CardId::P_Babel: {
-            Broadcast(sc::DiscardAll{});
-            for (auto& player : players) {
-                rgs::move(player->hand, std::back_inserter(discard));
-                player->hand.clear();
-                Draw(*player, HandSize);
-            }
+            RemoveCard(*p, *card);
+            for (auto& player : players)
+                if (not PromptNegation(*player, CardId::P_Babel))
+                    DoP_Babel(*player);
 
-            // Do NOT remove the card here since it’s already been discarded.
         } break;
 
         // Always playable.
@@ -328,7 +344,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlayPlayerTarget packet) {
             if (p == target_player) return Kick(client, InvalidPacket);
 
             // Show the target player’s hand to the player.
-            p->challenge = challenge::CardChoice{
+            p->add_challenge(challenge::CardChoice{
                 .target_player = target_player->id,
                 .data = {
                     .title = std::format("from {}’s hand", target_player->name),
@@ -336,9 +352,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlayPlayerTarget packet) {
                     .count = 1,
                     .mode = packets::CardChoiceChallenge::Mode::AtMost,
                 }
-            };
-
-            p->send(sc::CardChoice{p->challenge.get<challenge::CardChoice>().data});
+            });
         } break;
     }
 
@@ -406,7 +420,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
 // =============================================================================
 void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
     auto& p = player_map[client];
-    auto c = p->challenge.get_if<challenge::CardChoice>();
+    auto c = p->get_active_challenge<challenge::CardChoice>();
     if (not c) return Kick(client, UnexpectedPacket);
 
     // All indices must be in bounds and unique.
@@ -442,7 +456,7 @@ void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
     }
 
     // Finally, clear the challenge.
-    p->challenge = std::monostate{};
+    p->clear_active_challenge();
 }
 
 // =============================================================================
@@ -490,7 +504,7 @@ auto Server::CanPlayCard(
     }
 
     /// Check that the player does not have a pending challenge.
-    if (not p->challenge.is<std::monostate>()) {
+    if (p->has_active_challenge()) {
         Kick(client, UnexpectedPacket);
         return {};
     }
@@ -512,6 +526,13 @@ auto Server::CanPlayCard(
         card_index ? &p->hand[*card_index] : nullptr,
         target_player ? players[*target_player].get() : nullptr
     };
+}
+
+void Server::DoP_Babel(Player& p) {
+    p.send(sc::DiscardAll{});
+    rgs::move(p.hand, std::back_inserter(discard));
+    p.hand.clear();
+    Draw(p, HandSize);
 }
 
 void Server::Draw(Player& p, usz count) {
@@ -547,6 +568,13 @@ void Server::NextPlayer() {
 
         NextPlayer();
     }
+}
+
+bool Server::PromptNegation(Player& p, CardId power_card) {
+    bool has_negation = rgs::any_of(p.hand, [](auto& c) { return c.id == CardId::P_Negation; });
+    if (not has_negation) return false;
+    p.add_challenge(challenge::NegatePowerCard{power_card});
+    return true;
 }
 
 void Server::SendGameState(Player& p) {
@@ -626,7 +654,8 @@ void Server::SetUpGame() {
 
         // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate whatever
         // power card we’re currently testing into the player’s hand.
-        p->hand.emplace_back(CardId::P_Superstratum);
+        p->hand.emplace_back(CardId::P_Babel);
+        p->hand.emplace_back(CardId::P_Negation);
     }
     rgs::shuffle(players, rng);
 
