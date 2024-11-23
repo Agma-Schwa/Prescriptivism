@@ -422,7 +422,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::CardChoiceReply pack
         switch (c->data.mode) {
             case Mode::Exact: return packet.card_indices.size() == c->data.count;
             case Mode::AtLeast: return packet.card_indices.size() >= c->data.count;
-            case Mode::AtMost: return packet.card_indices.size() < c->data.count;
+            case Mode::AtMost: return packet.card_indices.size() <= c->data.count;
         }
         Unreachable();
     }();

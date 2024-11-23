@@ -717,6 +717,9 @@ public:
 
     /// Make all children of this group selectable.
     void make_selectable(Selectable new_value = Selectable::Yes);
+    void make_selectable(bool selectable) {
+        make_selectable(selectable ? Selectable::Yes : Selectable::No);
+    }
 
     /// Swap two elements of the group.
     void swap(Widget* a, Widget* b);
@@ -781,6 +784,7 @@ public:
 
         auto cards() { return children<Card>(); }
         auto index_of(Card& c) -> std::optional<u32> { return Group::index_of(c); }
+        void make_active(bool active);
         void push(CardId card);
 
         void draw(Renderer& r) override;

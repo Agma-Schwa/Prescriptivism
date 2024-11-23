@@ -115,7 +115,7 @@ struct CardChoiceChallenge {
     PR_SERIALISE(title, cards, count, mode);
     enum struct Mode {
         Exact,   ///< Choose exactly `count` cards.
-        AtMost,  ///< Choose at most `count` cards.
+        AtMost,  ///< Choose at most (up to and including) `count` cards.
         AtLeast, ///< Choose at least `count` cards.
     };
 

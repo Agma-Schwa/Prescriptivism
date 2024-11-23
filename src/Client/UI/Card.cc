@@ -547,6 +547,10 @@ void CardStacks::Stack::draw(Renderer& r) {
     }
 }
 
+void CardStacks::Stack::make_active(bool active) {
+    overlay = active ? Card::Overlay::Default : Card::Overlay::Inactive;
+}
+
 void CardStacks::Stack::push(CardId card) {
     auto& c = create<Card>(Position());
     c.id = card;

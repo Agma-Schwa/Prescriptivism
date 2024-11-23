@@ -78,7 +78,7 @@ class pr::client::CardChoiceChallengeScreen : public Screen {
     GameScreen& parent;
     Label* message;
     CardStacks* cards;
-    Button* pass_button;
+    Button* confirm_button;
     CardPreview* preview{};
     std::vector<Card*> selected{};
     packets::CardChoiceChallenge::Mode mode;
@@ -88,10 +88,10 @@ public:
     CardChoiceChallengeScreen(GameScreen& p);
 
     void enter(packets::CardChoiceChallenge c);
+    void tick(InputSystem &input) override;
 
 private:
     void Confirm();
-    void Pass();
 };
 
 /// This screen renders the actual game.

@@ -107,11 +107,7 @@ CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : parent{p} 
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->scale = Card::Hand;
     cards->gap = -Card::CardSize[Card::Hand].wd / 2;
-
-    auto& buttons = Create<Group>(Position::HCenter(150));
-    buttons.create<Button>("Confirm", Position(), [&] { Confirm(); });
-    pass_button = &buttons.create<Button>("Pass", Position(), [&] { Pass(); });
-    buttons.gap = 100;
+    confirm_button = &Create<Button>("Confirm", Position::HCenter(150), [&] { Confirm(); });
 }
 
 void CardChoiceChallengeScreen::enter(packets::CardChoiceChallenge c) {
@@ -126,26 +122,67 @@ void CardChoiceChallengeScreen::enter(packets::CardChoiceChallenge c) {
         c.title
     ));
 
+    // Passing/confirming is disallowed if we must select a card.
+    confirm_button->selectable = c.mode == AtMost ? Selectable::Yes : Selectable::No;
+
+    // Clear out stale data and copy data from the challenge.
     selected.clear();
-    pass_button->selectable = c.mode == Exact ? Selectable::No : Selectable::Yes;
+    cards->clear();
     count = c.count;
     mode = c.mode;
-    cards->clear();
+
+    // Initialise the cards.
     for (auto id : c.cards) cards->add_stack(id);
-    parent.client.push_screen(*this);
+    cards->selection_mode = CardStacks::SelectionMode::Card;
+    cards->make_selectable();
 
     // Recreate the preview so it’s drawn last.
     // TODO: Z order in the UI maybe?
     if (preview) remove(*preview);
     preview = &Create<CardPreview>();
+
+    // Enter the screen.
+    parent.client.push_screen(*this);
+}
+
+void CardChoiceChallengeScreen::tick(InputSystem& input) {
+    Screen::tick(input);
+    if (not selected_element) return;
+
+    // If the selected element was already selected, unselect it and
+    // remove it from the list of selected elements.
+    auto c = &selected_element->as<Card>();
+    if (std::erase(selected, c)) selected_element->unselect();
+
+    // Otherwise, remember it and clear it in the screen.
+    else {
+        selected.push_back(c);
+        selected_element = nullptr;
+    }
+
+    // Update selectability.
+    for (auto& s : cards->stacks()) {
+        bool selectable = selected.size() < count or s.top.selected;
+        s.make_selectable(selectable);
+        s.make_active(selectable);
+    }
+
+    // Update the confirm button.
+    confirm_button->selectable = [&] {
+        switch (mode) {
+            case Exact: return selected.size() == count;
+            case AtMost: return selected.size() <= count;
+            case AtLeast: return selected.size() >= count;
+        }
+        Unreachable();
+    }() ? Selectable::Yes : Selectable::No;
 }
 
 void CardChoiceChallengeScreen::Confirm() {
-    Log("TODO: Confirm");
-}
-
-void CardChoiceChallengeScreen::Pass() {
-    parent.client.server_connexion.send(packets::cs::CardChoiceReply{{}});
+    packets::cs::CardChoiceReply choice = selected
+        | vws::transform([&](Card* c) { return cards->index_of(c->parent.as<CardStacks::Stack>()).value(); })
+        | rgs::to<std::vector>();
+    parent.client.server_connexion.send(choice);
     parent.client.pop_screen();
 }
 
