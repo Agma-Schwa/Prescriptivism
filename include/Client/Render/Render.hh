@@ -728,6 +728,9 @@ public:
     /// Set the active cursor.
     void set_cursor(Cursor);
 
+    /// Check if we should do any rendering this frame.
+    auto should_render() -> bool;
+
     /// Get the SDL window.
     auto sdl_window() -> SDL_Window* { return window.get(); }
 

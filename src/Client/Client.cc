@@ -470,10 +470,12 @@ void Client::Tick() {
     // Tick the screen.
     screen_stack.back()->tick(input_system);
 
-    // Draw it.
-    for (auto s : screen_stack) {
-        s->draw(renderer);
-        if (s != screen_stack.back()) renderer.draw_rect(xy{}, renderer.size(), Veil);
+    // Draw it if the window is visible.
+    if (renderer.should_render()) {
+        for (auto s : screen_stack) {
+            s->draw(renderer);
+            if (s != screen_stack.back()) renderer.draw_rect(xy{}, renderer.size(), Veil);
+        }
     }
 }
 

@@ -1067,6 +1067,10 @@ void Renderer::set_cursor(Cursor c) {
     requested_cursor = c;
 }
 
+bool Renderer::should_render() {
+    return not (SDL_GetWindowFlags(window.get()) & SDL_WINDOW_MINIMIZED);
+}
+
 auto Renderer::text(
     std::u32string value,
     FontSize size,
