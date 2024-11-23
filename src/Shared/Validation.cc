@@ -30,7 +30,6 @@ bool validation::ValidateCardChoiceChallenge(
     Unreachable();
 }
 
-
 auto validation::ValidateInitialWord(constants::Word word, constants::Word original)
     -> InitialWordValidationResult {
     using enum InitialWordValidationResult;

@@ -352,6 +352,7 @@ public:
 
     /// Remove a widget. This asserts if the widget is not in the list.
     void remove(Widget& w);
+    void remove(u32 idx);
 
     /// Get all visible elements.
     auto visible_elements() {
@@ -850,6 +851,7 @@ public:
 
     /// Remove a stack from this group.
     void remove(Stack& s) { Group::remove(s); }
+    void remove(u32 idx) { Group::remove(idx); }
 
     /// Set the display state for all children.
     void set_overlay(Card::Overlay state);

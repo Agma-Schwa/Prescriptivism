@@ -178,6 +178,11 @@ void WidgetHolder::remove(Widget& w) {
     if (auto g = dynamic_cast<Widget*>(this)) g->needs_refresh = true;
 }
 
+void WidgetHolder::remove(u32 idx) {
+    Assert(idx < widgets.size(), "Index out of bounds!");
+    remove(*widgets[idx]);
+}
+
 // =============================================================================
 //  Basic Elements
 // =============================================================================

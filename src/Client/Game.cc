@@ -209,7 +209,7 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
 
 void GameScreen::ResetHand() {
     for (auto& c : our_hand->top_cards()) {
-        if (not Empty(Targets(c)) or validation::AlwaysPlayable(c.id)) {
+        if (state != State::NotOurTurn and (not Empty(Targets(c)) or validation::AlwaysPlayable(c.id))) {
             c.overlay = Card::Overlay::Default;
             c.selectable = Selectable::Yes;
         } else {
@@ -474,6 +474,7 @@ void GameScreen::add_card(PlayerId id, u32 stack_idx, CardId card) {
 
 void GameScreen::add_card_to_hand(CardId id) {
     our_hand->add_stack(id);
+    ResetHand();
 }
 
 void GameScreen::discard(base::u32 amount) {
@@ -557,6 +558,17 @@ void GameScreen::on_refresh(Renderer& r) {
     // Position the other players’ words at the top of the screen.
     other_words->pos = Position::HCenter(-100);
     other_words->gap = 100;
+}
+
+void GameScreen::remove_card(u32 card_index) {
+    // TODO: Show message to the user. This is only used when a card
+    //       is removed via some effect, so show e.g. ‘One of your cards has
+    //       been stolen!’ on the screen or sth like that.
+    //
+    //       In general, we need some API for flashing a message on the screen
+    //       above everything else (including every open screen). Probably put
+    //       that in the Client class.
+    our_hand->remove(card_index);
 }
 
 void GameScreen::tick(InputSystem& input) {

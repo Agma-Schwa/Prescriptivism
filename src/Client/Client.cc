@@ -373,16 +373,20 @@ void Client::handle(sc::StackLockChanged lock) {
     game_screen.lock_changed(lock.player, lock.stack_index, lock.locked);
 }
 
-void Client::handle(packets::sc::WordChanged wc) {
+void Client::handle(sc::WordChanged wc) {
     game_screen.update_word(wc.player, wc.new_word);
 }
 
-void Client::handle(packets::sc::DiscardAll) {
+void Client::handle(sc::DiscardAll) {
     game_screen.discard(0);
 }
 
-void Client::handle(packets::sc::CardChoice c) {
+void Client::handle(sc::CardChoice c) {
     game_screen.handle_challenge(std::move(c.challenge));
+}
+
+void Client::handle(sc::RemoveCard r) {
+    game_screen.remove_card(r.card_index);
 }
 
 void Client::TickNetworking() {

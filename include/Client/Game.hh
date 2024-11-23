@@ -177,6 +177,7 @@ public:
     void handle_challenge(packets::CardChoiceChallenge c);
     void lock_changed(PlayerId player, u32 stack_index, bool locked);
     void on_refresh(Renderer& r) override;
+    void remove_card(u32 card_index);
     void start_turn();
     void tick(InputSystem& input) override;
     void update_word(PlayerId player, std::span<const std::vector<CardId>> new_word);

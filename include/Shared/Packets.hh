@@ -26,7 +26,8 @@
     X(StackLockChanged) \
     X(WordChanged)      \
     X(DiscardAll)       \
-    X(CardChoice)
+    X(CardChoice)       \
+    X(RemoveCard)
 
 #define CS_PACKETS(X)    \
     X(HeartbeatResponse) \
@@ -285,6 +286,18 @@ DefinePacket(CardChoice) {
 
     /// The challenge.
     CardChoiceChallenge challenge;
+};
+
+/// This is only used for cards that are removed through means other
+/// than playing them (e.g. discarding at random, another player stealing
+/// them, etc.). Normally, the client automatically discards cards after
+/// they have been played.
+DefinePacket(RemoveCard) {
+    Ctor(RemoveCard)(u32 card_index) : card_index(card_index) {}
+    Serialisable(card_index);
+
+    /// The index of the card to remove.
+    u32 card_index;
 };
 } // namespace pr::packets::sc
 

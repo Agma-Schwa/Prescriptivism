@@ -255,7 +255,7 @@ void Server::handle(net::TCPConnexion& client, cs::Pass pass) {
     NextPlayer();
 }
 
-void Server::handle(net::TCPConnexion& client, packets::cs::PlayNoTarget packet) {
+void Server::handle(net::TCPConnexion& client, cs::PlayNoTarget packet) {
     auto res = CanPlayCard(client, packet.card_index);
     if (not res) return;
     auto [p, card, _] = res;
@@ -313,7 +313,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::PlayNoTarget packet)
     NextPlayer();
 }
 
-void Server::handle(net::TCPConnexion& client, packets::cs::PlayPlayerTarget packet) {
+void Server::handle(net::TCPConnexion& client, cs::PlayPlayerTarget packet) {
     auto res = CanPlayCard(client, packet.card_index, packet.player);
     if (not res) return;
     auto [p, card, target_player] = res;
@@ -404,7 +404,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
 // =============================================================================
 //  Challenge Packet Handlers
 // =============================================================================
-void Server::handle(net::TCPConnexion& client, packets::cs::CardChoiceReply packet) {
+void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
     auto& p = player_map[client];
     auto c = p->challenge.get_if<challenge::CardChoice>();
     if (not c) return Kick(client, UnexpectedPacket);
@@ -435,10 +435,11 @@ void Server::handle(net::TCPConnexion& client, packets::cs::CardChoiceReply pack
     //
     // Note: The indices are sorted, so deleting them in reverse order
     // does the expected thing here.
-    // TODO: Tell the player that we removed cards from their hand.
     auto& target = players[c->target_player];
-    for (auto i : packet.card_indices | vws::reverse)
+    for (auto i : packet.card_indices | vws::reverse) {
         RemoveCard(*target, target->hand[i]);
+        target->send(sc::RemoveCard{i});
+    }
 
     // Finally, clear the challenge.
     p->challenge = std::monostate{};
