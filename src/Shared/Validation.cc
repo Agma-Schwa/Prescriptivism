@@ -16,6 +16,21 @@ bool validation::AlwaysPlayable(CardId card) {
     }
 }
 
+bool validation::ValidateCardChoiceChallenge(
+    packets::CardChoiceChallenge::Mode mode,
+    u32 requested_count,
+    usz actual_count
+) {
+    using Mode = packets::CardChoiceChallenge::Mode;
+    switch (mode) {
+        case Mode::Exact: return actual_count == requested_count;
+        case Mode::AtLeast: return actual_count >= requested_count;
+        case Mode::AtMost: return actual_count <= requested_count;
+    }
+    Unreachable();
+}
+
+
 auto validation::ValidateInitialWord(constants::Word word, constants::Word original)
     -> InitialWordValidationResult {
     using enum InitialWordValidationResult;

@@ -417,16 +417,13 @@ void Server::handle(net::TCPConnexion& client, packets::cs::CardChoiceReply pack
     ) return Kick(client, InvalidPacket);
 
     // Check constraints on the count and mode.
-    auto ok = [&] {
-        using Mode = packets::CardChoiceChallenge::Mode;
-        switch (c->data.mode) {
-            case Mode::Exact: return packet.card_indices.size() == c->data.count;
-            case Mode::AtLeast: return packet.card_indices.size() >= c->data.count;
-            case Mode::AtMost: return packet.card_indices.size() <= c->data.count;
-        }
-        Unreachable();
-    }();
-    if (not ok) return Kick(client, InvalidPacket);
+    if (
+        not validation::ValidateCardChoiceChallenge(
+            c->data.mode,
+            c->data.count,
+            packet.card_indices.size()
+        )
+    ) return Kick(client, InvalidPacket);
 
     // Add the selected cards to the player’s hand.
     for (auto i : packet.card_indices) {
@@ -438,6 +435,7 @@ void Server::handle(net::TCPConnexion& client, packets::cs::CardChoiceReply pack
     //
     // Note: The indices are sorted, so deleting them in reverse order
     // does the expected thing here.
+    // TODO: Tell the player that we removed cards from their hand.
     auto& target = players[c->target_player];
     for (auto i : packet.card_indices | vws::reverse)
         RemoveCard(*target, target->hand[i]);

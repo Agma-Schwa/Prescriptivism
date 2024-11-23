@@ -168,14 +168,8 @@ void CardChoiceChallengeScreen::tick(InputSystem& input) {
     }
 
     // Update the confirm button.
-    confirm_button->selectable = [&] {
-        switch (mode) {
-            case Exact: return selected.size() == count;
-            case AtMost: return selected.size() <= count;
-            case AtLeast: return selected.size() >= count;
-        }
-        Unreachable();
-    }() ? Selectable::Yes : Selectable::No;
+    bool valid = validation::ValidateCardChoiceChallenge(mode, count, selected.size());
+    confirm_button->selectable = valid ? Selectable::Yes : Selectable::No;
 }
 
 void CardChoiceChallengeScreen::Confirm() {
