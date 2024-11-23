@@ -437,7 +437,7 @@ void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
     // does the expected thing here.
     auto& target = players[c->target_player];
     for (auto i : packet.card_indices | vws::reverse) {
-        RemoveCard(*target, target->hand[i]);
+        RemoveCard(*target, target->hand[i], false);
         target->send(sc::RemoveCard{i});
     }
 
