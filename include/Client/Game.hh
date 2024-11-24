@@ -113,6 +113,7 @@ private:
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
     struct Validator;
+    class PlayCard;
     friend Validator;
     friend ConfirmPlaySelectedScreen;
     friend CardChoiceChallengeScreen;
@@ -124,6 +125,10 @@ class pr::client::GameScreen : public Screen {
 
         /// It is not our turn. User interaction is passed.
         NotOurTurn,
+
+        /// We just played a card and are now waiting for the
+        /// server to confirm the play.
+        PlayedCard,
 
         /// A card in hand is selected, and we are waiting for
         /// the user to select a target for it.
@@ -191,7 +196,7 @@ public:
     void on_refresh(Renderer& r) override;
     void tick(InputSystem& input) override;
 
-#define X(name) void handle(packets::sc::name);
+#define X(name) void handle(packets::sc::name); void HandleImpl(packets::sc::name);
     SC_PLAY_PACKETS(X)
 #undef X
 

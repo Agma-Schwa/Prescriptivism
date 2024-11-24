@@ -186,10 +186,11 @@ public:
     // swapped before this is run. When the two cards overlap, the first
     // element is drawn on top.
     SwapAnimation(
+        Screen&,
         CardStacks::Stack& card1,
         CardStacks::Stack& card2
-    ) : Animation{Tick()}, c1{&card1}, c2{&card2} {
-        blocking = true;
+    ) : Animation{Tick(), Duration}, c1{&card1}, c2{&card2} {
+        prevent_user_input = true;
         c1->visible = false;
         c2->visible = false;
         c1orig = c1->absolute_position();
@@ -203,18 +204,12 @@ public:
 
 private:
     auto Tick() -> Coroutine {
-        auto start = chr::steady_clock::now();
         for (;;) {
-            auto now = chr::steady_clock::now();
-            if (now - start > Duration) break;
-            auto t = (f32(chr::duration_cast<chr::milliseconds>(now - start).count()) / Duration.count());
+            auto t = dt();
             c1pos = lerp_smooth(c1orig, c2orig, t);
             c2pos = lerp_smooth(c2orig, c1orig, t);
             co_yield {};
         }
-
-        c1->visible = true;
-        c2->visible = true;
     }
 
     void draw(Renderer& r) override {
@@ -227,6 +222,11 @@ private:
             c2->draw_absolute(r, c2pos);
             c1->draw_absolute(r, c1pos);
         }
+    }
+
+    void on_done() override {
+        c1->visible = true;
+        c2->visible = true;
     }
 };
 

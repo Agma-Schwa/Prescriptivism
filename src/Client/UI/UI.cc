@@ -430,7 +430,10 @@ void Screen::DeleteAllChildren() {
 void Screen::draw(Renderer& r) {
     r.set_cursor(Cursor::Default);
     for (auto& e : visible_elements()) e.draw(r);
-    for (auto& a : animations) a->draw(r);
+    for (auto& e : effects) {
+        if (auto a = dynamic_cast<Animation*>(e.get())) a->draw(r);
+        if (e->blocking) break;
+    }
 }
 
 void Screen::refresh(Renderer& r) {
@@ -466,20 +469,22 @@ void Screen::refresh(Renderer& r) {
 
 void Screen::tick(InputSystem& input) {
     // Tick animations.
-    bool block_user_interaction = false;
-    for (auto& a : animations) {
+    bool prevent_user_input = false;
+    for (auto& a : effects) {
         a->tick();
         if (not a->done()) {
-            if (a->blocking) block_user_interaction = true;
-            if (a->exclusive) break;
+            if (a->prevent_user_input) prevent_user_input = true;
+            if (a->blocking) break;
+        } else {
+            a->on_done();
         }
     }
 
     // Remove any that are done.
-    std::erase_if(animations, [](auto& a) { return a->done(); });
+    std::erase_if(effects, [](auto& a) { return a->done(); });
 
     // Do not do anything if we’re blocking user interaction.
-    if (block_user_interaction) return;
+    if (prevent_user_input) return;
 
     // Reset the currently hovered element since we always recompute
     // this; we also need to make sure to clear its hovered flag here.
@@ -529,6 +534,16 @@ void Screen::tick(InputSystem& input) {
     // In any case, tell the input system whether we have a
     // selected element.
     input.update_selection(selected_element != nullptr);
+}
+
+void Screen::QueueImpl(std::unique_ptr<Effect> effect, bool flush_queue) {
+    // Signal to all effects that they can stop waiting.
+    if (flush_queue)
+        for (auto& e : effects)
+            e->waiting = false;
+
+    // And add this one at the end.
+    effects.push_back(std::move(effect));
 }
 
 // =============================================================================

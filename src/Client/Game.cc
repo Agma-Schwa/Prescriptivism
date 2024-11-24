@@ -69,6 +69,42 @@ void CardPreview::refresh(Renderer& r) {
 }
 
 // =============================================================================
+// Effects
+// =============================================================================
+// Animation that plays a card in hand.
+class GameScreen::PlayCard : public Animation {
+    static constexpr auto Duration = 500ms;
+    GameScreen& g;
+    CardId id;
+
+public:
+    explicit PlayCard(GameScreen& g, Card& c) : Animation(Tick(), Duration), g{g}, id{c.id} {
+        g.ClearSelection(State::PlayedCard);
+        g.our_hand->make_selectable(false);
+        c.visible = false;
+        waiting = true;
+        blocking = true;
+        prevent_user_input = true;
+    }
+
+    auto Tick() -> Coroutine {
+        for (;;) {
+            // TODO: Animate
+            co_yield {};
+        }
+    }
+
+    void draw(Renderer& r) override {
+        // TODO: Animate
+    }
+
+    void on_done() override {
+        g.state = GameScreen::State::NoSelection;
+        g.ResetHand();
+    }
+};
+
+// =============================================================================
 // Play Confirmation Screen
 // =============================================================================
 ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(pr::client::GameScreen& p) : parent{p} {
@@ -357,30 +393,42 @@ auto GameScreen::Targets(Card& c) -> std::generator<Target> {
 // =============================================================================
 // Packet Handlers
 // =============================================================================
-void GameScreen::handle(sc::AddSoundToStack add) {
+#define X(name)                                                                               \
+    void GameScreen::handle(packets::sc::name packet) {                                       \
+        if (effect_queue_empty()) {                                                           \
+            HandleImpl(std::move(packet));                                                    \
+            return;                                                                           \
+        }                                                                                     \
+                                                                                              \
+        Queue([this, packet = std::move(packet)] mutable { HandleImpl(std::move(packet)); }); \
+    }
+SC_PLAY_PACKETS(X)
+#undef X
+
+void GameScreen::HandleImpl(sc::AddSoundToStack add) {
     auto& player = PlayerById(add.player);
     player.word->stacks()[add.stack_index].push(add.card);
 }
 
-void GameScreen::handle(sc::CardChoice c) {
+void GameScreen::HandleImpl(sc::CardChoice c) {
     packets::CardChoiceChallenge c1 = std::move(c.challenge);
     card_choice_challenge_screen.enter(std::move(c1));
 }
 
-void GameScreen::handle(sc::Draw dr) {
+void GameScreen::HandleImpl(sc::Draw dr) {
     our_hand->add_stack(dr.card);
     ResetHand();
 }
 
-void GameScreen::handle(sc::DiscardAll) {
+void GameScreen::HandleImpl(sc::DiscardAll) {
     Discard(0);
 }
 
-void GameScreen::handle(sc::EndTurn) {
+void GameScreen::HandleImpl(sc::EndTurn) {
     EndTurn();
 }
 
-void GameScreen::handle(sc::RemoveCard r) {
+void GameScreen::HandleImpl(sc::RemoveCard r) {
     // TODO: Show message to the user. This is only used when a card
     //       is removed via some effect, so show e.g. ‘One of your cards has
     //       been stolen!’ on the screen or sth like that.
@@ -391,19 +439,19 @@ void GameScreen::handle(sc::RemoveCard r) {
     our_hand->remove(r.card_index);
 }
 
-void GameScreen::handle(sc::StackLockChanged lock) {
+void GameScreen::HandleImpl(sc::StackLockChanged lock) {
     auto& p = PlayerById(lock.player);
     p.word->stacks()[lock.stack_index].locked = lock.locked;
 }
 
-void GameScreen::handle(sc::StartTurn) {
+void GameScreen::HandleImpl(sc::StartTurn) {
     state = State::NoSelection;
     end_turn_button->selectable = Selectable::Yes;
     ResetHand();
     // TODO: Automatically go into passing mode if we cannot play anything in our hand.
 }
 
-void GameScreen::handle(sc::WordChanged wc) {
+void GameScreen::HandleImpl(sc::WordChanged wc) {
     auto& p = PlayerById(wc.player);
     p.word->clear();
     for (auto& s : wc.new_word) {
@@ -412,7 +460,7 @@ void GameScreen::handle(sc::WordChanged wc) {
     }
 }
 
-void GameScreen::handle(sc::PromptNegation p) {
+void GameScreen::HandleImpl(sc::PromptNegation p) {
     negation_challenge_screen.enter(p);
 }
 
@@ -449,7 +497,7 @@ void GameScreen::PlayCardWithoutTarget() {
     Assert(our_selected_card, "No card selected?");
     auto [stack, idx] = GetStackInHand(*our_selected_card);
     client.server_connexion.send(cs::PlayNoTarget{idx});
-    Discard(stack);
+    Queue<PlayCard>(*our_selected_card);
 }
 
 void GameScreen::TickNoSelection() {
@@ -501,7 +549,7 @@ void GameScreen::TickPassing() {
     if (not selected_element) return;
     auto [stack, idx] = GetStackInHand(selected_element->as<Card>());
     client.server_connexion.send(cs::Pass{idx});
-    Discard(stack);
+    Discard(stack); // TODO: Remove this as well.
     end_turn_button->update_text("Pass");
 
     /// Make sure the user can’t press the pass button again (and the server
@@ -527,7 +575,7 @@ void GameScreen::TickPlayerTarget() {
         case CardIdValue::P_Superstratum: {
             auto [stack, idx] = GetStackInHand(*our_selected_card);
             client.server_connexion.send(cs::PlayPlayerTarget{idx, p.id});
-            Discard(stack);
+            Queue<PlayCard>(*our_selected_card);
         } break;
     }
 }
@@ -551,8 +599,7 @@ void GameScreen::TickSingleTarget() {
             selected_card_index.value(),
         });
 
-        // Remove the card we played.
-        Discard(our_stack);
+        Queue<PlayCard>(*our_selected_card);
     };
 
     // We selected a different card in hand.
@@ -645,13 +692,17 @@ void GameScreen::tick(InputSystem& input) {
         return;
     }
 
+    // Handle user input.
     Screen::tick(input);
+
+    // Handle the game state.
     switch (state) {
         case State::NoSelection: TickNoSelection(); break;
         case State::NotOurTurn: TickNotOurTurn(); break;
         case State::Passing: TickPassing(); break;
         case State::SingleTarget: TickSingleTarget(); break;
         case State::PlayerTarget: TickPlayerTarget(); break;
+        case State::PlayedCard: break;
         case State::InAuxiliaryScreen: Unreachable("Should never get here if in auxiliary screen");
     }
 }

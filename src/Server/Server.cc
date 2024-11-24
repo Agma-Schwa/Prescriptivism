@@ -270,7 +270,10 @@ void Server::handle(net::TCPConnexion& client, cs::Pass pass) {
     auto res = CanPlayCard(client, pass.card_index);
     if (not res) return;
     auto [p, card, _] = res;
-    RemoveCard(*p, *card);
+
+    // FIXME: Should notify here as well when once the client no longer discards
+    // this immediately.
+    RemoveCard(*p, *card, true, false);
     NextPlayer();
 }
 
@@ -296,7 +299,6 @@ void Server::handle(net::TCPConnexion& client, cs::PlayNoTarget packet) {
         // Always playable.
         case CardId::P_Whorf: {
             Word new_word;
-            usz deck_size = deck.size();
             for (auto& s : p->word.stacks) {
                 // Empty stacks can simply be ignored here.
                 if (s.cards.empty()) continue;
@@ -304,16 +306,10 @@ void Server::handle(net::TCPConnexion& client, cs::PlayNoTarget packet) {
                 // Keep the topmost card.
                 new_word.add_stack(std::move(s.cards.back()));
 
-                // FIXME: Should be moved to the discard pile.
-                // All cards except the topmost one are placed at
-                // the bottom of the deck.
-                for (auto& c : s.cards | vws::take(s.cards.size() - 1))
-                    deck.push_back(std::move(c));
+                // All cards except the topmost one are discarded.
+                auto cards = s.cards | vws::take(s.cards.size() - 1);
+                rgs::move(cards, std::back_inserter(discard));
             }
-
-            // FIXME: Don’t do this.
-            // All cards so added are shuffled.
-            rgs::shuffle(deck.begin() + deck_size, deck.end(), rng);
 
             // Replace the word and broadcast the change.
             p->word = std::move(new_word);
@@ -452,10 +448,8 @@ void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
     // Note: The indices are sorted, so deleting them in reverse order
     // does the expected thing here.
     auto& target = players[c->target_player];
-    for (auto i : packet.card_indices | vws::reverse) {
+    for (auto i : packet.card_indices | vws::reverse)
         RemoveCard(*target, target->hand[i], false);
-        target->send(sc::RemoveCard{i});
-    }
 
     // Finally, clear the challenge.
     p->clear_active_challenge();
@@ -473,7 +467,6 @@ void Server::handle(net::TCPConnexion& client, cs::PromptNegationReply reply) {
     if (reply.negate) {
         auto it = rgs::find_if(p->hand, [](auto& c) { return c.id == CardId::P_Negation; });
         Assert(it != p->hand.end(), "Negation card not found in hand?");
-        p->send(sc::RemoveCard(u32(it - p->hand.begin())));
         RemoveCard(*p, *it);
         return;
     }
@@ -601,6 +594,14 @@ bool Server::PromptNegation(Player& p, CardId power_card) {
     if (not has_negation) return false;
     p.add_challenge(challenge::NegatePowerCard{power_card});
     return true;
+}
+
+void Server::RemoveCard(Player& p, Card& c, bool to_discard_pile, bool notify) {
+    auto it = rgs::find_if(p.hand, [&](Card& x) { return &x == &c; });
+    Assert(it != p.hand.end(), "Card not in hand");
+    if (to_discard_pile) discard.emplace_back(c.id);
+    if (notify) p.send(sc::RemoveCard{u32(it - p.hand.begin())});
+    p.hand.erase(it);
 }
 
 void Server::SendGameState(Player& p) {

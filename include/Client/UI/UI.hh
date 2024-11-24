@@ -373,8 +373,8 @@ class pr::client::Screen : public Element
     /// Previous size so we don’t refresh every frame.
     Size prev_size = {};
 
-    /// Animations that are currently in flight.
-    std::vector<std::unique_ptr<Animation>> animations;
+    /// Effects that are currently in flight.
+    std::vector<std::unique_ptr<Effect>> effects;
 
 protected:
     /// The selected element.
@@ -398,10 +398,20 @@ public:
         return ref;
     }
 
-    /// Queue a new animation.
-    template <typename Anim, typename... Args>
-    void Queue(Args&&... args) {
-        animations.push_back(std::make_unique<Anim>(std::forward<Args>(args)...));
+    /// Queue a new effect.
+    template <std::derived_from<Effect> EffectTy, typename... Args>
+    void Queue(this auto& Self, Args&&... args) {
+        Self.QueueImpl(std::make_unique<EffectTy>(Self, std::forward<Args>(args)...), false);
+    }
+
+    /// Queue a new callable.
+    ///
+    /// If 'flush_queue' is true, this signals to all other animations
+    /// in the queue that are waiting for an effect to be enqueued that
+    /// they can stop waiting.
+    template <typename Callable>
+    void Queue(Callable c, bool flush_queue = true) {
+        QueueImpl(std::make_unique<Effect>(std::move(c)), flush_queue);
     }
 
     /// Code to run to reset a screen when it is entered.
@@ -417,6 +427,9 @@ public:
     /// this screen.
     void draw(Renderer& r) override;
 
+    /// Whether the effect queue is empty.
+    auto effect_queue_empty() -> bool { return effects.empty(); }
+
     /// Refresh all element positions.
     ///
     /// This recomputes the position of each element after the screen
@@ -429,6 +442,9 @@ public:
     /// interactions on them; thus, calling this handler is recommended
     /// if you override it.
     virtual void tick(InputSystem& input);
+
+private:
+    void QueueImpl(std::unique_ptr<Effect> e, bool flush_queue);
 };
 
 /// Label that supports reflowing text automatically.

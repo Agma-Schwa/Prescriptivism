@@ -272,12 +272,7 @@ private:
     void NextPlayer();
 
     /// Remove a card a player’s hand.
-    void RemoveCard(Player& p, Card& c, bool to_discard_pile = true) {
-        auto it = rgs::find_if(p.hand, [&](Card& x) { return &x == &c; });
-        Assert(it != p.hand.end(), "Card not in hand");
-        if (to_discard_pile) discard.emplace_back(c.id);
-        p.hand.erase(it);
-    }
+    void RemoveCard(Player& p, Card& c, bool to_discard_pile = true, bool notify = true);
 
     bool PromptNegation(Player& p, CardId power_card);
     void SendGameState(Player& p);
