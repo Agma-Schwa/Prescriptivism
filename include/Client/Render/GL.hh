@@ -1,13 +1,18 @@
 #ifndef PRESCRIPTIVISM_CLIENT_RENDER_GL_HH
 #define PRESCRIPTIVISM_CLIENT_RENDER_GL_HH
 
-#include <Client/gl-headers.hh>
-
 #include <Shared/Serialisation.hh>
 #include <Shared/Utils.hh>
 
 #include <base/Base.hh>
 #include <base/FS.hh>
+#include <glbinding-aux/types_to_string.h>
+#include <glbinding/AbstractFunction.h>
+#include <glbinding/FunctionCall.h>
+#include <glbinding/gl/gl.h>
+#include <glbinding/glbinding.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include <utility>

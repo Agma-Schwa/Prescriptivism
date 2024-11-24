@@ -1,4 +1,3 @@
-#include <Client/gl-headers.hh>
 #include <Client/UI/UI.hh>
 
 #include <base/Base.hh>
