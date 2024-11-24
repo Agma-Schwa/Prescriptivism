@@ -54,6 +54,7 @@ class Widget;
 class CardStacks;
 class Group;
 class Player;
+class Arrow;
 
 enum class Anchor : u8;
 enum class Selectable : u8;
@@ -398,8 +399,8 @@ public:
     }
 
     /// Queue a new animation.
-    template <typename Anim, typename ...Args>
-    void Queue(Args&& ...args) {
+    template <typename Anim, typename... Args>
+    void Queue(Args&&... args) {
         animations.push_back(std::make_unique<Anim>(std::forward<Args>(args)...));
     }
 
@@ -671,6 +672,26 @@ public:
 
 private:
     void DrawChildren(Renderer& r);
+};
+
+class pr::client::Arrow : public Widget {
+    /// The direction of the arrow.
+    Property(vec2, direction);
+
+public:
+    /// The length of the arrow.
+    i32 length;
+
+    /// The thickness of the arrow.
+    i32 thickness = 5;
+
+    /// The colour of the arrow.
+    Colour colour = Colour::White;
+
+    Arrow(Element* parent, Position pos, vec2 direction = {1, 0}, i32 length = 50);
+
+    void draw(Renderer &r) override;
+    void refresh(Renderer &) override;
 };
 
 /// A group of widgets, arranged horizontally or vertically.

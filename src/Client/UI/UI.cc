@@ -186,6 +186,22 @@ void WidgetHolder::remove(u32 idx) {
 // =============================================================================
 //  Basic Elements
 // =============================================================================
+Arrow::Arrow(Element* parent, Position pos, vec2 direction, i32 length)
+    : Widget(parent, pos), _direction(glm::normalize(direction)), length(length) {}
+
+void Arrow::draw(Renderer& r) {
+    auto _ = PushTransform(r);
+    r.draw_arrow(xy(), xy(direction) * length, thickness, colour);
+}
+
+void Arrow::refresh(Renderer&) {
+    UpdateBoundingBox(Size{length, thickness});
+}
+
+void Arrow::set_direction(vec2 new_value) {
+    _direction = glm::normalize(new_value);
+}
+
 Throbber::Throbber(Element* parent, Position pos)
     : Widget(parent, pos), vao(VertexLayout::Position2D) {
     vec2 verts[]{
@@ -240,7 +256,7 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture);
 // =============================================================================
 auto Group::HoverSelectHelper(
     xy rel_pos,
-    auto (Widget::*accessor)(xy)->SelectResult,
+    auto (Widget::* accessor)(xy)->SelectResult,
     Selectable Widget::* property
 ) -> SelectResult {
     auto Get = [&]<typename T>(T&& range) -> SelectResult {

@@ -304,12 +304,14 @@ void Server::handle(net::TCPConnexion& client, cs::PlayNoTarget packet) {
                 // Keep the topmost card.
                 new_word.add_stack(std::move(s.cards.back()));
 
+                // FIXME: Should be moved to the discard pile.
                 // All cards except the topmost one are placed at
                 // the bottom of the deck.
                 for (auto& c : s.cards | vws::take(s.cards.size() - 1))
                     deck.push_back(std::move(c));
             }
 
+            // FIXME: Don’t do this.
             // All cards so added are shuffled.
             rgs::shuffle(deck.begin() + deck_size, deck.end(), rng);
 

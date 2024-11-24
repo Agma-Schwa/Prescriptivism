@@ -20,6 +20,7 @@ namespace pr::client {
 class Client;
 class ConfirmPlaySelectedScreen;
 class CardChoiceChallengeScreen;
+class NegationChallengeScreen;
 class GameScreen;
 class Player;
 class CardPreview;
@@ -94,12 +95,28 @@ private:
     void Confirm();
 };
 
+/// This screen is used to handle the 'Negation' card.
+class pr::client::NegationChallengeScreen : public Screen {
+    GameScreen& parent;
+    Card* card;
+
+public:
+    NegationChallengeScreen(GameScreen& p);
+
+    void enter(packets::sc::PromptNegation p);
+
+private:
+    void Yes();
+    void No();
+};
+
 /// This screen renders the actual game.
 class pr::client::GameScreen : public Screen {
     struct Validator;
     friend Validator;
     friend ConfirmPlaySelectedScreen;
     friend CardChoiceChallengeScreen;
+    friend NegationChallengeScreen;
 
     enum struct State {
         /// The starting state. Nothing is selected.
@@ -138,6 +155,7 @@ class pr::client::GameScreen : public Screen {
     Client& client;
     ConfirmPlaySelectedScreen confirm_play_selected_screen{*this};
     CardChoiceChallengeScreen card_choice_challenge_screen{*this};
+    NegationChallengeScreen negation_challenge_screen{*this};
 
     /// The end turn / pass / cancel button in the lower
     /// right corner of the screen.

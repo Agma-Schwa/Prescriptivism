@@ -315,7 +315,7 @@ DefinePacket(RemoveCard) {
 
 DefinePacket(PromptNegation) {
     Ctor(PromptNegation)(CardId card_id) : card_id(card_id) {}
-    Serialisable(id);
+    Serialisable(card_id);
 
     // The card to negate.
     CardId card_id;

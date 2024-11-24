@@ -83,9 +83,9 @@ struct NegatePowerCard {
 };
 
 using Challenge = Variant< // clang-format off
-        challenge::CardChoice,
-        challenge::NegatePowerCard
-    >; // clang-format on
+    challenge::CardChoice,
+    challenge::NegatePowerCard
+>; // clang-format on
 } // namespace pr::server::challenge
 
 class pr::server::Player {

@@ -199,6 +199,10 @@ constexpr pr::client::Colour pr::client::Colour::Black = {0, 0, 0, 255};
 constexpr pr::client::Colour pr::client::Colour::Grey = {128, 128, 128, 255};
 
 // XY position that is destructurable.
+//
+// FIXME: Rewrite this to and introduce some generic vector types because
+// I don’t quite like GLM’s API (e.g. the horrible hack wrt how they are
+// made destructurable isn’t necessary if you use properties)...
 struct pr::client::xy {
     PR_SERIALISE(x, y);
 

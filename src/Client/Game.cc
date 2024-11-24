@@ -184,6 +184,25 @@ void CardChoiceChallengeScreen::Confirm() { // clang-format off
 } // clang-format on
 
 // =============================================================================
+// Negation Challenge Screen
+// =============================================================================
+NegationChallengeScreen::NegationChallengeScreen(GameScreen& p) : parent{p} {
+    auto& group = Create<Group>(Position::Center());
+    auto& negation = group.create<Card>(Position());
+    group.create<Arrow>(Position());
+    card = &group.create<Card>(Position());
+
+    negation.id = CardId::P_Negation;
+    negation.scale = Card::Preview;
+    card->scale = Card::Preview;
+}
+
+void NegationChallengeScreen::enter(sc::PromptNegation p) {
+    card->id = p.card_id;
+    parent.client.push_screen(*this);
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
 GameScreen::GameScreen(Client& c) : client(c) {
@@ -377,7 +396,7 @@ void GameScreen::handle(sc::WordChanged wc) {
 }
 
 void GameScreen::handle(sc::PromptNegation p) {
-    Log("TODO: Prompt negation");
+    negation_challenge_screen.enter(p);
 }
 
 // =============================================================================
