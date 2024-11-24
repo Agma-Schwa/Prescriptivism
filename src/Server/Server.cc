@@ -461,6 +461,30 @@ void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
     p->clear_active_challenge();
 }
 
+void Server::handle(net::TCPConnexion& client, cs::PromptNegationReply reply) {
+    auto& p = player_map[client];
+    auto c = p->get_active_challenge<challenge::NegatePowerCard>();
+    if (not c) return Kick(client, UnexpectedPacket);
+    defer { p->clear_active_challenge(); };
+
+    // If we negated the card, remove a negate from the client’s hand; we
+    // also need to tell the client about this since we don’t pick a card
+    // to discard on the client for simplicity.
+    if (reply.negate) {
+        auto it = rgs::find_if(p->hand, [](auto& c) { return c.id == CardId::P_Negation; });
+        Assert(it != p->hand.end(), "Negation card not found in hand?");
+        p->send(sc::RemoveCard(u32(it - p->hand.begin())));
+        RemoveCard(*p, *it);
+        return;
+    }
+
+    // Otherwise, apply the effects of the power card.
+    switch (c->id.value) {
+        default: Unreachable("Forgot to add support for {}", CardDatabase[+c->id].name);
+        case CardId::P_Babel: return DoP_Babel(*p);
+    }
+}
+
 // =============================================================================
 //  Playing Cards
 // =============================================================================

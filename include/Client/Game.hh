@@ -98,6 +98,7 @@ private:
 /// This screen is used to handle the 'Negation' card.
 class pr::client::NegationChallengeScreen : public Screen {
     GameScreen& parent;
+    Label* prompt;
     Card* card;
 
 public:
@@ -106,8 +107,7 @@ public:
     void enter(packets::sc::PromptNegation p);
 
 private:
-    void Yes();
-    void No();
+    void Negate(bool negate);
 };
 
 /// This screen renders the actual game.

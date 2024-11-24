@@ -51,7 +51,8 @@
     X(PlayPlayerTarget)    \
     X(PlayNoTarget)        \
     X(Pass)                \
-    X(CardChoiceReply)
+    X(CardChoiceReply)     \
+    X(PromptNegationReply)
 
 namespace pr {
 using PlayerId = u8;
@@ -402,6 +403,12 @@ DefinePacket(CardChoiceReply) {
 
     /// The indices of the cards chosen.
     std::vector<u32> card_indices;
+};
+
+DefinePacket(PromptNegationReply) {
+    Ctor(PromptNegationReply)(bool negate) : negate(negate) {}
+    Serialisable(negate);
+    bool negate;
 };
 
 } // namespace pr::packets::cs

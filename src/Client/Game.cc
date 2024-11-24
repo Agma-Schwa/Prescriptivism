@@ -189,17 +189,34 @@ void CardChoiceChallengeScreen::Confirm() { // clang-format off
 NegationChallengeScreen::NegationChallengeScreen(GameScreen& p) : parent{p} {
     auto& group = Create<Group>(Position::Center());
     auto& negation = group.create<Card>(Position());
-    group.create<Arrow>(Position());
+    group.create<Arrow>(Position(), vec2{1, 0}, 200).thickness = 10;
     card = &group.create<Card>(Position());
+    group.gap = 50;
 
     negation.id = CardId::P_Negation;
     negation.scale = Card::Preview;
     card->scale = Card::Preview;
+
+    prompt = &Create<Label>("", FontSize::Large, Position::HCenter(-100));
+
+    auto& buttons = Create<Group>(Position::HCenter(100));
+    buttons.create<Button>("Yes", Position(), [&] { Negate(true); });
+    buttons.create<Button>("No", Position(), [&] { Negate(false); });
+    buttons.gap = 100;
+}
+
+void NegationChallengeScreen::Negate(bool negate) {
+    parent.client.server_connexion.send(cs::PromptNegationReply{negate});
+    parent.client.pop_screen();
 }
 
 void NegationChallengeScreen::enter(sc::PromptNegation p) {
     card->id = p.card_id;
     parent.client.push_screen(*this);
+    prompt->update_text(std::format(
+        "Use Negation to protect yourself from {}?",
+        CardDatabase[+p.card_id].name
+    ));
 }
 
 // =============================================================================
