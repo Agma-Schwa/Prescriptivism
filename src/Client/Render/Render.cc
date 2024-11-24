@@ -815,16 +815,18 @@ void Renderer::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
     // position.
     //
     // Furthermore, the tip of the arrow has to extrude outwards
-    // from the actual arrow head since it tapers off.
+    // from the actual arrow head since it tapers off, so move the
+    // actual end of the arrow back a bit.
     static constexpr f32 HeadSz = 2.f;
     auto start = start_pos.vec();
     auto end = end_pos.vec();
     auto dir = glm::normalize(end - start);
-    auto head_end = end + dir * (thickness * HeadSz);
+    auto head_end = end;
     auto n1 = glm::vec2(-dir.y, dir.x);
     auto n2 = glm::vec2(dir.y, -dir.x);
     auto h1 = end + n1 * (thickness * HeadSz) - dir * (thickness * HeadSz);
     auto h2 = end + n2 * (thickness * HeadSz) - dir * (thickness * HeadSz);
+    end -= dir * (thickness * HeadSz);
 
     // We use a rectangle instead of a GL line for the shaft because
     // this makes drawing the arrow head easier.
