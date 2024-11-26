@@ -268,11 +268,11 @@ void WordChoiceScreen::SendWord() {
                        "consonants or vowels.";
 
             case BadInitialClusterManner:
-                return "Invalid Word: A word must not start with M1 or M2 consonant"
+                return "Invalid Word: A word must not start with M1 or M2 consonant "
                        "followed by another consonant";
 
             case BadInitialClusterCoordinates:
-                return "Invalid Word: If a word starts with a consonant cluster, the"
+                return "Invalid Word: If a word starts with a consonant cluster, the "
                        "consonants must not have the same coordinates";
         }
         Unreachable();
