@@ -110,9 +110,6 @@ void Server::Tick() {
     // Clear out pending connexions that may have gone away.
     std::erase_if(pending_connexions, [](const auto& c) { return c.conn.disconnected; });
 
-    // Clear out player connexions of players that are disconnected.
-    std::erase_if(player_map, [](const auto& x) { return x.first.disconnected; });
-
     // As the last step, accept new connexions and close stale ones.
     server.update_connexions();
 
@@ -184,14 +181,14 @@ void Server::handle(net::TCPConnexion& client, cs::Disconnect) {
 // =============================================================================
 void Server::handle(net::TCPConnexion& client, sc::WordChoice wc) {
     // Player has already submitted a word.
-    if (not player_map.contains(client) or player_map[client]->submitted_word) {
+    auto p = client.get<Player>();
+    if (not p or p->submitted_word) {
         Kick(client, UnexpectedPacket);
         return;
     }
 
     // Word is invalid.
     constants::Word original;
-    auto& p = player_map[client];
     for (auto [i, s] : p->word.stacks | vws::enumerate) original[i] = s.top;
     if (validation::ValidateInitialWord(wc.word, original) != validation::InitialWordValidationResult::Valid) {
         Kick(client, InvalidPacket);
@@ -234,7 +231,7 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
 
             Log("Player {} logging back in", login.name);
             p->client_connexion = client;
-            player_map[client] = p.get();
+            client.set(p.get());
 
             // Get the player up to date with the current game state.
             switch (state) {
@@ -259,7 +256,7 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
     // reach the player limit for the first time, so perform game
     // initialisation here if we have enough players.
     players.push_back(std::make_unique<Player>(client, std::move(login.name)));
-    player_map[client] = players.back().get();
+    client.set(players.back().get());
     if (players.size() == PlayersNeeded) SetUpGame();
 }
 
@@ -417,7 +414,8 @@ void Server::handle(net::TCPConnexion& client, cs::PlaySingleTarget packet) {
 //  Challenge Packet Handlers
 // =============================================================================
 void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
-    auto& p = player_map[client];
+    auto p = client.get<Player>();
+    if (not p) return Kick(client, UnexpectedPacket);
     auto c = p->get_active_challenge<challenge::CardChoice>();
     if (not c) return Kick(client, UnexpectedPacket);
 
@@ -456,7 +454,8 @@ void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
 }
 
 void Server::handle(net::TCPConnexion& client, cs::PromptNegationReply reply) {
-    auto& p = player_map[client];
+    auto p = client.get<Player>();
+    if (not p) return Kick(client, UnexpectedPacket);
     auto c = p->get_active_challenge<challenge::NegatePowerCard>();
     if (not c) return Kick(client, UnexpectedPacket);
     defer { p->clear_active_challenge(); };
@@ -487,7 +486,8 @@ void Server::HandlePlaySoundCard(
     Player& target_player,
     u32 target_index
 ) {
-    auto& p = player_map[client];
+    auto p = client.get<Player>();
+    if (not p) return Kick(client, UnexpectedPacket);
 
     // Perform validation.
     if (
@@ -516,8 +516,8 @@ auto Server::CanPlayCard(
     std::optional<PlayerId> target_player
 ) -> CanPlayCardResult {
     // Check that the player is the current player.
-    auto& p = player_map[client];
-    if (p->id != current_player) {
+    auto p = client.get<Player>();
+    if (not p or p->id != current_player) {
         Kick(client, UnexpectedPacket);
         return {};
     }

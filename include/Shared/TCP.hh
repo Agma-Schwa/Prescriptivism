@@ -147,6 +147,10 @@ public:
     /// Close the connexion.
     void disconnect();
 
+    /// Get user data that was set with 'set()'.
+    template <typename T>
+    auto get() -> T* { return static_cast<T*>(GetImpl()); }
+
     /// Receive data from the remote peer.
     void receive(std::function<void(ReceiveBuffer&)> callback);
 
@@ -172,7 +176,13 @@ public:
     /// Send data to the remote peer.
     void send(std::span<const std::byte> data);
 
+    /// Set user data for this connexion.
+    void set(void* data);
+
     friend auto operator<=>(const TCPConnexion&, const TCPConnexion&) = default;
+
+private:
+    auto GetImpl() -> void*;
 };
 
 /// A reference type that holds a TCP server that can accept

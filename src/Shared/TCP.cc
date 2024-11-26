@@ -265,6 +265,7 @@ struct TCPConnexion::Impl : impl::SocketHolder {
     std::string ip_address;
     std::vector<std::byte> receive_buffer;
     std::vector<std::byte> send_buffer;
+    void* user_data = nullptr;
 
     // We need this because multiple copies of a connexion need
     // to be able to communicate to each other the fact that a
@@ -460,6 +461,11 @@ void TCPConnexion::disconnect() {
     if (not disconnected) impl->Disconnect();
 }
 
+auto TCPConnexion::GetImpl() -> void* {
+    if (disconnected) return nullptr;
+    return impl->user_data;
+}
+
 auto TCPConnexion::get_address() const -> std::string_view {
     if (disconnected) return "";
     return impl->ip_address;
@@ -475,6 +481,10 @@ void TCPConnexion::receive(std::function<void(ReceiveBuffer&)> callback) {
 
 void TCPConnexion::send(std::span<const std::byte> data) {
     if (not disconnected) return impl->Send(data);
+}
+
+void TCPConnexion::set(void* data) {
+    if (not disconnected) impl->user_data = data;
 }
 
 auto TCPServer::connexions() -> std::span<TCPConnexion> { return impl->all_connexions; }

@@ -193,9 +193,6 @@ class pr::server::Server : net::TCPServerCallbacks {
     /// typically never removed.
     std::vector<std::unique_ptr<Player>> players;
 
-    /// A map from connexions to players, to figure out which player sent that packet.
-    std::map<net::TCPConnexion, Player*> player_map;
-
     /// The current player
     PlayerId current_player = 0;
 
