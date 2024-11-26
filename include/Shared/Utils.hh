@@ -13,6 +13,12 @@
 
 #define FWD(x) std::forward<decltype(x)>(x)
 
+#define ComputedAccessor(type, name, ...)                                                                              \
+public:                                                                                                                \
+    [[nodiscard]] type get_##name() __VA_OPT__({ return) LIBBASE_VA_FIRST(__VA_ARGS__ __VA_OPT__(, );) __VA_OPT__(; }) \
+        __declspec(property(get = get_##name)) type name;                                                              \
+private:
+
 namespace pr {
 using namespace base;
 

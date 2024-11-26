@@ -336,28 +336,27 @@ private:
 class pr::client::WidgetHolder {
 protected:
     /// List of children.
-    std::vector<std::unique_ptr<Widget>> widgets;
+    StableVector<Widget> widgets;
 
 public:
     virtual ~WidgetHolder() = default;
 
     /// Iterate over the children of this element.
-    template <typename CastTo = Widget>
-    auto children(this auto&& self) {
-        return std::forward_like<decltype(self)>(self.widgets) //
-             | vws::transform([](auto& w) -> CastTo& { return static_cast<CastTo&>(*w); });
+    template <std::derived_from<Widget> CastTo = Widget>
+    auto children() {
+        return widgets | vws::transform(&Widget::as<CastTo>);
     }
 
     /// Get a widget by index.
-    auto index_of(Widget& c) -> std::optional<u32>;
+    auto index_of(Widget& c) -> std::optional<usz>;
 
     /// Remove a widget. This asserts if the widget is not in the list.
     void remove(Widget& w);
-    void remove(u32 idx);
+    void remove(usz idx);
 
     /// Get all visible elements.
     auto visible_elements() {
-        return children() | vws::filter([](auto& e) { return e.visible; });
+        return widgets | vws::filter([](auto& e) { return e.visible; });
     }
 };
 
@@ -374,7 +373,7 @@ class pr::client::Screen : public Element
     Size prev_size = {};
 
     /// Effects that are currently in flight.
-    std::vector<std::unique_ptr<Effect>> effects;
+    StableVector<Effect> effects;
 
 protected:
     /// The selected element.
@@ -392,10 +391,7 @@ public:
     /// Create an element with this as its parent.
     template <std::derived_from<Widget> El, typename... Args>
     auto Create(Args&&... args) -> El& {
-        auto el = std::make_unique<El>(this, std::forward<Args>(args)...);
-        auto& ref = *el;
-        widgets.push_back(std::move(el));
-        return ref;
+        return widgets.emplace_back<El>(this, std::forward<Args>(args)...);
     }
 
     /// Queue a new effect.
@@ -741,10 +737,8 @@ public:
     /// Create an element with this as its parent.
     template <std::derived_from<Widget> El, typename... Args>
     auto create(Args&&... args) -> El& {
-        auto el = new El(this, std::forward<Args>(args)...);
-        widgets.emplace_back(el);
         needs_refresh = true;
-        return *el;
+        return widgets.emplace_back<El>(this, std::forward<Args>(args)...);
     }
 
     /// Remove all children from this group.
@@ -790,6 +784,7 @@ public:
     class Stack final : public Group {
         friend CardStacks;
         friend Group;
+        struct Token {};
 
         /// The common scale of all cards in this stack.
         Property(Scale, scale, Scale::Field);
@@ -801,23 +796,23 @@ public:
         ComputedReadonly(CardStacks&, parent, Widget::get_parent().as<CardStacks>());
 
         /// Get the topmost card.
-        ComputedReadonly(Card&, top, static_cast<Card&>(*widgets.back()));
+        ComputedAccessor(Card&, top, static_cast<Card&>(widgets.back()));
 
         /// Whether this stack is full.
         ComputedReadonly(bool, full, widgets.size() == constants::MaxSoundStackSize);
 
-        Stack(Element* parent, Position pos) : Group(parent, pos) {
+    public:
+        Stack(Group* parent, Token = {}) : Group(parent, Position()) {
             vertical = true;
         }
 
-    public:
         /// Whether this stack is locked.
         bool locked = false;
 
         /// Get the Id of a card in this stack.
         auto operator[](usz i) -> CardId {
             Assert(i < widgets.size(), "Index out of bounds!");
-            return static_cast<Card&>(*widgets[i]).id;
+            return static_cast<Card&>(widgets[i]).id;
         }
 
         auto cards() { return children<Card>(); }
@@ -861,7 +856,7 @@ public:
     /// Get a stack in this stack group.
     auto operator[](usz i) -> Stack& {
         Assert(i < widgets.size(), "Index out of bounds!");
-        return static_cast<Stack&>(*widgets[i]);
+        return static_cast<Stack&>(widgets[i]);
     }
 
     /// Add an empty stack.

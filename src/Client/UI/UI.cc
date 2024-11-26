@@ -164,22 +164,20 @@ void Widget::set_needs_refresh(bool new_value) {
         g->needs_refresh = true;
 }
 
-auto WidgetHolder::index_of(Widget& c) -> std::optional<u32> {
-    auto it = rgs::find(widgets, &c, &std::unique_ptr<Widget>::get);
-    if (it == widgets.end()) return std::nullopt;
-    return u32(it - widgets.begin());
+auto WidgetHolder::index_of(Widget& c) -> std::optional<usz> {
+    return widgets.index_of(c);
 }
 
 void WidgetHolder::remove(Widget& w) {
     w.unselect();
-    auto erased = std::erase_if(widgets, [&](auto& c) { return c.get() == &w; });
-    Assert(erased == 1, "Attempted to remove non-direct child?");
+    auto erased = widgets.erase(w);
+    Assert(erased, "Attempted to remove non-direct child?");
     if (auto g = dynamic_cast<Widget*>(this)) g->needs_refresh = true;
 }
 
-void WidgetHolder::remove(u32 idx) {
+void WidgetHolder::remove(usz idx) {
     Assert(idx < widgets.size(), "Index out of bounds!");
-    remove(*widgets[idx]);
+    remove(widgets[idx]);
 }
 
 // =============================================================================
@@ -279,7 +277,7 @@ auto Group::HoverSelectHelper(
 }
 
 void Group::clear() {
-    for (auto& w : widgets) w->unselect();
+    for (auto& w : widgets) w.unselect();
     widgets.clear();
 }
 
@@ -293,8 +291,7 @@ auto Group::hovered_child(xy rel_pos) -> SelectResult {
 }
 
 void Group::refresh(Renderer& r) {
-    auto ch = children();
-    if (ch.empty()) return;
+    if (widgets.empty()) return;
 
     // Reset our bounding box to our parent’s before refreshing the
     // children; otherwise, nested groups can get stuck at a smaller
@@ -309,7 +306,7 @@ void Group::refresh(Renderer& r) {
     // and compute the total width of all elements.
     Axis a = vertical ? Axis::Y : Axis::X;
     i32 total_extent = 0;
-    for (auto& c : ch) {
+    for (auto& c : widgets) {
         c.refresh(r);
         total_extent += c.bounding_box.extent(a);
 
@@ -321,10 +318,10 @@ void Group::refresh(Renderer& r) {
     // Compute gap size.
     auto parent_extent = parent.bounding_box.extent(a);
     i32 g = 0;
-    if (total_extent < parent_extent and ch.size() > 1) {
+    if (total_extent < parent_extent and widgets.size() > 1) {
         g = std::min(
             gap,
-            i32((parent_extent - total_extent) / (ch.size() - 1))
+            i32((parent_extent - total_extent) / (widgets.size() - 1))
         );
     } else if (gap < 0) {
         g = gap;
@@ -332,18 +329,18 @@ void Group::refresh(Renderer& r) {
 
     // Position the children.
     i32 offset = 0;
-    for (auto& c : ch) {
+    for (auto& c : widgets) {
         c.pos = Position(flip(a), alignment, offset);
         offset += c.bounding_box.extent(a) + g;
     }
 
     // Update our bounding box.
-    auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w->bounding_box.extent(flip(a)); }));
+    auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w.bounding_box.extent(flip(a)); }));
     auto sz = Size{a, offset - g, max};
     UpdateBoundingBox(sz);
 
     // And refresh the children again now that we know where everything is.
-    for (auto& c : ch) c.refresh(r);
+    for (auto& c : widgets) c.refresh(r);
 }
 
 auto Group::selected_child(xy rel_pos) -> SelectResult {
@@ -351,15 +348,12 @@ auto Group::selected_child(xy rel_pos) -> SelectResult {
 }
 
 void Group::swap(Widget* a, Widget* b) {
-    auto ita = rgs::find_if(widgets, [&](auto& w) { return w.get() == a; });
-    auto itb = rgs::find_if(widgets, [&](auto& w) { return w.get() == b; });
-    Assert(ita != widgets.end() and itb != widgets.end(), "Widget not found in group?");
-    std::iter_swap(ita, itb);
+    widgets.swap_indices(widgets.index_of(*a).value(), widgets.index_of(*b).value());
     needs_refresh = true;
 }
 
 void Group::make_selectable(Selectable new_value) {
-    for (auto& c : children()) {
+    for (auto& c : widgets) {
         if (auto g = c.cast<Group>()) g->make_selectable(new_value);
         c.selectable = new_value;
     }
@@ -431,8 +425,8 @@ void Screen::draw(Renderer& r) {
     r.set_cursor(Cursor::Default);
     for (auto& e : visible_elements()) e.draw(r);
     for (auto& e : effects) {
-        if (auto a = dynamic_cast<Animation*>(e.get())) a->draw(r);
-        if (e->blocking) break;
+        if (auto a = dynamic_cast<Animation*>(&e)) a->draw(r);
+        if (e.blocking) break;
     }
 }
 
@@ -446,7 +440,7 @@ void Screen::refresh(Renderer& r) {
     // Always clear out the refresh flag first since an element
     // may set it back to true immediately.
     if (prev_size == r.size()) {
-        for (auto& e : children()) {
+        for (auto& e : widgets) {
             if (e.needs_refresh) {
                 e.needs_refresh = false;
                 e.refresh(r);
@@ -459,7 +453,7 @@ void Screen::refresh(Renderer& r) {
     // Refresh every visible element, and every element that
     // requested a refresh.
     prev_size = r.size();
-    for (auto& e : children()) {
+    for (auto& e : widgets) {
         if (e.visible or e.needs_refresh) {
             e.needs_refresh = false;
             e.refresh(r);
@@ -470,18 +464,18 @@ void Screen::refresh(Renderer& r) {
 void Screen::tick(InputSystem& input) {
     // Tick animations.
     bool prevent_user_input = false;
-    for (auto& a : effects) {
-        a->tick();
-        if (not a->done()) {
-            if (a->prevent_user_input) prevent_user_input = true;
-            if (a->blocking) break;
+    for (auto& e : effects) {
+        e.tick();
+        if (not e.done()) {
+            if (e.prevent_user_input) prevent_user_input = true;
+            if (e.blocking) break;
         } else {
-            a->on_done();
+            e.on_done();
         }
     }
 
     // Remove any that are done.
-    std::erase_if(effects, [](auto& a) { return a->done(); });
+    effects.erase_if(&Effect::done);
 
     // Do not do anything if we’re blocking user interaction.
     if (prevent_user_input) return;
@@ -540,7 +534,7 @@ void Screen::QueueImpl(std::unique_ptr<Effect> effect, bool flush_queue) {
     // Signal to all effects that they can stop waiting.
     if (flush_queue)
         for (auto& e : effects)
-            e->waiting = false;
+            e.waiting = false;
 
     // And add this one at the end.
     effects.push_back(std::move(effect));
