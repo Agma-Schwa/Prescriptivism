@@ -124,14 +124,14 @@ void Server::Tick() {
 
         // Send each player’s word to every player and tell the first
         // player to start their turn.
-        for (auto& p : players) SendGameState(*p);
+        for (auto& p : players) SendGameState(p);
         player().send(sc::StartTurn{});
     }
 }
 
 bool Server::accept(net::TCPConnexion& connexion) {
     // Make sure we’re not full yet.
-    auto connected_players = rgs::distance(players | vws::filter([](auto& p) { return p->connected; }));
+    auto connected_players = rgs::distance(players | vws::filter(&Player::get_connected));
     if (connected_players + pending_connexions.size() == PlayersNeeded) {
         connexion.send(packets::sc::Disconnect{ServerFull});
         return false;
@@ -221,30 +221,30 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
 
     // Try to match this connexion to an existing player.
     for (auto& p : players) {
-        if (p->name == login.name) {
+        if (p.name == login.name) {
             // Someone is trying to connect to a player that is
             // already connected.
-            if (p->connected) {
+            if (p.connected) {
                 Log("{} is already connected", login.name);
                 return Kick(client, UsernameInUse);
             }
 
             Log("Player {} logging back in", login.name);
-            p->client_connexion = client;
-            client.set(p.get());
+            p.client_connexion = client;
+            client.set(&p);
 
             // Get the player up to date with the current game state.
             switch (state) {
                 case State::WaitingForPlayerRegistration: break;
                 case State::WaitingForWords:
-                    if (not p->submitted_word) p->send(sc::WordChoice{p->word.ids()});
+                    if (not p.submitted_word) p.send(sc::WordChoice{p.word.ids()});
                     break;
 
                 case State::Running:
-                    SendGameState(*p);
-                    if (current_player == p->id) {
-                        p->send(sc::StartTurn{});
-                        p->send_active_challenge();
+                    SendGameState(p);
+                    if (current_player == p.id) {
+                        p.send(sc::StartTurn{});
+                        p.send_active_challenge();
                     }
                     break;
             }
@@ -256,7 +256,7 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
     // reach the player limit for the first time, so perform game
     // initialisation here if we have enough players.
     players.push_back(std::make_unique<Player>(client, std::move(login.name)));
-    client.set(players.back().get());
+    client.set(&players.back());
     if (players.size() == PlayersNeeded) SetUpGame();
 }
 
@@ -288,8 +288,8 @@ void Server::handle(net::TCPConnexion& client, cs::PlayNoTarget packet) {
         case CardId::P_Babel: {
             RemoveCard(*p, *card);
             for (auto& player : players)
-                if (not PromptNegation(*player, CardId::P_Babel))
-                    DoP_Babel(*player);
+                if (not PromptNegation(player, CardId::P_Babel))
+                    DoP_Babel(player);
 
         } break;
 
@@ -447,7 +447,7 @@ void Server::handle(net::TCPConnexion& client, cs::CardChoiceReply packet) {
     // does the expected thing here.
     auto& target = players[c->target_player];
     for (auto i : packet.card_indices | vws::reverse)
-        RemoveCard(*target, target->hand[i], false);
+        RemoveCard(target, target.hand[i], false);
 
     // Finally, clear the challenge.
     p->clear_active_challenge();
@@ -543,7 +543,7 @@ auto Server::CanPlayCard(
     return {
         p,
         card_index ? &p->hand[*card_index] : nullptr,
-        target_player ? players[*target_player].get() : nullptr
+        target_player ? &players[*target_player] : nullptr
     };
 }
 
@@ -579,7 +579,7 @@ void Server::NextPlayer() {
     if (player().hand.empty()) {
         // If *all* players’ hands are empty, we need to end the game. This
         // *shouldn’t* happen, but you never know...
-        if (rgs::all_of(players, [](auto& p) { return p->hand.empty(); })) {
+        if (rgs::all_of(players, [](auto& p) { return p.hand.empty(); })) {
             Broadcast(sc::Disconnect{Unspecified});
             Log("No more plays can be made. The game is a draw.");
             std::exit(27);
@@ -613,8 +613,8 @@ void Server::SendGameState(Player& p) {
     // TODO: Send *entire* stacks, not just the topmost card in each stack.
     std::array<sc::StartGame::PlayerInfo, constants::PlayersPerGame> player_infos;
     for (auto [i, p] : players | vws::enumerate) {
-        player_infos[i].name = p->name;
-        for (auto [j, c] : p->word.stacks | vws::enumerate)
+        player_infos[i].name = p.name;
+        for (auto [j, c] : p.word.stacks | vws::enumerate)
             player_infos[i].word[j] = c.top;
     }
 
@@ -653,16 +653,16 @@ void Server::SetUpGame() {
     for (auto& p : players) {
         for (u8 i = 0; i < 3; ++i) {
             // Add consonant.
-            p->word.add_stack(std::move(deck.front()));
+            p.word.add_stack(std::move(deck.front()));
             deck.erase(deck.begin());
 
             // Add vowel.
-            p->word.add_stack(std::move(deck.back()));
+            p.word.add_stack(std::move(deck.back()));
             deck.pop_back();
         }
 
         // Send the player their word.
-        p->send(sc::WordChoice{BuildWordArray(p->word)});
+        p.send(sc::WordChoice{BuildWordArray(p.word)});
     }
 
     // Special cards.
@@ -672,8 +672,8 @@ void Server::SetUpGame() {
     rgs::shuffle(deck, rng);
     for (auto& p : players) {
         Assert(deck.size() > HandSize, "Somehow out of cards?");
-        p->hand.insert(
-            p->hand.end(),
+        p.hand.insert(
+            p.hand.end(),
             std::make_move_iterator(deck.end() - HandSize),
             std::make_move_iterator(deck.end())
         );
@@ -681,20 +681,20 @@ void Server::SetUpGame() {
 
         // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate whatever
         // power card we’re currently testing into the player’s hand.
-        p->hand.emplace_back(CardId::P_Babel);
-        p->hand.emplace_back(CardId::P_Negation);
+        p.hand.emplace_back(CardId::P_Babel);
+        p.hand.emplace_back(CardId::P_Negation);
     }
-    rgs::shuffle(players, rng);
+    rgs::shuffle(players.elements(), rng);
 
     // FIXME: FOR TESTING ONLY. COMMENT THIS OUT IN PRODUCTION.
-    auto it = rgs::find_if(players, [](auto& p) { return p->name == "debugger" or p->name == "console"; });
+    auto it = rgs::find_if(players, [](auto& p) { return p.name == "debugger" or p.name == "console"; });
     if (it != players.end()) {
         Log("Debugger or console found.");
-        std::iter_swap(it, players.begin());
+        players.swap_iterators(it, players.begin());
     }
 
     // Initialise player IDs.
-    for (auto [i, p] : players | vws::enumerate) p->id = u8(i);
+    for (auto [i, p] : players | vws::enumerate) p.id = u8(i);
 }
 
 // =============================================================================

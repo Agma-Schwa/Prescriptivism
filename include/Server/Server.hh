@@ -191,7 +191,7 @@ class pr::server::Server : net::TCPServerCallbacks {
 
     /// The list of players. Once a player has been added, they are
     /// typically never removed.
-    std::vector<std::unique_ptr<Player>> players;
+    StableVector<Player> players;
 
     /// The current player
     PlayerId current_player = 0;
@@ -231,16 +231,16 @@ public:
 
 private:
     bool AllPlayersConnected() {
-        return rgs::all_of(players, [](const auto& p) { return p->connected; });
+        return rgs::all_of(players, &Player::get_connected);
     }
 
     bool AllWordsSubmitted() {
-        return rgs::all_of(players, [](auto& x) { return x->submitted_word; });
+        return rgs::all_of(players, &Player::submitted_word);
     }
 
     template <typename T>
     void Broadcast(const T& packet) {
-        for (auto& p : players) p->send(packet);
+        for (auto& p : players) p.send(packet);
     }
 
     /// Perform basic checks to see if a play is valid:
@@ -277,7 +277,7 @@ private:
     void Tick();
     auto ValidatorFor(Player& p) -> Validator;
 
-    auto player() -> Player& { return *players[current_player]; }
+    auto player() -> Player& { return players[current_player]; }
 
     bool accept(net::TCPConnexion& connexion) override;
     void receive(net::TCPConnexion& client, net::ReceiveBuffer& buffer) override;
