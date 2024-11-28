@@ -285,6 +285,7 @@ struct pr::client::AABB {
 
 template <typename T>
 auto pr::client::lerp_smooth(T a, T b, base::f32 t) -> T {
+    t = std::clamp(t, 0.f, 1.f);
     t = t * t * (3 - 2 * t);
     return a * (1 - t) + b * t;
 }

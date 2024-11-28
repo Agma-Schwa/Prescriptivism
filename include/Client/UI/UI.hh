@@ -292,7 +292,7 @@ public:
     virtual void event_input(InputSystem&) {}
 
     /// Draw this widget at a fixed position.
-    void draw_absolute(Renderer& r, xy pos);
+    void draw_absolute(Renderer& r, xy pos, f32 scale = 1.f);
 
     /// Check whether an element is a parent of this widget.
     bool has_parent(Element* other);

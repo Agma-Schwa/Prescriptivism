@@ -138,7 +138,8 @@ public:
     virtual void draw(Renderer& r) = 0;
 
     /// Get the elapsed time normalised between 0 and 1.
-    [[nodiscard]] auto dt() const -> f32 {
+    [[nodiscard]] auto dt() const -> f32 { return dt(duration); }
+    [[nodiscard]] auto dt(chr::milliseconds duration) const -> f32 {
         return f32(elapsed().count()) / duration.count();
     }
 

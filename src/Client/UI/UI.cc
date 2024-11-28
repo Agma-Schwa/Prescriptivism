@@ -86,9 +86,8 @@ auto Widget::absolute_position() -> xy {
     }
 }
 
-void Widget::draw_absolute(Renderer& r, xy a) {
-    auto _ = r.push_matrix(a);
-    auto _ = r.push_matrix(-scaled_bounding_box.origin());
+void Widget::draw_absolute(Renderer& r, xy a, f32 scale) {
+    auto _ = r.push_matrix(a - scaled_bounding_box.origin(), scale);
     draw(r);
 }
 
@@ -473,6 +472,12 @@ void Screen::tick(InputSystem& input) {
             e.on_done();
         }
     }
+
+    // If any effects were ticked, refresh the screen again. Not doing
+    // this needs to weird in-between flickering for a single frame if
+    // an effect happens to modify UI state in a way that requires a
+    // refresh.
+    if (not effects.empty()) refresh(input.renderer);
 
     // Remove any that are done.
     effects.erase_if(&Effect::done);

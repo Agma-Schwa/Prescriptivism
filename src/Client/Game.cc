@@ -73,37 +73,43 @@ void CardPreview::refresh(Renderer& r) {
 // =============================================================================
 // Animation that plays a card in hand.
 class GameScreen::PlayCard : public Animation {
-    static constexpr auto Duration = 500ms;
+    static constexpr auto MoveDuration = 250ms;
+    static constexpr auto TotalDuration = MoveDuration + 500ms;
+    static constexpr auto StartSize = Card::CardSize[Card::Hand];
+    static constexpr auto EndSize = Card::CardSize[Card::Preview];
+
     GameScreen& g;
-    CardId id;
-    xy start_pos;
-    xy end_pos;
+    Card card{&g, Position()};
+    xy pos, start_pos, end_pos;
+    f32 scale{};
 
 public:
-    explicit PlayCard(GameScreen& g, Card& c) : Animation(Tick(), Duration), g{g}, id{c.id} {
+    explicit PlayCard(GameScreen& g, Card& c) : Animation(&PlayCard::Tick, TotalDuration), g{g} {
         g.ClearSelection(State::PlayedCard);
         g.our_hand->make_selectable(false);
         c.visible = false;
+        card.id = c.id;
+        card.scale = Card::Preview;
+        card.refresh(g.client.renderer);
         start_pos = c.absolute_position();
-        end_pos = Position::VCenter(150).resolve(g.bounding_box, Card::CardSize[c.scale]);
+        end_pos = Position::VCenter(150).resolve(g.bounding_box, EndSize);
         waiting = true;
         blocking = true;
         prevent_user_input = true;
     }
 
-    auto Tick() -> Coroutine {
-        for (;;) {
-            // TODO: Animate
-            co_yield {};
-        }
+    void Tick() {
+        auto t = dt(MoveDuration);
+        pos = lerp_smooth(start_pos, end_pos, t);
+        scale = lerp_smooth(StartSize.ht / f32(EndSize.ht), 1.f, t);
     }
 
     void draw(Renderer& r) override {
-        // TODO: Animate
+        card.draw_absolute(r, pos, scale);
     }
 
     void on_done() override {
-        g.state = GameScreen::State::NoSelection;
+        g.state = State::NoSelection;
         g.ResetHand();
     }
 };
@@ -111,7 +117,7 @@ public:
 // =============================================================================
 // Play Confirmation Screen
 // =============================================================================
-ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(pr::client::GameScreen& p) : parent{p} {
+ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(GameScreen& p) : parent{p} {
     preview = &Create<Card>(Position::Center());
     preview->scale = Card::Preview;
 
