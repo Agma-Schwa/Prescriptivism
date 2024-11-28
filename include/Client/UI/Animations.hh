@@ -125,9 +125,13 @@ class pr::client::Animation : public Effect {
 
 protected:
     Animation(Coroutine ticker, chr::milliseconds duration)
-        : Effect(MakeTicker(std::move(ticker))), duration{duration} {
+        : Effect{MakeTicker(std::move(ticker))}, duration{duration} {
         start = chr::steady_clock::now();
     }
+
+    template <std::derived_from<Animation> T>
+    Animation(void (T::*f)(), chr::milliseconds duration)
+        : Animation{Animation::InfiniteLoop(this, f), duration} {}
 
 public:
     /// Render the animation.
@@ -144,9 +148,20 @@ public:
     }
 
 private:
-    auto MakeTicker(Coroutine c) -> Coroutine {
+    /// This is static because it, unlike MakeTicker(), is called before the Animation
+    /// object is fully constructed (because of the delegated constructor call), so a
+    /// non-static member function call would technically be UB.
+    template <std::derived_from<Animation> T>
+    static auto InfiniteLoop(Animation* self, void (T::*f)()) -> Coroutine {
         for (;;) {
-            if (elapsed() > duration) break;
+            // The downcast needs to happen in here for the same reason.
+            (static_cast<T*>(self)->*f)();
+            co_yield {};
+        }
+    }
+
+    auto MakeTicker(Coroutine c) -> Coroutine {
+        while (elapsed() <= duration) {
             if (not c.done()) c();
             co_yield {};
         }

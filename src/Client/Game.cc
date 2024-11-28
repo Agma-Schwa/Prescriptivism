@@ -76,12 +76,16 @@ class GameScreen::PlayCard : public Animation {
     static constexpr auto Duration = 500ms;
     GameScreen& g;
     CardId id;
+    xy start_pos;
+    xy end_pos;
 
 public:
     explicit PlayCard(GameScreen& g, Card& c) : Animation(Tick(), Duration), g{g}, id{c.id} {
         g.ClearSelection(State::PlayedCard);
         g.our_hand->make_selectable(false);
         c.visible = false;
+        start_pos = c.absolute_position();
+        end_pos = Position::VCenter(150).resolve(g.bounding_box, Card::CardSize[c.scale]);
         waiting = true;
         blocking = true;
         prevent_user_input = true;
@@ -150,16 +154,16 @@ CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : parent{p} 
 }
 
 void CardChoiceChallengeScreen::enter(packets::CardChoiceChallenge c) {
-    message->update_text(std::format(
+    message->update_text(std::format( // clang-format off
         "{} {}{} card{} {}",
-        c.mode == Exact ? "Choose"sv : "You may choose"sv,
+        c.mode == Exact     ? "Choose"sv : "You may choose"sv,
         c.mode == Exact     ? ""
-        : c.mode == AtLeast ? "at least "sv
+      : c.mode == AtLeast   ? "at least "sv
                             : "up to "sv,
         c.count,
         c.count == 1 ? ""sv : "s"sv,
         c.title
-    ));
+    )); // clang-format on
 
     // Passing/confirming is disallowed if we must select a card.
     confirm_button->selectable = c.mode == AtMost ? Selectable::Yes : Selectable::No;
@@ -249,10 +253,7 @@ void NegationChallengeScreen::Negate(bool negate) {
 void NegationChallengeScreen::enter(sc::PromptNegation p) {
     card->id = p.card_id;
     parent.client.push_screen(*this);
-    prompt->update_text(std::format(
-        "Use Negation to protect yourself from {}?",
-        CardDatabase[+p.card_id].name
-    ));
+    prompt->update_text(std::format("Use Negation to protect yourself from {}?", CardDatabase[+p.card_id].name));
 }
 
 // =============================================================================
@@ -309,7 +310,10 @@ auto GameScreen::PlayerForCardInWord(Card* c) -> Player* {
 
 void GameScreen::ResetHand() {
     for (auto& c : our_hand->top_cards()) {
-        if (state != State::NotOurTurn and (not Empty(Targets(c)) or validation::AlwaysPlayable(c.id))) {
+        if (
+            state != State::NotOurTurn and
+            (not utils::Empty(Targets(c)) or validation::AlwaysPlayable(c.id))
+        ) {
             c.overlay = Card::Overlay::Default;
             c.selectable = Selectable::Yes;
         } else {

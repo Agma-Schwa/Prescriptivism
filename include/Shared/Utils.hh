@@ -39,18 +39,6 @@ class Thread;
 
 void CloseLoggingThread();
 
-/// Check if a range is empty. This circumvents the stupid
-/// amortised time constraint that the standard library’s
-/// rgs::empty() has.
-template <typename Range>
-bool Empty(Range&& range) {
-    if constexpr (requires { rgs::empty(std::forward<Range>(range)); }) {
-        return rgs::empty(std::forward<Range>(range));
-    } else {
-        return range.begin() == range.end();
-    }
-}
-
 struct SilenceLog {
     LIBBASE_IMMOVABLE(SilenceLog);
     SilenceLog();

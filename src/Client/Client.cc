@@ -189,7 +189,7 @@ public:
         Screen&,
         CardStacks::Stack& card1,
         CardStacks::Stack& card2
-    ) : Animation{Tick(), Duration}, c1{&card1}, c2{&card2} {
+    ) : Animation{&SwapAnimation::Tick, Duration}, c1{&card1}, c2{&card2} {
         prevent_user_input = true;
         c1->visible = false;
         c2->visible = false;
@@ -203,13 +203,10 @@ public:
     }
 
 private:
-    auto Tick() -> Coroutine {
-        for (;;) {
-            auto t = dt();
-            c1pos = lerp_smooth(c1orig, c2orig, t);
-            c2pos = lerp_smooth(c2orig, c1orig, t);
-            co_yield {};
-        }
+    void Tick() {
+        auto t = dt();
+        c1pos = lerp_smooth(c1orig, c2orig, t);
+        c2pos = lerp_smooth(c2orig, c1orig, t);
     }
 
     void draw(Renderer& r) override {

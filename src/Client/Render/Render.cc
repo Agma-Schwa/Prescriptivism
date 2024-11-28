@@ -914,7 +914,6 @@ void Renderer::draw_outline_rect(
         {wd, ty},
         {0, 0},
         {wd, 0},
-
     };
 
     vao.add_buffer(verts, GL_TRIANGLES);
