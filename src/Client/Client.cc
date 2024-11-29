@@ -285,6 +285,7 @@ void WordChoiceScreen::enter(const constants::Word& word) {
     for (auto s : word) cards->add_stack(s);
     cards->make_selectable();
     client.set_screen(*this);
+    if (client.autoconfirm_word) SendWord();
 }
 
 void WordChoiceScreen::on_refresh(Renderer& r) {
@@ -392,6 +393,7 @@ void Client::RunAndConnect(std::string address, std::string username, std::strin
         std::move(username),
         std::move(password)
     );
+    c.autoconfirm_word = true;
     c.RunGame();
 }
 
@@ -400,7 +402,7 @@ void Client::pop_screen() {
     screen_stack.pop_back();
 }
 
-void Client::push_screen(pr::client::Screen& s) {
+void Client::push_screen(Screen& s) {
     screen_stack.emplace_back();
     set_screen(s);
 }

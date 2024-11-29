@@ -134,6 +134,9 @@ public:
     /// Connexion to the game server.
     net::TCPConnexion server_connexion;
 
+    /// Used by --connect.
+    bool autoconfirm_word = false;
+
 private:
     /// Screens that are currently open.
     std::vector<Screen*> screen_stack;
