@@ -234,11 +234,7 @@ void TextBox::draw(Renderer& r, Colour text_colour) {
 }
 
 void TextBox::refresh(Renderer&, bool full) {
-    if (not full) {
-        UpdateBoundingBox(bounding_box.size());
-        return;
-    }
-
+    if (not full) return RefreshBoundingBox();
     auto strut = label.font.strut();
     Size sz{
         std::max(min_wd, i32(label.width)) + 2 * padding,

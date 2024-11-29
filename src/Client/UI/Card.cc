@@ -399,8 +399,6 @@ void Card::DrawChildren(Renderer& r) {
 }
 
 void Card::refresh(Renderer& r, bool full) {
-    UpdateBoundingBox(CardSize[scale]);
-
     // Refresh our children *after* we’re done potentially
     // setting properties for them.
     defer {
@@ -412,11 +410,16 @@ void Card::refresh(Renderer& r, bool full) {
     };
 
     // If the window was resized, we don’t need to update the
-    // font size etc. every time.
-    if (not full) return;
+    // font size etc. every time. Crucially, this behaviour is
+    // also used to manually override the card bounding box during
+    // animations without it being reset on a partial refresh.
+    if (not full) {
+        RefreshBoundingBox();
+        return;
+    }
 
-    // Adjust label font sizes.
     bool power = id.is_power();
+    UpdateBoundingBox(CardSize[scale]);
     code.font_size = CodeSizes[scale];
     name.font_size = NameSizes[scale];
     middle.font_size = MiddleSizes[scale];

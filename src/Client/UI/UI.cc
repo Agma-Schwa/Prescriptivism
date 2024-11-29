@@ -60,6 +60,10 @@ void Element::SetBoundingBox(AABB aabb) {
     _bounding_box = aabb;
 }
 
+void Widget::RefreshBoundingBox() {
+    UpdateBoundingBox(bounding_box.size());
+}
+
 void Widget::UpdateBoundingBox(Size size) {
     auto scaled = size * ui_scale;
     SetBoundingBox(AABB{pos.resolve(parent.bounding_box, size), size});
@@ -183,15 +187,13 @@ void WidgetHolder::remove(usz idx) {
 //  Basic Elements
 // =============================================================================
 Arrow::Arrow(Element* parent, Position pos, vec2 direction, i32 length)
-    : Widget(parent, pos), _direction(glm::normalize(direction)), length(length) {}
+    : Widget(parent, pos), _direction(glm::normalize(direction)), length(length) {
+    UpdateBoundingBox(Size{length, thickness});
+}
 
 void Arrow::draw(Renderer& r) {
     auto _ = PushTransform(r);
     r.draw_arrow(xy(), xy(direction) * length, thickness, colour);
-}
-
-void Arrow::refresh(Renderer&, bool) {
-    UpdateBoundingBox(Size{length, thickness});
 }
 
 void Arrow::set_direction(vec2 new_value) {
@@ -233,11 +235,7 @@ void Image::draw(Renderer& r) {
 }
 
 void Image::refresh(Renderer&, bool full) {
-    if (not full) {
-        UpdateBoundingBox(bounding_box.size());
-        return;
-    }
-
+    if (not full) return RefreshBoundingBox();
     if (not texture) {
         UpdateBoundingBox(Size{});
         return;

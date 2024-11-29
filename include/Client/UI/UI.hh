@@ -316,13 +316,18 @@ public:
     /// \see Renderer::push_matrix().
     auto PushTransform(Renderer& r) -> Renderer::MatrixRAII;
 
-    /// Recompute bounding box etc. `full` is true if this element itself
-    /// requested a refresh, and false if this was triggered by a screen size
-    /// change.
+    /// Recompute bounding box etc.
+    ///
+    /// `full` is true if this element itself requested a refresh, and false
+    /// if this was triggered by a screen size change.
+    ///
+    /// Derived classes must call RefreshBoundingBox(), UpdateBoundingBox(),
+    /// or (rarely) SetBoundingBox() whenever this is called (the first is
+    /// usually appropriate if a full refresh is not needed).
     virtual void refresh(
         [[maybe_unused]] Renderer& r,
         [[maybe_unused]] bool full
-    ) {}
+    ) { RefreshBoundingBox(); }
 
     /// Determine which of our children is being selected, if any. Widgets
     /// that don’t have children can just return themselves.
@@ -332,7 +337,15 @@ public:
     void unselect();
 
 protected:
+    /// Set a new size for our bounding box and recalculate our
+    /// position accordingly.
     void UpdateBoundingBox(Size sz);
+
+    /// Refresh the position of our bounding box without changing
+    /// its size. This needs to be called every time the parent
+    /// size (which can be the screen size) changes so that centering
+    /// and edge-relative positioning is resolved correctly.
+    void RefreshBoundingBox();
 
 private:
     void unselect_impl(Screen& parent);
@@ -707,7 +720,6 @@ public:
     Arrow(Element* parent, Position pos, vec2 direction = {1, 0}, i32 length = 50);
 
     void draw(Renderer& r) override;
-    void refresh(Renderer&, bool full) override;
 };
 
 /// A group of widgets, arranged horizontally or vertically.
