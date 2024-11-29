@@ -1,5 +1,5 @@
-#ifndef PR_CLIENT_UI_ANIMATIONS_HH
-#define PR_CLIENT_UI_ANIMATIONS_HH
+#ifndef PR_CLIENT_UI_EFFECT_HH
+#define PR_CLIENT_UI_EFFECT_HH
 
 #include <Client/Render/Render.hh>
 
@@ -169,4 +169,4 @@ private:
     }
 };
 
-#endif // PR_CLIENT_UI_ANIMATIONS_HH
+#endif // PR_CLIENT_UI_EFFECT_HH

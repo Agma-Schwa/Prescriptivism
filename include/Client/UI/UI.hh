@@ -3,7 +3,7 @@
 
 #include <Client/Render/GL.hh>
 #include <Client/Render/Render.hh>
-#include <Client/UI/Animations.hh>
+#include <Client/UI/Effect.hh>
 
 #include <Shared/Cards.hh>
 #include <Shared/Constants.hh>
