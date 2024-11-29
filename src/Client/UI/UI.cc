@@ -54,9 +54,16 @@ auto Position::resolve(Size parent_size, Size object_size) -> xy {
 }
 
 auto client::lerp_smooth(Position a, Position b, f32 t) -> Position {
+    static constexpr auto C = Position::Centered;
     Position pos = a;
-    if (pos.base.x != Position::Centered) pos.base.x = lerp_smooth(a.base.x, b.base.x, t);
-    if (pos.base.y != Position::Centered) pos.base.y = lerp_smooth(a.base.y, b.base.y, t);
+
+    // Interpolate X and Y, but center if either is centered.
+    if (a.base.x == C or b.base.x == C) pos.base.x = C;
+    else pos.base.x = lerp_smooth(a.base.x, b.base.x, t);
+    if (a.base.y == C or b.base.y == C) pos.base.y = C;
+    else pos.base.y = lerp_smooth(a.base.y, b.base.y, t);
+
+    // Interpolate adjustments.
     pos.xadjust = lerp_smooth(a.xadjust, b.xadjust, t);
     pos.yadjust = lerp_smooth(a.yadjust, b.yadjust, t);
     return pos;
@@ -283,23 +290,41 @@ Group::InterpolateGroupPositions::InterpolateGroupPositions(Group& g, Token)
     for (auto& w : g.visible_elements()) positions[&w].start = w.pos;
 
     // Compute where everything should be and save those positions too.
+    ComputeEndPositions();
+    g.animation = this;
+}
+
+void Group::InterpolateGroupPositions::ComputeEndPositions() {
     g.ComputeDefaultLayout(g.parent_screen().renderer);
     for (auto& w : g.visible_elements()) positions[&w].end = w.pos;
-    g.animation_running = true;
 }
 
 void Group::InterpolateGroupPositions::on_done() {
     g.needs_refresh = true;
-    g.animation_running = false;
+    g.animation = nullptr;
 }
 
 void Group::InterpolateGroupPositions::tick() {
+    /// Another widget was added or removed.
+    if (g.needs_refresh) {
+        // Add the start positions of elements that were added.
+        for (auto& w : g.visible_elements())
+            if (not positions.contains(&w))
+                positions[&w].start = w.pos;
+
+        // And recompute the final layout.
+        ComputeEndPositions();
+    }
+
+    // Interpolate the elements’ positions.
     auto t = timer.dt();
     for (auto& w : g.visible_elements()) {
         auto pos = positions.get(&w);
         if (not pos) continue;
         w.pos = lerp_smooth(pos->start, pos->end, t);
     }
+
+    // Recompute our bounding box and refresh them.
     g.FinishLayout(g.parent_screen().renderer);
 }
 
@@ -355,9 +380,10 @@ void Group::FinishLayout(Renderer& r) {
     if (widgets.size() == 1) {
         extent = widgets.front().bounding_box.size().extent(a);
     } else {
-        auto front_bb = widgets.front().bounding_box;
-        auto back_bb = widgets.back().bounding_box;
-        extent = back_bb.origin().extent(a) + back_bb.extent(a) - front_bb.origin().extent(a);
+        // Get the leftmost origin and rightmost end point.
+        auto min = rgs::min(widgets | vws::transform([&](auto& w) { return w.bounding_box.origin().extent(a); }));
+        auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w.bounding_box.end(a); }));
+        extent = max - min;
     }
 
     // Compute the maximum extent along the secondary axis.
@@ -396,6 +422,11 @@ auto Group::HoverSelectHelper(
     return gap < 0 ? Get(children() | vws::reverse) : Get(children());
 }
 
+void Group::OnRemove() {
+    if (not animate or animation) return;
+    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this));
+}
+
 void Group::RecomputeLayout(Renderer& r) {
     ComputeDefaultLayout(r);
     FinishLayout(r);
@@ -420,7 +451,7 @@ void Group::refresh(Renderer& r, bool full) {
 
     // If we’re in an animation, then our layout is controlled
     // by it; don’t do anything here in that case.
-    if (not animation_running) RecomputeLayout(r);
+    if (not animation) RecomputeLayout(r);
 }
 
 auto Group::selected_child(xy rel_pos) -> SelectResult {
@@ -429,12 +460,12 @@ auto Group::selected_child(xy rel_pos) -> SelectResult {
 
 void Group::remove(u32 idx) {
     WidgetHolder::remove(idx);
-    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this));
+    OnRemove();
 }
 
 void Group::remove(Widget& s) {
     WidgetHolder::remove(s);
-    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this));
+    OnRemove();
 }
 
 void Group::swap(Widget* a, Widget* b) {

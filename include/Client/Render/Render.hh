@@ -247,6 +247,9 @@ struct pr::client::AABB {
     /// Check if this box contains a point.
     [[nodiscard]] auto contains(xy) const -> bool;
 
+    /// Get the end value along an axis.
+    [[nodiscard]] constexpr auto end(Axis a) const -> i32 { return a == Axis::X ? max.x : max.y; }
+
     /// Get the extent along an axis.
     [[nodiscard]] constexpr auto extent(Axis a) const -> i32 {
         return a == Axis::X ? width() : height();

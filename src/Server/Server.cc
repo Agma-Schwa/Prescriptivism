@@ -681,8 +681,8 @@ void Server::SetUpGame() {
 
         // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate whatever
         // power card we’re currently testing into the player’s hand.
-        p.hand.emplace_back(CardId::P_Babel);
-        p.hand.emplace_back(CardId::P_Negation);
+        /*p.hand.emplace_back(CardId::P_Babel);
+        p.hand.emplace_back(CardId::P_Negation);*/
     }
     rgs::shuffle(players.elements(), rng);
 

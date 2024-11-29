@@ -70,6 +70,9 @@ public:
         return elapsed() >= duration;
     }
 
+    /// Extend the duration of the current iteration of the timer.
+    void extend(chr::milliseconds extra) { _start += extra; }
+
     /// Restart the timer.
     void restart() { _start = chr::steady_clock::now(); }
 };

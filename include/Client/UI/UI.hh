@@ -66,11 +66,8 @@ void InitialiseUI(Renderer& r);
 
 /// Interpolate between two positions.
 ///
-/// If either dimension is set to centered for both positions,
+/// If either dimension is set to centered for either position,
 /// the result will also be centered.
-///
-/// If a dimension is only centered in one of the two positions,
-/// the result is unspecified.
 auto lerp_smooth(Position a, Position b, f32 t) -> Position;
 } // namespace pr::client
 
@@ -797,13 +794,14 @@ class pr::client::Group : public Widget
 
         void tick();
         void on_done() override;
+        void ComputeEndPositions();
 
     public:
         explicit InterpolateGroupPositions(Group& g, Token = {});
     };
 
-    /// Whether this group is currently being animated.
-    bool animation_running = false;
+    /// The animation that is currently controlling this group.
+    InterpolateGroupPositions* animation = nullptr;
 
 public:
     /// Whether this group should animate elements being added or removed.
@@ -851,6 +849,7 @@ private:
         auto (Widget::*accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
+    void OnRemove();
     void RecomputeLayout(Renderer& r);
 };
 
