@@ -406,6 +406,9 @@ class pr::client::Screen : public Element
 
     friend void Widget::unselect_impl(Screen&);
 
+    /// The renderer used to draw this screen.
+    Readonly(Renderer&, renderer);
+
     /// Previous size so we don’t refresh every frame.
     Size prev_size = {};
 
@@ -423,7 +426,7 @@ public:
     /// The hovered element.
     Widget* hovered_element = nullptr;
 
-    Screen() = default;
+    explicit Screen(Renderer& r) : _renderer(&r) {}
 
     /// Create an element with this as its parent.
     template <std::derived_from<Widget> El, typename... Args>
@@ -442,12 +445,18 @@ public:
         }
     }
 
+    template <std::derived_from<Effect> EffectTy>
+    void Queue(std::unique_ptr<EffectTy> e, bool flush_queue = false) {
+        QueueImpl(std::move(e), flush_queue);
+    }
+
     /// Queue a new callable.
     ///
     /// If 'flush_queue' is true, this signals to all other animations
     /// in the queue that are waiting for an effect to be enqueued that
     /// they can stop waiting.
     template <typename Callable>
+    requires requires (Callable c) { std::invoke(c); }
     void Queue(Callable c, bool flush_queue = true) {
         QueueImpl(std::make_unique<Effect>(std::move(c)), flush_queue);
     }
@@ -772,19 +781,11 @@ class pr::client::Group : public Widget
     Property(i32, alignment, Position::Centered);
 
     /// Animation that handles a card being removed.
-    /// TODO: Refactor to coroutine and block on it.
-    struct Animation {
+    class InterpolateGroupPositions final : public Animation {
         static constexpr auto Duration = 250ms;
-
-        /// The current state of the animation.
-        enum struct State {
-            None, ///< Animation is not running.
-            Started, ///< Animation just started.
-            Running,
-        } state = State::None;
-
-        /// The timer that controls the animation.
-        Timer timer{Duration};
+        struct Token {};
+        friend Group;
+        Group& g;
 
         /// Interpolation data for the child positions.
         struct InterpData {
@@ -792,10 +793,17 @@ class pr::client::Group : public Widget
             Position end;
         };
 
-        HashMap<Widget*, InterpData> data;
+        HashMap<Widget*, InterpData> positions;
+
+        void tick();
+        void on_done() override;
+
+    public:
+        explicit InterpolateGroupPositions(Group& g, Token = {});
     };
 
-    Animation animation;
+    /// Whether this group is currently being animated.
+    bool animation_running = false;
 
 public:
     /// Whether this group should animate elements being added or removed.
@@ -836,8 +844,6 @@ public:
     auto selected_child(xy rel_pos) -> SelectResult override;
 
 private:
-    void CalcStartPositions();
-    void CalcEndPositions(Renderer& r);
     void ComputeDefaultLayout(Renderer& r);
     void FinishLayout(Renderer& r);
     auto HoverSelectHelper(

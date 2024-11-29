@@ -24,7 +24,7 @@ static constexpr Colour Veil = Colour{0, 0, 0, 200};
 // =============================================================================
 //  Error Screen
 // =============================================================================
-ErrorScreen::ErrorScreen(Client& c) {
+ErrorScreen::ErrorScreen(Client& c) : Screen(c.renderer) {
     msg = &Create<Label>("", FontSize::Large, Position::Center());
     msg->align = TextAlign::Center;
 
@@ -44,7 +44,7 @@ void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
 // =============================================================================
 //  Main Menu Screen
 // =============================================================================
-MenuScreen::MenuScreen(Client& c) {
+MenuScreen::MenuScreen(Client& c) : Screen(c.renderer) {
     auto& address = Create<TextEdit>(Position::HCenter(350), "Server Address");
     auto& username = Create<TextEdit>(Position::HCenter(287), "Your Name");
     auto& password = Create<TextEdit>(Position::HCenter(225), "Password");
@@ -73,7 +73,7 @@ MenuScreen::MenuScreen(Client& c) {
 // =============================================================================
 //  Connexion Phase Screens
 // =============================================================================
-ConnexionScreen::ConnexionScreen(Client& c) : client{c} {
+ConnexionScreen::ConnexionScreen(Client& c) : Screen(c.renderer), client{c} {
     Create<Label>(
         "Connecting to server...",
         FontSize::Large,
@@ -159,7 +159,7 @@ void ConnexionScreen::set_address(std::string addr) {
     address = std::move(addr);
 }
 
-WaitingScreen::WaitingScreen(Client&) {
+WaitingScreen::WaitingScreen(Client& c) : Screen(c.renderer) {
     Create<Throbber>(Position::Center());
     Create<Label>(
         "Waiting for players...",
@@ -227,7 +227,7 @@ private:
     }
 };
 
-WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
+WordChoiceScreen::WordChoiceScreen(Client& c) : Screen(c.renderer), client{c} {
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->autoscale = true;
 
@@ -449,8 +449,8 @@ auto Client::Startup() -> Renderer {
     // call finalise(), so the reason we can’t do much here is not
     // that another thread is using OpenGl, but rather simply the
     // fact that we don’t have the required assets yet.
-    Screen screen;
     Renderer r{1'800, 1'000};
+    Screen screen{r};
     Thread asset_loader{AssetLoader::Create()};
     InputSystem startup{r};
     screen.Create<Throbber>(Position::Center());

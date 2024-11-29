@@ -75,7 +75,7 @@ void CardPreview::refresh(Renderer& r, bool) {
 // Animation that plays a card in hand.
 class GameScreen::PlayCard : public Animation {
     static constexpr auto MoveDuration = 250ms;
-    static constexpr auto TotalDuration = MoveDuration + 500ms;
+    static constexpr auto TotalDuration = MoveDuration + 750ms;
     static constexpr auto StartSize = Card::CardSize[Card::Hand];
     static constexpr auto EndSize = Card::CardSize[Card::Preview];
 
@@ -118,7 +118,7 @@ public:
 // =============================================================================
 // Play Confirmation Screen
 // =============================================================================
-ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(GameScreen& p) : parent{p} {
+ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(GameScreen& p): Screen(p.renderer), parent{p} {
     preview = &Create<Card>(Position::Center());
     preview->scale = Card::Preview;
 
@@ -152,7 +152,7 @@ void ConfirmPlaySelectedScreen::No() {
 // =============================================================================
 // Card Choice Challenge Screen
 // =============================================================================
-CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : parent{p} {
+CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : Screen(p.renderer), parent{p} {
     message = &Create<Label>("", FontSize::Medium, Position::HCenter(-150));
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->scale = Card::Hand;
@@ -233,7 +233,7 @@ void CardChoiceChallengeScreen::Confirm() { // clang-format off
 // =============================================================================
 // Negation Challenge Screen
 // =============================================================================
-NegationChallengeScreen::NegationChallengeScreen(GameScreen& p) : parent{p} {
+NegationChallengeScreen::NegationChallengeScreen(GameScreen& p) : Screen(p.renderer), parent{p} {
     auto& group = Create<Group>(Position::Center());
     auto& negation = group.create<Card>(Position());
     group.create<Arrow>(Position(), vec2{1, 0}, 200).thickness = 10;
@@ -266,7 +266,7 @@ void NegationChallengeScreen::enter(sc::PromptNegation p) {
 // =============================================================================
 // Helpers
 // =============================================================================
-GameScreen::GameScreen(Client& c) : client(c) {
+GameScreen::GameScreen(Client& c) : Screen(c.renderer), client(c) {
     // UI is set up in enter().
 }
 

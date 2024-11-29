@@ -274,17 +274,33 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture);
 // =============================================================================
 //  Group
 // =============================================================================
-void Group::CalcStartPositions() {
-    animation.state = Animation::State::Started;
-    animation.data.clear();
-    for (auto& w : widgets) animation.data[&w].start = w.pos;
+Group::InterpolateGroupPositions::InterpolateGroupPositions(Group& g, Token)
+    : Animation(&InterpolateGroupPositions::tick, Duration), g{g} {
+    blocking = true;
+    prevent_user_input = true;
+
+    // Save the current positions.
+    for (auto& w : g.visible_elements()) positions[&w].start = w.pos;
+
+    // Compute where everything should be and save those positions too.
+    g.ComputeDefaultLayout(g.parent_screen().renderer);
+    for (auto& w : g.visible_elements()) positions[&w].end = w.pos;
+    g.animation_running = true;
 }
 
-void Group::CalcEndPositions(Renderer& r) {
-    animation.timer.restart();
-    animation.state = Animation::State::Running;
-    ComputeDefaultLayout(r);
-    for (auto& w : widgets) animation.data[&w].end = w.pos;
+void Group::InterpolateGroupPositions::on_done() {
+    g.needs_refresh = true;
+    g.animation_running = false;
+}
+
+void Group::InterpolateGroupPositions::tick() {
+    auto t = timer.dt();
+    for (auto& w : g.visible_elements()) {
+        auto pos = positions.get(&w);
+        if (not pos) continue;
+        w.pos = lerp_smooth(pos->start, pos->end, t);
+    }
+    g.FinishLayout(g.parent_screen().renderer);
 }
 
 void Group::ComputeDefaultLayout(Renderer& r) {
@@ -402,36 +418,9 @@ auto Group::hovered_child(xy rel_pos) -> SelectResult {
 void Group::refresh(Renderer& r, bool full) {
     if (widgets.empty()) return;
 
-    // We’re in an animation.
-    if (animate and animation.state != Animation::State::None) {
-        // We need to keep refreshing the group for this.
-        // TODO: Tick the group instead.
-        needs_refresh = true;
-
-        // Calculate end positions if we haven’t already. This also starts
-        // the animation timer.
-        if (animation.state == Animation::State::Started) CalcEndPositions(r);
-
-        // End the animation if it’s been running for too long.
-        if (animation.timer.expired()) {
-            animation.state = Animation::State::None;
-            animate = false;
-            RecomputeLayout(r);
-            return;
-        }
-
-        // Interpolate between start and end positions.
-        auto t = animation.timer.dt();
-        for (auto& w : visible_elements()) {
-            auto data = animation.data.get(&w);
-            if (not data) continue;
-            w.pos = lerp_smooth(data->start, data->end, t);
-        }
-
-        FinishLayout(r);
-    } else {
-        RecomputeLayout(r);
-    }
+    // If we’re in an animation, then our layout is controlled
+    // by it; don’t do anything here in that case.
+    if (not animation_running) RecomputeLayout(r);
 }
 
 auto Group::selected_child(xy rel_pos) -> SelectResult {
@@ -439,13 +428,13 @@ auto Group::selected_child(xy rel_pos) -> SelectResult {
 }
 
 void Group::remove(u32 idx) {
-    if (animate) CalcStartPositions();
     WidgetHolder::remove(idx);
+    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this));
 }
 
 void Group::remove(Widget& s) {
-    if (animate) CalcStartPositions();
     WidgetHolder::remove(s);
+    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this));
 }
 
 void Group::swap(Widget* a, Widget* b) {
@@ -553,15 +542,16 @@ void Screen::refresh(Renderer& r) {
 }
 
 void Screen::tick(InputSystem& input) {
-    // Tick animations.
+    // Tick animations. Note that this may create even more effects,
+    // so take care not to fall victim to iterator invalidation here.
     bool prevent_user_input = false;
-    for (auto& e : effects) {
-        e.tick();
-        if (not e.done()) {
-            if (e.prevent_user_input) prevent_user_input = true;
-            if (e.blocking) break;
+    for (usz i = 0; i < effects.size(); ++i) {
+        effects[i].tick();
+        if (not effects[i].done()) {
+            if (effects[i].prevent_user_input) prevent_user_input = true;
+            if (effects[i].blocking) break;
         } else {
-            e.on_done();
+            effects[i].on_done();
         }
     }
 
