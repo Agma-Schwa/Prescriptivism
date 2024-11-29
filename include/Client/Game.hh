@@ -193,7 +193,6 @@ class pr::client::GameScreen : public Screen {
 public:
     explicit GameScreen(Client& c);
     void enter(packets::sc::StartGame sg);
-    void on_refresh(Renderer& r) override;
     void tick(InputSystem& input) override;
 
 #define X(name) void handle(packets::sc::name); void HandleImpl(packets::sc::name);

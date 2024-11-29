@@ -697,9 +697,6 @@ void GameScreen::enter(sc::StartGame sg) {
     client.set_screen(*this);
 }
 
-void GameScreen::on_refresh(Renderer& r) {
-}
-
 void GameScreen::tick(InputSystem& input) {
     if (client.server_connexion.disconnected) {
         client.show_error("Disconnected: Server has gone away", client.menu_screen);
