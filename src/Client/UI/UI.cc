@@ -190,7 +190,7 @@ void Arrow::draw(Renderer& r) {
     r.draw_arrow(xy(), xy(direction) * length, thickness, colour);
 }
 
-void Arrow::refresh(Renderer&) {
+void Arrow::refresh(Renderer&, bool) {
     UpdateBoundingBox(Size{length, thickness});
 }
 
@@ -232,7 +232,12 @@ void Image::draw(Renderer& r) {
     if (texture) r.draw_texture_sized(*texture, bounding_box);
 }
 
-void Image::refresh(Renderer&) {
+void Image::refresh(Renderer&, bool full) {
+    if (not full) {
+        UpdateBoundingBox(bounding_box.size());
+        return;
+    }
+
     if (not texture) {
         UpdateBoundingBox(Size{});
         return;
@@ -289,7 +294,7 @@ auto Group::hovered_child(xy rel_pos) -> SelectResult {
     return HoverSelectHelper(rel_pos, &Widget::hovered_child, &Widget::hoverable);
 }
 
-void Group::refresh(Renderer& r) {
+void Group::refresh(Renderer& r, bool full) {
     if (widgets.empty()) return;
 
     // Reset our bounding box to our parent’s before refreshing the
@@ -306,7 +311,7 @@ void Group::refresh(Renderer& r) {
     Axis a = vertical ? Axis::Y : Axis::X;
     i32 total_extent = 0;
     for (auto& c : widgets) {
-        c.refresh(r);
+        c.refresh(r, full);
         total_extent += c.bounding_box.extent(a);
 
         // If the gap is *negative*, i.e. we’re supposed to overlap
@@ -339,7 +344,7 @@ void Group::refresh(Renderer& r) {
     UpdateBoundingBox(sz);
 
     // And refresh the children again now that we know where everything is.
-    for (auto& c : widgets) c.refresh(r);
+    for (auto& c : widgets) c.refresh(r, full);
 }
 
 auto Group::selected_child(xy rel_pos) -> SelectResult {
@@ -433,31 +438,30 @@ void Screen::refresh(Renderer& r) {
     SetBoundingBox(AABB({0, 0}, r.size()));
     on_refresh(r);
 
+    // Refresh an element.
+    auto RefreshElement = [&](Widget& w) {
+        // Always clear out the refresh flag before refreshing the element
+        // since it may decide to set it back to true immediately.
+        bool requested = w.needs_refresh;
+        w.needs_refresh = false;
+        w.refresh(r, requested);
+    };
+
     // Size hasn’t changed. Still update any elements that
     // requested a refresh. Also ignore visibility here.
-    //
-    // Always clear out the refresh flag first since an element
-    // may set it back to true immediately.
     if (prev_size == r.size()) {
-        for (auto& e : widgets) {
-            if (e.needs_refresh) {
-                e.needs_refresh = false;
-                e.refresh(r);
-            }
-        }
-
+        for (auto& e : widgets)
+            if (e.needs_refresh)
+                RefreshElement(e);
         return;
     }
 
     // Refresh every visible element, and every element that
     // requested a refresh.
     prev_size = r.size();
-    for (auto& e : widgets) {
-        if (e.visible or e.needs_refresh) {
-            e.needs_refresh = false;
-            e.refresh(r);
-        }
-    }
+    for (auto& e : widgets)
+        if (e.visible or e.needs_refresh)
+            RefreshElement(e);
 }
 
 void Screen::tick(InputSystem& input) {

@@ -52,7 +52,7 @@ class pr::client::CardPreview : public Widget {
 
 public:
     CardPreview(Screen* parent, Position p = Position::VCenter(-100));
-    void refresh(Renderer &r) override;
+    void refresh(Renderer &r, bool full) override;
     void draw(Renderer &r) override;
 };
 

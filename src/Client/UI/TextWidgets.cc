@@ -156,7 +156,7 @@ void Label::draw(Renderer& r) {
     );
 }
 
-void Label::refresh(Renderer&) {
+void Label::refresh(Renderer&, bool) {
     defer {
         auto sz = text.text_size;
         UpdateBoundingBox(Size{sz.wd, std::max(sz.ht, fixed_height)});
@@ -233,15 +233,18 @@ void TextBox::draw(Renderer& r, Colour text_colour) {
     }
 }
 
-void TextBox::refresh(Renderer&) {
+void TextBox::refresh(Renderer&, bool full) {
+    if (not full) {
+        UpdateBoundingBox(bounding_box.size());
+        return;
+    }
+
     auto strut = label.font.strut();
     Size sz{
         std::max(min_wd, i32(label.width)) + 2 * padding,
         std::max({min_ht, i32(label.height + label.depth), strut}) + 2 * padding,
     };
 
-    // Absolute position calculation depends on the size, so make sure
-    // to initialise them in the right order.
     UpdateBoundingBox(sz);
 }
 

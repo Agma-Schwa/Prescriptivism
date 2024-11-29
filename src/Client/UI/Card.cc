@@ -398,23 +398,22 @@ void Card::DrawChildren(Renderer& r) {
     }
 }
 
-void Card::refresh(Renderer& r) {
+void Card::refresh(Renderer& r, bool full) {
     UpdateBoundingBox(CardSize[scale]);
 
     // Refresh our children *after* we’re done potentially
     // setting properties for them.
     defer {
-        code.refresh(r);
-        name.refresh(r);
-        middle.refresh(r);
-        description.refresh(r);
-        image.refresh(r);
+        code.refresh(r, full);
+        name.refresh(r, full);
+        middle.refresh(r, full);
+        description.refresh(r, full);
+        image.refresh(r, full);
     };
 
     // If the window was resized, we don’t need to update the
     // font size etc. every time.
-    if (not needs_full_refresh) return;
-    needs_full_refresh = false;
+    if (not full) return;
 
     // Adjust label font sizes.
     bool power = id.is_power();
@@ -510,13 +509,9 @@ void Card::set_id(CardId ct) {
     }
 
     needs_refresh = true;
-
-    // Also force the position of the labels to be recalculated since
-    // we may have added more text.
-    needs_full_refresh = true;
 }
 
-TRIVIAL_CACHING_SETTER(Card, Scale, scale, needs_full_refresh = true)
+TRIVIAL_CACHING_SETTER(Card, Scale, scale)
 
 // =============================================================================
 //  Stack
@@ -559,10 +554,13 @@ void CardStacks::Stack::push(CardId card) {
     if (full) c.variant = Card::Variant::FullStackTop;
 }
 
-void CardStacks::Stack::refresh(Renderer& r) {
-    for (auto& c : cards()) c.scale = scale;
-    gap = -Card::CardSize[scale].ht + 2 * Card::Border[scale].ht;
-    Group::refresh(r);
+void CardStacks::Stack::refresh(Renderer& r, bool full) {
+    if (full) {
+        for (auto& c : cards()) c.scale = scale;
+        gap = -Card::CardSize[scale].ht + 2 * Card::Border[scale].ht;
+    }
+
+    Group::refresh(r, full);
 }
 
 TRIVIAL_CACHING_SETTER(
@@ -600,9 +598,12 @@ auto CardStacks::selected_child(xy rel_pos) -> SelectResult {
     return res;
 }
 
-void CardStacks::refresh(Renderer& r) {
+void CardStacks::refresh(Renderer& r, bool full) {
     auto ch = stacks();
     if (ch.empty()) return;
+
+    // See Group::refresh().
+    SetBoundingBox(parent.bounding_box);
 
     // If we’re allowed to scale up, determine the maximum scale that works.
     Scale s;
@@ -619,7 +620,7 @@ void CardStacks::refresh(Renderer& r) {
     }
 
     for (auto& c : ch) c.scale = s;
-    Group::refresh(r);
+    Group::refresh(r, full);
 }
 
 void CardStacks::set_overlay(Card::Overlay new_value) {

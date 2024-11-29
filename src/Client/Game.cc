@@ -48,7 +48,7 @@ void CardPreview::draw(Renderer& r) {
     card.draw(r);
 }
 
-void CardPreview::refresh(Renderer& r) {
+void CardPreview::refresh(Renderer& r, bool) {
     // Always refresh this element.
     needs_refresh = true;
 
@@ -63,7 +63,7 @@ void CardPreview::refresh(Renderer& r) {
     visible = true;
     card.id = s.hovered_element->as<Card>().id;
     if (card.needs_refresh) {
-        card.refresh(r);
+        card.refresh(r, true);
         UpdateBoundingBox(card.bounding_box.size());
     }
 }
@@ -90,7 +90,7 @@ public:
         c.visible = false;
         card.id = c.id;
         card.scale = Card::Preview;
-        card.refresh(g.client.renderer);
+        card.refresh(g.client.renderer, true);
         start_pos = c.absolute_position();
         end_pos = Position::VCenter(150).resolve(g.bounding_box, EndSize);
         waiting = true;

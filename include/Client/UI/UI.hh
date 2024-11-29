@@ -316,8 +316,13 @@ public:
     /// \see Renderer::push_matrix().
     auto PushTransform(Renderer& r) -> Renderer::MatrixRAII;
 
-    /// Recompute bounding box etc.
-    virtual void refresh(Renderer&) {}
+    /// Recompute bounding box etc. `full` is true if this element itself
+    /// requested a refresh, and false if this was triggered by a screen size
+    /// change.
+    virtual void refresh(
+        [[maybe_unused]] Renderer& r,
+        [[maybe_unused]] bool full
+    ) {}
 
     /// Determine which of our children is being selected, if any. Widgets
     /// that don’t have children can just return themselves.
@@ -472,7 +477,7 @@ public:
     explicit Label(Element* parent, std::string_view text, FontSize sz, Position pos);
 
     void draw(Renderer& r) override;
-    void refresh(Renderer& r) override;
+    void refresh(Renderer& r, bool full) override;
     void update_text(std::string_view new_text);
 };
 
@@ -499,7 +504,7 @@ protected:
 
 public:
     void draw(Renderer& r) override;
-    void refresh(Renderer& r) override;
+    void refresh(Renderer& r, bool full) override;
     void update_text(std::string_view new_text);
     void update_text(Text new_text);
 
@@ -602,7 +607,7 @@ public:
     Image(Element* parent, Position pos) : Widget(parent, pos) {}
 
     void draw(Renderer& r) override;
-    void refresh(Renderer&) override;
+    void refresh(Renderer&, bool full) override;
 };
 
 class pr::client::Card : public Widget {
@@ -664,7 +669,6 @@ private:
     Property(CardId, id, CardId::$$Count);
     Property(Scale, scale, Field);
     u8 count{};
-    bool needs_full_refresh = true; // Set initially so we recalculate everything.
     Label code;
     Label name;
     Label middle;
@@ -680,7 +684,7 @@ public:
     Card(Element* parent, Position pos);
 
     void draw(Renderer& r) override;
-    void refresh(Renderer&) override;
+    void refresh(Renderer&, bool full) override;
 
 private:
     void DrawChildren(Renderer& r);
@@ -702,8 +706,8 @@ public:
 
     Arrow(Element* parent, Position pos, vec2 direction = {1, 0}, i32 length = 50);
 
-    void draw(Renderer &r) override;
-    void refresh(Renderer &) override;
+    void draw(Renderer& r) override;
+    void refresh(Renderer&, bool full) override;
 };
 
 /// A group of widgets, arranged horizontally or vertically.
@@ -758,13 +762,13 @@ public:
 
     void draw(Renderer& r) override;
     auto hovered_child(xy rel_pos) -> HoverResult override;
-    void refresh(Renderer&) override;
+    void refresh(Renderer&, bool full) override;
     auto selected_child(xy rel_pos) -> SelectResult override;
 
 private:
     auto HoverSelectHelper(
         xy rel_pos,
-        auto (Widget::* accessor)(xy)->SelectResult,
+        auto (Widget::*accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
 };
@@ -821,7 +825,7 @@ public:
         void push(CardId card);
 
         void draw(Renderer& r) override;
-        void refresh(Renderer&) override;
+        void refresh(Renderer&, bool full) override;
 
         /// Validation API.
         bool stack_is_locked() const { return locked; }
@@ -894,7 +898,7 @@ public:
     }
 
     auto selected_child(xy rel_pos) -> SelectResult override;
-    void refresh(Renderer&) override;
+    void refresh(Renderer&, bool full) override;
 };
 
 template <>
