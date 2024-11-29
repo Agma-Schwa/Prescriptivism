@@ -140,7 +140,7 @@ void ConnexionScreen::tick(InputSystem& input) {
 
             // We do! Tell the server who we are and switch to game screen.
             client.server_connexion = std::move(conn.value());
-            client.server_connexion.send(packets::cs::Login(std::move(username), std::move(password)));
+            client.server_connexion.send(cs::Login(std::move(username), std::move(password)));
             client.set_screen(client.waiting_screen);
             return;
         }

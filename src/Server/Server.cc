@@ -267,10 +267,7 @@ void Server::handle(net::TCPConnexion& client, cs::Pass pass) {
     auto res = CanPlayCard(client, pass.card_index);
     if (not res) return;
     auto [p, card, _] = res;
-
-    // FIXME: Should notify here as well when once the client no longer discards
-    // this immediately.
-    RemoveCard(*p, *card, true, false);
+    RemoveCard(*p, *card);
     NextPlayer();
 }
 

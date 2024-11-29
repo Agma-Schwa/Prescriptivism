@@ -560,7 +560,6 @@ void GameScreen::TickPassing() {
     if (not selected_element) return;
     auto [stack, idx] = GetStackInHand(selected_element->as<Card>());
     client.server_connexion.send(cs::Pass{idx});
-    Discard(stack); // TODO: Remove this as well.
     end_turn_button->update_text("Pass");
 
     /// Make sure the user can’t press the pass button again (and the server
