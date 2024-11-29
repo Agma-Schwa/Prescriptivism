@@ -295,9 +295,10 @@ Group::InterpolateGroupPositions::InterpolateGroupPositions(Group& g, Token)
 }
 
 void Group::InterpolateGroupPositions::ComputeEndPositions() {
-    g.ComputeDefaultLayout(g.parent_screen().renderer);
+    auto& r = g.parent_screen().renderer;
+    g.ComputeDefaultLayout(r);
     for (auto& w : g.widgets) positions[&w].end = w.pos;
-    g.FinishLayout(g.parent_screen().renderer); // Recompute BB.
+    g.FinishLayout(r); // Recompute BB.
 }
 
 void Group::InterpolateGroupPositions::on_done() {
@@ -306,12 +307,14 @@ void Group::InterpolateGroupPositions::on_done() {
 }
 
 void Group::InterpolateGroupPositions::tick() {
+    auto& r = g.parent_screen().renderer;
+
     // Another widget was added or removed.
     if (g.needs_refresh) {
         // Refresh the group in case a derived class needs to set
         // any properties on the widget that was just added (e.g.
         // the scale in case of a card stack).
-        g.refresh(g.parent_screen().renderer, true);
+        g.refresh(r, true);
 
         // Add the start positions of elements that were added.
         for (auto& w : g.widgets)
@@ -331,7 +334,7 @@ void Group::InterpolateGroupPositions::tick() {
     }
 
     // Refresh our children.
-    for (auto& c : g.widgets) g.RefreshElement(g.parent_screen().renderer, c);
+    for (auto& c : g.widgets) g.RefreshElement(r, c);
 }
 
 void Group::ComputeDefaultLayout(Renderer& r) {
