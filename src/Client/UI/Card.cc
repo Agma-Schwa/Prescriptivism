@@ -606,13 +606,10 @@ void CardStacks::refresh(Renderer& r, bool full) {
     auto ch = stacks();
     if (ch.empty()) return;
 
-    // If we’re allowed to scale up, determine the maximum scale that works.
+    // If we’re allowed to scale up, determine the maximum scale that works (see
+    // Group::ComputeDefaultLayout() for why we use our parent’s bounding box here).
     if (autoscale) {
-        // See Group::refresh().
-        SetBoundingBox(parent.bounding_box);
-
-        // If we’re allowed to scale up, determine the maximum scale that works.
-        i32 width = max_width != 0 ? max_width : bounding_box.size().wd;
+        i32 width = max_width != 0 ? max_width : parent.bounding_box.size().wd;
         auto s = Scale(Scale::NumScales - 1);
         while (s != scale) {
             auto wd = i32(ch.size() * Card::CardSize[s].wd + (ch.size() - 1) * CardGaps[s]);

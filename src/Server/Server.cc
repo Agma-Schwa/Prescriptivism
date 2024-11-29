@@ -686,12 +686,15 @@ void Server::SetUpGame() {
     }
     rgs::shuffle(players.elements(), rng);
 
-    // FIXME: FOR TESTING ONLY. COMMENT THIS OUT IN PRODUCTION.
+#ifndef NDEBUG
+    // In debug mode, if a player with the name 'debugger' or 'console'
+    // is connect, give that player the first turn.
     auto it = rgs::find_if(players, [](auto& p) { return p.name == "debugger" or p.name == "console"; });
     if (it != players.end()) {
         Log("Debugger or console found.");
         players.swap_iterators(it, players.begin());
     }
+#endif
 
     // Initialise player IDs.
     for (auto [i, p] : players | vws::enumerate) p.id = u8(i);

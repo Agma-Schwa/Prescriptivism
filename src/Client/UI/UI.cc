@@ -281,8 +281,11 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture);
 // =============================================================================
 //  Group
 // =============================================================================
-Group::InterpolateGroupPositions::InterpolateGroupPositions(Group& g, Token)
-    : Animation(&InterpolateGroupPositions::tick, Duration), g{g} {
+Group::InterpolateGroupPositions::InterpolateGroupPositions(
+    Group& g,
+    chr::milliseconds duration,
+    Token
+) : Animation(&InterpolateGroupPositions::tick, duration), g{g} {
     blocking = true;
     prevent_user_input = true;
 
@@ -407,6 +410,10 @@ void Group::FinishLayout(Renderer& r) {
 
     // And refresh the children again now that we know where everything is.
     for (auto& c : widgets) RefreshElement(r, c);
+
+    // Refreshing this group’s elements might have triggered the refresh
+    // flag. Do not refresh again after we’re done here.
+    needs_refresh = false;
 }
 
 auto Group::HoverSelectHelper(
@@ -434,18 +441,14 @@ auto Group::HoverSelectHelper(
     return gap < 0 ? Get(children() | vws::reverse) : Get(children());
 }
 
-void Group::OnRemove() {
+void Group::StartAnimation(chr::milliseconds duration) {
     if (not animate or animation) return;
-    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this));
+    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this, duration));
 }
 
 void Group::RecomputeLayout(Renderer& r) {
     ComputeDefaultLayout(r);
     FinishLayout(r);
-
-    // Refreshing this group’s elements might have triggered the refresh
-    // flag. Do not refresh again after we’re done here.
-    needs_refresh = false;
 }
 
 void Group::clear() {
@@ -476,17 +479,17 @@ auto Group::selected_child(xy rel_pos) -> SelectResult {
 
 void Group::remove(u32 idx) {
     WidgetHolder::remove(idx);
-    OnRemove();
+    StartAnimation();
 }
 
 void Group::remove(Widget& s) {
     WidgetHolder::remove(s);
-    OnRemove();
+    StartAnimation();
 }
 
 void Group::swap(Widget* a, Widget* b) {
     widgets.swap_indices(widgets.index_of(*a).value(), widgets.index_of(*b).value());
-    needs_refresh = true;
+    StartAnimation(350ms);
 }
 
 void Group::make_selectable(Selectable new_value) {

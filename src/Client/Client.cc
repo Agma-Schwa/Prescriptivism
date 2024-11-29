@@ -171,65 +171,10 @@ WaitingScreen::WaitingScreen(Client& c) : Screen(c.renderer) {
 // =============================================================================
 //  Word Choice Screen
 // =============================================================================
-class SwapAnimation : public Animation {
-    static constexpr auto Duration = 350ms;
-
-    CardStacks::Stack* c1;
-    CardStacks::Stack* c2;
-    xy c1orig, c2orig;
-    xy c1pos, c2pos;
-    bool flipped = false;
-
-public:
-    // Swaps the position of two cards; this is merely graphical and does
-    // not affect the actual card positions! The actual positions should be
-    // swapped before this is run. When the two cards overlap, the first
-    // element is drawn on top.
-    SwapAnimation(
-        Screen&,
-        CardStacks::Stack& card1,
-        CardStacks::Stack& card2
-    ) : Animation{&SwapAnimation::Tick, Duration}, c1{&card1}, c2{&card2} {
-        prevent_user_input = true;
-        c1->visible = false;
-        c2->visible = false;
-        c1orig = c1->absolute_position();
-        c2orig = c2->absolute_position();
-        if (c1orig.x > c2orig.x) {
-            std::swap(c1, c2);
-            std::swap(c1orig, c2orig);
-            flipped = true;
-        }
-    }
-
-private:
-    void Tick() {
-        auto t = timer.dt();
-        c1pos = lerp_smooth(c1orig, c2orig, t);
-        c2pos = lerp_smooth(c2orig, c1orig, t);
-    }
-
-    void draw(Renderer& r) override {
-        // Render everything in such a way that the card the user
-        // clicked on is always on top.
-        if (flipped) {
-            c1->draw_absolute(r, c1pos);
-            c2->draw_absolute(r, c2pos);
-        } else {
-            c2->draw_absolute(r, c2pos);
-            c1->draw_absolute(r, c1pos);
-        }
-    }
-
-    void on_done() override {
-        c1->visible = true;
-        c2->visible = true;
-    }
-};
-
 WordChoiceScreen::WordChoiceScreen(Client& c) : Screen(c.renderer), client{c} {
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->autoscale = true;
+    cards->animate = true;
 
     Create<Button>("Submit", Position::HCenter(75), [&] { SendWord(); });
     Create<Label>(
@@ -285,7 +230,7 @@ void WordChoiceScreen::enter(const constants::Word& word) {
     for (auto s : word) cards->add_stack(s);
     cards->make_selectable();
     client.set_screen(*this);
-    if (client.autoconfirm_word) SendWord();
+    //if (client.autoconfirm_word) SendWord();
 }
 
 void WordChoiceScreen::on_refresh(Renderer& r) {
@@ -309,7 +254,6 @@ void WordChoiceScreen::tick(InputSystem& input) {
 
     // Otherwise, swap the cards and unselect both.
     else {
-        Queue<SwapAnimation>(*selected, selected_element->as<CardStacks::Stack>());
         cards->swap(selected, selected_element);
         selected->unselect();
         selected_element->unselect();

@@ -779,7 +779,6 @@ class pr::client::Group : public Widget
 
     /// Animation that handles a card being removed.
     class InterpolateGroupPositions final : public Animation {
-        static constexpr auto Duration = 500ms;
         struct Token {};
         friend Group;
         Group& g;
@@ -797,7 +796,7 @@ class pr::client::Group : public Widget
         void ComputeEndPositions();
 
     public:
-        explicit InterpolateGroupPositions(Group& g, Token = {});
+        explicit InterpolateGroupPositions(Group& g, chr::milliseconds duration, Token = {});
     };
 
     /// The animation that is currently controlling this group.
@@ -849,7 +848,7 @@ private:
         auto (Widget::*accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
-    void OnRemove();
+    void StartAnimation(chr::milliseconds duration = 500ms);
     void RecomputeLayout(Renderer& r);
 };
 
