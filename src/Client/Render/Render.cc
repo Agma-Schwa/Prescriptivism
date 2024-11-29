@@ -196,6 +196,7 @@ void Text::set_content(std::string_view new_text) {
 }
 
 void Text::set_desired_width(i32 desired) {
+    if (desired == _desired_width) return;
     _desired_width = desired;
     if (not vertices or desired < width or multiline) font.shape(*this, nullptr);
 }

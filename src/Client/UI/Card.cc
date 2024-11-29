@@ -399,16 +399,6 @@ void Card::DrawChildren(Renderer& r) {
 }
 
 void Card::refresh(Renderer& r, bool full) {
-    // Refresh our children *after* we’re done potentially
-    // setting properties for them.
-    defer {
-        code.refresh(r, full);
-        name.refresh(r, full);
-        middle.refresh(r, full);
-        description.refresh(r, full);
-        image.refresh(r, full);
-    };
-
     // If the window was resized, we don’t need to update the
     // font size etc. every time. Crucially, this behaviour is
     // also used to manually override the card bounding box during
@@ -462,6 +452,14 @@ void Card::refresh(Renderer& r, bool full) {
         name.fixed_height = 0;
         description.pos = Position::HCenter(Border[scale].ht + 3 * Padding[scale]);
     }
+
+    // Finally, refresh our children.
+    code.refresh(r, full);
+    name.refresh(r, full);
+    middle.refresh(r, full);
+    description.refresh(r, full);
+    image.refresh(r, full);
+
 }
 
 void Card::set_id(CardId ct) {
