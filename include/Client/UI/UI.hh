@@ -779,7 +779,7 @@ class pr::client::Group : public Widget
 
     /// Animation that handles a card being removed.
     class InterpolateGroupPositions final : public Animation {
-        static constexpr auto Duration = 750ms;
+        static constexpr auto Duration = 500ms;
         struct Token {};
         friend Group;
         Group& g;

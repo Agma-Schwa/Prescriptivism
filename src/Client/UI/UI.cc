@@ -306,8 +306,13 @@ void Group::InterpolateGroupPositions::on_done() {
 }
 
 void Group::InterpolateGroupPositions::tick() {
-    /// Another widget was added or removed.
+    // Another widget was added or removed.
     if (g.needs_refresh) {
+        // Refresh the group in case a derived class needs to set
+        // any properties on the widget that was just added (e.g.
+        // the scale in case of a card stack).
+        g.refresh(g.parent_screen().renderer, true);
+
         // Add the start positions of elements that were added.
         for (auto& w : g.widgets)
             if (not positions.contains(&w))

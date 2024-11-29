@@ -582,8 +582,11 @@ auto CardStacks::add_stack() -> Stack& {
 
 void CardStacks::add_stack(CardId c) {
     auto& card = add_stack().create<Card>(Position());
-    card.parent.as<Widget>().pos.yadjust = 600; // FIXME: DEBUGGING; REMOVE
     card.id = c;
+
+    // TODO: This starting position is currently arbitrary; actually make
+    // it so this lines up w/ the deck if we’re drawing a card and so on.
+    card.parent.as<Widget>().pos.yadjust = 600;
 }
 
 auto CardStacks::selected_child(xy rel_pos) -> SelectResult {
