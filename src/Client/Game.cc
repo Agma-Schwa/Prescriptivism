@@ -679,23 +679,25 @@ void GameScreen::enter(sc::StartGame sg) {
     // above everything else.
     preview = &Create<CardPreview>();
 
-    // Finally, ‘end’ our turn to reset everything.
-    EndTurn();
-    client.set_screen(*this);
-}
-
-void GameScreen::on_refresh(Renderer& r) {
     // Put our hand at the bottom, with the cards slightly out of the screen.
     our_hand->pos = Position::HCenter(50).anchor_to(Anchor::Center);
 
     // Put our word in the center, but offset it upward to counteract the anchor,
     // which is there because we want additional cards to ‘hang’ from the top of
     // the word (i.e. cards added to a stack should go below the ‘baseline’).
-    us.word->pos = Position::HCenter(r.size().ht / 2 + Card::CardSize[us.word->scale].wd).anchor_to(Anchor::North);
+    us.word->pos = Position::HCenter(client.renderer.size().ht / 2 + Card::CardSize[us.word->scale].wd)
+        .anchor_to(Anchor::North);
 
     // Position the other players’ words at the top of the screen.
     other_words->pos = Position::HCenter(-100);
     other_words->gap = 100;
+
+    // Finally, ‘end’ our turn to reset everything.
+    EndTurn();
+    client.set_screen(*this);
+}
+
+void GameScreen::on_refresh(Renderer& r) {
 }
 
 void GameScreen::tick(InputSystem& input) {

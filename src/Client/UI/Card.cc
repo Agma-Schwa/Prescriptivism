@@ -582,6 +582,7 @@ auto CardStacks::add_stack() -> Stack& {
 
 void CardStacks::add_stack(CardId c) {
     auto& card = add_stack().create<Card>(Position());
+    card.parent.as<Widget>().pos.yadjust = 600; // FIXME: DEBUGGING; REMOVE
     card.id = c;
 }
 
@@ -602,24 +603,29 @@ void CardStacks::refresh(Renderer& r, bool full) {
     auto ch = stacks();
     if (ch.empty()) return;
 
-    // See Group::refresh().
-    SetBoundingBox(parent.bounding_box);
-
     // If we’re allowed to scale up, determine the maximum scale that works.
-    Scale s;
-    i32 width = max_width != 0 ? max_width : bounding_box.size().wd;
     if (autoscale) {
-        s = Scale(Scale::NumScales - 1);
+        // See Group::refresh().
+        SetBoundingBox(parent.bounding_box);
+
+        // If we’re allowed to scale up, determine the maximum scale that works.
+        i32 width = max_width != 0 ? max_width : bounding_box.size().wd;
+        auto s = Scale(Scale::NumScales - 1);
         while (s != scale) {
             auto wd = i32(ch.size() * Card::CardSize[s].wd + (ch.size() - 1) * CardGaps[s]);
             if (wd < width) break;
             s = Scale(s - 1);
         }
-    } else {
-        s = scale;
+
+        for (auto& c : ch) c.scale = s;
     }
 
-    for (auto& c : ch) c.scale = s;
+    // Otherwise, set the scale if this is a full refresh.
+    else if (full) {
+        for (auto& c : ch) c.scale = scale;
+    }
+
+    // And refresh the group.
     Group::refresh(r, full);
 }
 

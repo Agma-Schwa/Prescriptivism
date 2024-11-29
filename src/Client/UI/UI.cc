@@ -287,7 +287,7 @@ Group::InterpolateGroupPositions::InterpolateGroupPositions(Group& g, Token)
     prevent_user_input = true;
 
     // Save the current positions.
-    for (auto& w : g.visible_elements()) positions[&w].start = w.pos;
+    for (auto& w : g.widgets) positions[&w].start = w.pos;
 
     // Compute where everything should be and save those positions too.
     ComputeEndPositions();
@@ -296,7 +296,8 @@ Group::InterpolateGroupPositions::InterpolateGroupPositions(Group& g, Token)
 
 void Group::InterpolateGroupPositions::ComputeEndPositions() {
     g.ComputeDefaultLayout(g.parent_screen().renderer);
-    for (auto& w : g.visible_elements()) positions[&w].end = w.pos;
+    for (auto& w : g.widgets) positions[&w].end = w.pos;
+    g.FinishLayout(g.parent_screen().renderer); // Recompute BB.
 }
 
 void Group::InterpolateGroupPositions::on_done() {
@@ -308,7 +309,7 @@ void Group::InterpolateGroupPositions::tick() {
     /// Another widget was added or removed.
     if (g.needs_refresh) {
         // Add the start positions of elements that were added.
-        for (auto& w : g.visible_elements())
+        for (auto& w : g.widgets)
             if (not positions.contains(&w))
                 positions[&w].start = w.pos;
 
@@ -318,14 +319,14 @@ void Group::InterpolateGroupPositions::tick() {
 
     // Interpolate the elements’ positions.
     auto t = timer.dt();
-    for (auto& w : g.visible_elements()) {
+    for (auto& w : g.widgets) {
         auto pos = positions.get(&w);
         if (not pos) continue;
         w.pos = lerp_smooth(pos->start, pos->end, t);
     }
 
-    // Recompute our bounding box and refresh them.
-    g.FinishLayout(g.parent_screen().renderer);
+    // Refresh our children.
+    for (auto& c : g.widgets) g.RefreshElement(g.parent_screen().renderer, c);
 }
 
 void Group::ComputeDefaultLayout(Renderer& r) {
@@ -373,6 +374,9 @@ void Group::ComputeDefaultLayout(Renderer& r) {
 
 void Group::FinishLayout(Renderer& r) {
     Assert(not widgets.empty());
+
+    // Refresh the children once so the extent calculations below are correct.
+    for (auto& c : widgets) RefreshElement(r, c);
 
     // Compute the combined extent along the layout axis.
     i32 extent{};
@@ -430,6 +434,10 @@ void Group::OnRemove() {
 void Group::RecomputeLayout(Renderer& r) {
     ComputeDefaultLayout(r);
     FinishLayout(r);
+
+    // Refreshing this group’s elements might have triggered the refresh
+    // flag. Do not refresh again after we’re done here.
+    needs_refresh = false;
 }
 
 void Group::clear() {
