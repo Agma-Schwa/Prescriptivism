@@ -53,6 +53,15 @@ auto Position::resolve(Size parent_size, Size object_size) -> xy {
     return {x, y};
 }
 
+auto client::lerp_smooth(Position a, Position b, f32 t) -> Position {
+    Position pos = a;
+    if (pos.base.x != Position::Centered) pos.base.x = lerp_smooth(a.base.x, b.base.x, t);
+    if (pos.base.y != Position::Centered) pos.base.y = lerp_smooth(a.base.y, b.base.y, t);
+    pos.xadjust = lerp_smooth(a.xadjust, b.xadjust, t);
+    pos.yadjust = lerp_smooth(a.yadjust, b.yadjust, t);
+    return pos;
+}
+
 // =============================================================================
 //  Element
 // =============================================================================
@@ -171,7 +180,6 @@ void WidgetHolder::DrawVisibleElements(Renderer& r) {
     for (auto& e : visible_elements()) e.draw(r);
 }
 
-
 void WidgetHolder::RefreshElement(Renderer& r, Widget& w) {
     // Always clear out the refresh flag before refreshing the element
     // since it may decide to set it back to true immediately.
@@ -266,48 +274,20 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture);
 // =============================================================================
 //  Group
 // =============================================================================
-auto Group::HoverSelectHelper(
-    xy rel_pos,
-    auto (Widget::* accessor)(xy)->SelectResult,
-    Selectable Widget::* property
-) -> SelectResult {
-    auto Get = [&]<typename T>(T&& range) -> SelectResult {
-        auto rel = rel_pos - bounding_box.origin();
-        for (auto& c : std::forward<T>(range)) {
-            if (c.bounding_box.contains(rel)) {
-                auto res = (c.*accessor)(rel);
-                if (not res.keep_searching) return res;
-            }
-        }
-
-        // The group itself is a proxy widget that cannot be hovered.
-        return SelectResult::No(this->*property);
-    };
-
-    // If two children overlap, we pick the first in the list, unless
-    // the maximum gap is negative (which means that the widgets may
-    // overlap with widgets on the right being above), in which case
-    // we pick the last one.
-    return gap < 0 ? Get(children() | vws::reverse) : Get(children());
+void Group::CalcStartPositions() {
+    animation.state = Animation::State::Started;
+    animation.data.clear();
+    for (auto& w : widgets) animation.data[&w].start = w.pos;
 }
 
-void Group::clear() {
-    for (auto& w : widgets) w.unselect();
-    widgets.clear();
+void Group::CalcEndPositions(Renderer& r) {
+    animation.timer.restart();
+    animation.state = Animation::State::Running;
+    ComputeDefaultLayout(r);
+    for (auto& w : widgets) animation.data[&w].end = w.pos;
 }
 
-void Group::draw(Renderer& r) {
-    auto _ = PushTransform(r);
-    DrawVisibleElements(r);
-}
-
-auto Group::hovered_child(xy rel_pos) -> SelectResult {
-    return HoverSelectHelper(rel_pos, &Widget::hovered_child, &Widget::hoverable);
-}
-
-void Group::refresh(Renderer& r, bool full) {
-    if (widgets.empty()) return;
-
+void Group::ComputeDefaultLayout(Renderer& r) {
     // Reset our bounding box to our parent’s before refreshing the
     // children; otherwise, nested groups can get stuck at a smaller
     // size: the child group will base its width around the parent’s
@@ -348,18 +328,124 @@ void Group::refresh(Renderer& r, bool full) {
         c.pos = Position(flip(a), alignment, offset);
         offset += c.bounding_box.extent(a) + g;
     }
+}
+
+void Group::FinishLayout(Renderer& r) {
+    Assert(not widgets.empty());
+
+    // Compute the combined extent along the layout axis.
+    i32 extent{};
+    Axis a = vertical ? Axis::Y : Axis::X;
+    if (widgets.size() == 1) {
+        extent = widgets.front().bounding_box.size().extent(a);
+    } else {
+        auto front_bb = widgets.front().bounding_box;
+        auto back_bb = widgets.back().bounding_box;
+        extent = back_bb.origin().extent(a) + back_bb.extent(a) - front_bb.origin().extent(a);
+    }
+
+    // Compute the maximum extent along the secondary axis.
+    auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w.bounding_box.extent(flip(a)); }));
 
     // Update our bounding box.
-    auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w.bounding_box.extent(flip(a)); }));
-    auto sz = Size{a, offset - g, max};
+    auto sz = Size{a, extent, max};
     UpdateBoundingBox(sz);
 
     // And refresh the children again now that we know where everything is.
     for (auto& c : widgets) RefreshElement(r, c);
 }
 
+auto Group::HoverSelectHelper(
+    xy rel_pos,
+    auto (Widget::*accessor)(xy)->SelectResult,
+    Selectable Widget::* property
+) -> SelectResult {
+    auto Get = [&]<typename T>(T&& range) -> SelectResult {
+        auto rel = rel_pos - bounding_box.origin();
+        for (auto& c : std::forward<T>(range)) {
+            if (c.bounding_box.contains(rel)) {
+                auto res = (c.*accessor)(rel);
+                if (not res.keep_searching) return res;
+            }
+        }
+
+        // The group itself is a proxy widget that cannot be hovered.
+        return SelectResult::No(this->*property);
+    };
+
+    // If two children overlap, we pick the first in the list, unless
+    // the maximum gap is negative (which means that the widgets may
+    // overlap with widgets on the right being above), in which case
+    // we pick the last one.
+    return gap < 0 ? Get(children() | vws::reverse) : Get(children());
+}
+
+void Group::RecomputeLayout(Renderer& r) {
+    ComputeDefaultLayout(r);
+    FinishLayout(r);
+}
+
+void Group::clear() {
+    for (auto& w : widgets) w.unselect();
+    widgets.clear();
+}
+
+void Group::draw(Renderer& r) {
+    auto _ = PushTransform(r);
+    DrawVisibleElements(r);
+}
+
+auto Group::hovered_child(xy rel_pos) -> SelectResult {
+    return HoverSelectHelper(rel_pos, &Widget::hovered_child, &Widget::hoverable);
+}
+
+void Group::refresh(Renderer& r, bool full) {
+    if (widgets.empty()) return;
+
+    // We’re in an animation.
+    if (animate and animation.state != Animation::State::None) {
+        // We need to keep refreshing the group for this.
+        // TODO: Tick the group instead.
+        needs_refresh = true;
+
+        // Calculate end positions if we haven’t already. This also starts
+        // the animation timer.
+        if (animation.state == Animation::State::Started) CalcEndPositions(r);
+
+        // End the animation if it’s been running for too long.
+        if (animation.timer.expired()) {
+            animation.state = Animation::State::None;
+            animate = false;
+            RecomputeLayout(r);
+            return;
+        }
+
+        // Interpolate between start and end positions.
+        auto t = animation.timer.dt();
+        for (auto& w : visible_elements()) {
+            auto data = animation.data.get(&w);
+            if (not data) continue;
+            w.pos = lerp_smooth(data->start, data->end, t);
+        }
+
+        FinishLayout(r);
+    } else {
+        RecomputeLayout(r);
+    }
+}
+
 auto Group::selected_child(xy rel_pos) -> SelectResult {
     return HoverSelectHelper(rel_pos, &Widget::selected_child, &Widget::selectable);
+}
+
+void Group::remove(u32 idx) {
+    if (animate) CalcStartPositions();
+    WidgetHolder::remove(idx);
+}
+
+void Group::remove(Widget& s) {
+    if (animate) CalcStartPositions();
+    WidgetHolder::remove(s);
 }
 
 void Group::swap(Widget* a, Widget* b) {

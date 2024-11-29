@@ -204,7 +204,7 @@ public:
 
 private:
     void Tick() {
-        auto t = dt();
+        auto t = timer.dt();
         c1pos = lerp_smooth(c1orig, c2orig, t);
         c2pos = lerp_smooth(c2orig, c1orig, t);
     }

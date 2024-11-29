@@ -216,6 +216,7 @@ struct pr::client::xy {
     constexpr xy(f64 x, f64 y) : x(i32(x)), y(i32(y)) {}
     constexpr xy(Size sz) : x(sz.wd), y(sz.ht) {}
 
+    constexpr auto extent(Axis a) const -> i32 { return a == Axis::X ? x : y; }
     constexpr auto vec() const -> vec2 { return {f32(x), f32(y)}; }
 
 private:
@@ -287,7 +288,7 @@ template <typename T>
 auto pr::client::lerp_smooth(T a, T b, base::f32 t) -> T {
     t = std::clamp(t, 0.f, 1.f);
     t = t * t * (3 - 2 * t);
-    return a * (1 - t) + b * t;
+    return T(a * (1 - t) + b * t);
 }
 
 template <>

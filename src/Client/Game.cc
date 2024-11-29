@@ -88,6 +88,7 @@ public:
     explicit PlayCard(GameScreen& g, Card& c) : Animation(&PlayCard::Tick, TotalDuration), g{g} {
         g.ClearSelection(State::PlayedCard);
         g.our_hand->make_selectable(false);
+        c.visible = false;
         card.id = c.id;
         card.scale = Card::Preview;
         card.refresh(g.client.renderer, true);
@@ -99,7 +100,7 @@ public:
     }
 
     void Tick() {
-        auto t = dt(MoveDuration);
+        auto t = timer.dt(MoveDuration);
         pos = lerp_smooth(start_pos, end_pos, t);
         scale = lerp_smooth(StartSize.ht / f32(EndSize.ht), 1.f, t);
     }
@@ -507,12 +508,7 @@ void GameScreen::PlayCardWithoutTarget() {
     Assert(our_selected_card, "No card selected?");
     auto [stack, idx] = GetStackInHand(*our_selected_card);
     client.server_connexion.send(cs::PlayNoTarget{idx});
-    QueuePlayCard(*our_selected_card);
-}
-
-void GameScreen::QueuePlayCard(Card& c) {
-    Queue<RemoveGroupElement>(client.renderer, c.parent.as<CardStacks::Stack>());
-    Queue<PlayCard>(c);
+    Queue<PlayCard>(*our_selected_card);
 }
 
 void GameScreen::TickNoSelection() {
@@ -590,7 +586,7 @@ void GameScreen::TickPlayerTarget() {
         case CardIdValue::P_Superstratum: {
             auto [stack, idx] = GetStackInHand(*our_selected_card);
             client.server_connexion.send(cs::PlayPlayerTarget{idx, p.id});
-            QueuePlayCard(*our_selected_card);
+            Queue<PlayCard>(*our_selected_card);
         } break;
     }
 }
@@ -614,7 +610,7 @@ void GameScreen::TickSingleTarget() {
             selected_card_index.value(),
         });
 
-        QueuePlayCard(*our_selected_card);
+        Queue<PlayCard>(*our_selected_card);
     };
 
     // We selected a different card in hand.
@@ -655,6 +651,7 @@ void GameScreen::enter(sc::StartGame sg) {
             our_hand->scale = Card::Hand;
             our_hand->gap = -Card::CardSize[Card::Hand].wd / 2;
             our_hand->selection_mode = CardStacks::SelectionMode::Card;
+            our_hand->animate = true;
             us.word->alignment = -5;
             continue;
         }

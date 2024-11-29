@@ -212,7 +212,6 @@ private:
     auto PlayerById(PlayerId id) -> Player&;
     auto PlayerForCardInWord(Card* c) -> Player*; /// Return the player that owns this card in their word.
     void PlayCardWithoutTarget();
-    void QueuePlayCard(Card& c);
     void ResetHand();
     void ResetWords(Selectable s = Selectable::No, Card::Overlay o = Card::Overlay::Default);
     auto SelectedPlayer() -> Player&;

@@ -101,10 +101,13 @@ struct pr::client::Size {
         : wd(a == Axis::X ? axis_value : other),
           ht(a == Axis::Y ? axis_value : other) {}
 
-    // Compute the area of this size.
+    /// Compute the area of this size.
     constexpr auto area() const -> i32 { return wd * ht; }
 
-    // Get this as a vector.
+    /// Get the extent along an axis.
+    constexpr auto extent(Axis a) const -> i32 { return a == Axis::X ? wd : ht; }
+
+    /// Get this as a vector.
     constexpr auto vec() const -> vec2 { return {wd, ht}; }
 
 private:

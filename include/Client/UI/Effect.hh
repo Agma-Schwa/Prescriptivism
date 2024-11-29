@@ -120,33 +120,19 @@ public:
 
 /// An effect that also requires drawing something on the screen.
 class pr::client::Animation : public Effect {
-    chr::milliseconds duration;
-    chr::steady_clock::time_point start;
-
 protected:
+    Timer timer;
+
     Animation(Coroutine ticker, chr::milliseconds duration)
-        : Effect{MakeTicker(std::move(ticker))}, duration{duration} {
-        start = chr::steady_clock::now();
-    }
+        : Effect{MakeTicker(std::move(ticker))}, timer{duration} {}
 
     template <std::derived_from<Animation> T>
     Animation(void (T::*f)(), chr::milliseconds duration)
-        : Animation{Animation::InfiniteLoop(this, f), duration} {}
+        : Effect{MakeTicker(InfiniteLoop(this, f))}, timer{duration} {}
 
 public:
     /// Render the animation.
     virtual void draw(Renderer&) {}
-
-    /// Get the elapsed time normalised between 0 and 1.
-    [[nodiscard]] auto dt() const -> f32 { return dt(duration); }
-    [[nodiscard]] auto dt(chr::milliseconds duration) const -> f32 {
-        return f32(elapsed().count()) / duration.count();
-    }
-
-    /// Get the time that has elapsed since the animation started.
-    [[nodiscard]] auto elapsed() const -> chr::milliseconds {
-        return chr::duration_cast<chr::milliseconds>(chr::steady_clock::now() - start);
-    }
 
 private:
     /// This is static because it, unlike MakeTicker(), is called before the Animation
@@ -162,7 +148,7 @@ private:
     }
 
     auto MakeTicker(Coroutine c) -> Coroutine {
-        while (elapsed() <= duration) {
+        while (not timer.expired()) {
             if (not c.done()) c();
             co_yield {};
         }

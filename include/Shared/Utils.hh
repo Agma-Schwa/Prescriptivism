@@ -45,6 +45,35 @@ struct SilenceLog {
     ~SilenceLog();
 };
 
+class Timer {
+    Readonly(chr::milliseconds, duration);
+    Readonly(chr::steady_clock::time_point, start);
+
+public:
+    /// Create a new timer with the given duration and start it.
+    explicit Timer(chr::milliseconds duration)
+        : _duration(duration), _start(chr::steady_clock::now()) {}
+
+    /// Get the elapsed time normalised between 0 and 1.
+    [[nodiscard]] auto dt() const -> f32 { return dt(duration); }
+    [[nodiscard]] auto dt(chr::milliseconds duration) const -> f32 {
+        return f32(elapsed().count()) / duration.count();
+    }
+
+    /// Get the time that has elapsed since the animation started.
+    [[nodiscard]] auto elapsed() const -> chr::milliseconds {
+        return chr::duration_cast<chr::milliseconds>(chr::steady_clock::now() - start);
+    }
+
+    /// Check if the timer has expired.
+    [[nodiscard]] auto expired() const -> bool {
+        return elapsed() >= duration;
+    }
+
+    /// Restart the timer.
+    void restart() { _start = chr::steady_clock::now(); }
+};
+
 template <typename... Args>
 void Log(std::format_string<Args...> fmt, Args&&... args);
 } // namespace pr

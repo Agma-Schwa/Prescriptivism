@@ -63,6 +63,15 @@ enum class Selectable : u8;
 using Hoverable = Selectable;
 
 void InitialiseUI(Renderer& r);
+
+/// Interpolate between two positions.
+///
+/// If either dimension is set to centered for both positions,
+/// the result will also be centered.
+///
+/// If a dimension is only centered in one of the two positions,
+/// the result is unspecified.
+auto lerp_smooth(Position a, Position b, f32 t) -> Position;
 } // namespace pr::client
 
 namespace pr::client {
@@ -113,7 +122,7 @@ struct pr::client::SelectResult {
 
 private:
     /// Should we keep searching for widgets to hover over or select?
-    ComputedProperty(bool, keep_searching, not widget and transparent);
+    ComputedReadonly(bool, keep_searching, not widget and transparent);
 
     SelectResult(Widget* w, bool t) : widget(w), transparent(t) {}
 
@@ -368,6 +377,12 @@ public:
         return widgets | vws::transform(&Widget::as<CastTo>);
     }
 
+    /// Get all visible elements.
+    auto visible_elements() {
+        return widgets | vws::filter([](auto& e) { return e.visible; });
+    }
+
+protected:
     /// Get a widget by index.
     auto index_of(Widget& c) -> std::optional<usz>;
 
@@ -375,12 +390,6 @@ public:
     void remove(Widget& w);
     void remove(usz idx);
 
-    /// Get all visible elements.
-    auto visible_elements() {
-        return widgets | vws::filter([](auto& e) { return e.visible; });
-    }
-
-protected:
     /// Draw all elements that are actually visible.
     void DrawVisibleElements(Renderer& r);
 
@@ -762,7 +771,37 @@ class pr::client::Group : public Widget
     /// are centered on the axis on which they are laid out.
     Property(i32, alignment, Position::Centered);
 
+    /// Animation that handles a card being removed.
+    /// TODO: Refactor to coroutine and block on it.
+    struct Animation {
+        static constexpr auto Duration = 250ms;
+
+        /// The current state of the animation.
+        enum struct State {
+            None, ///< Animation is not running.
+            Started, ///< Animation just started.
+            Running,
+        } state = State::None;
+
+        /// The timer that controls the animation.
+        Timer timer{Duration};
+
+        /// Interpolation data for the child positions.
+        struct InterpData {
+            Position start;
+            Position end;
+        };
+
+        HashMap<Widget*, InterpData> data;
+    };
+
+    Animation animation;
+
 public:
+    /// Whether this group should animate elements being added or removed.
+    bool animate = false;
+
+    /// Create a new empty group.
     Group(Element* parent, Position pos) : Widget(parent, pos) {}
 
     /// Create an element with this as its parent.
@@ -784,6 +823,10 @@ public:
         make_selectable(selectable ? Selectable::Yes : Selectable::No);
     }
 
+    /// Remove a widget from the group.
+    void remove(Widget& s);
+    void remove(u32 idx);
+
     /// Swap two elements of the group.
     void swap(Widget* a, Widget* b);
 
@@ -793,11 +836,16 @@ public:
     auto selected_child(xy rel_pos) -> SelectResult override;
 
 private:
+    void CalcStartPositions();
+    void CalcEndPositions(Renderer& r);
+    void ComputeDefaultLayout(Renderer& r);
+    void FinishLayout(Renderer& r);
     auto HoverSelectHelper(
         xy rel_pos,
         auto (Widget::*accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
+    void RecomputeLayout(Renderer& r);
 };
 
 /// A group of widgets, each of which are a stack of cards
