@@ -56,6 +56,8 @@ class Group;
 class Player;
 class Arrow;
 
+class RemoveGroupElement;
+
 enum class Anchor : u8;
 enum class Selectable : u8;
 using Hoverable = Selectable;
@@ -254,6 +256,7 @@ class pr::client::Widget : public Element {
 
     friend Element;
     friend Screen;
+    friend RemoveGroupElement;
 
     Readonly(Element&, parent);
     Property(bool, needs_refresh, true);
@@ -376,6 +379,13 @@ public:
     auto visible_elements() {
         return widgets | vws::filter([](auto& e) { return e.visible; });
     }
+
+protected:
+    /// Draw all elements that are actually visible.
+    void DrawVisibleElements(Renderer& r);
+
+    /// Refresh a child element.
+    void RefreshElement(Renderer& r, Widget& w);
 };
 
 /// A screen that displays elements and controls user
@@ -415,7 +425,12 @@ public:
     /// Queue a new effect.
     template <std::derived_from<Effect> EffectTy, typename... Args>
     void Queue(this auto& Self, Args&&... args) {
-        Self.QueueImpl(std::make_unique<EffectTy>(Self, std::forward<Args>(args)...), false);
+        // Pass us as the first parameter if the constructor accepts a screen.
+        if constexpr (requires { EffectTy(Self, std::forward<Args>(args)...); }) {
+            Self.QueueImpl(std::make_unique<EffectTy>(Self, std::forward<Args>(args)...), false);
+        } else {
+            Self.QueueImpl(std::make_unique<EffectTy>(std::forward<Args>(args)...), false);
+        }
     }
 
     /// Queue a new callable.

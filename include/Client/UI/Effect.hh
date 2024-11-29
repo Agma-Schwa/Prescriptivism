@@ -135,7 +135,7 @@ protected:
 
 public:
     /// Render the animation.
-    virtual void draw(Renderer& r) = 0;
+    virtual void draw(Renderer&) {}
 
     /// Get the elapsed time normalised between 0 and 1.
     [[nodiscard]] auto dt() const -> f32 { return dt(duration); }

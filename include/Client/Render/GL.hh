@@ -109,6 +109,10 @@ struct pr::client::Size {
 
 private:
     friend constexpr bool operator==(Size, Size) = default;
+    friend constexpr auto operator+(Size a, Size b) -> Size {
+        return Size(a.wd + b.wd, a.ht + b.ht);
+    }
+
     friend constexpr auto operator*(Size sz, f32 scale) -> Size {
         return Size(sz.wd * scale, sz.ht * scale);
     }

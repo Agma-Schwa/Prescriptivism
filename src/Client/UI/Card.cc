@@ -459,7 +459,6 @@ void Card::refresh(Renderer& r, bool full) {
     middle.refresh(r, full);
     description.refresh(r, full);
     image.refresh(r, full);
-
 }
 
 void Card::set_id(CardId ct) {
