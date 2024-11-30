@@ -22,7 +22,7 @@ namespace cs = packets::cs;
 // ============================================================================
 using enum DisconnectReason;
 namespace {
-constexpr usz PlayersNeeded = pr::constants::PlayersPerGame;
+constexpr usz PlayersNeeded = constants::PlayersPerGame;
 constexpr usz HandSize = 7;
 constexpr u32 PacketsPerTick = 10;
 constexpr u32 MaxReceiveBufferSize = 40 * 1'024;
@@ -67,10 +67,12 @@ void Player::clear_active_challenge() {
 
 void Player::send_active_challenge() {
     if (challenges.empty()) return;
-    challenges.front().visit(utils::Overloaded{
-        [&](const challenge::CardChoice& c) { send(sc::CardChoice(c.data)); },
-        [&](challenge::NegatePowerCard n) { send(sc::PromptNegation{n.id}); }
-    });
+    challenges.front().visit(utils::Overloaded{[&](const challenge::CardChoice& c) { send(sc::CardChoice(c.data)); }, [&](challenge::NegatePowerCard n) { send(sc::PromptNegation{n.id}); }});
+}
+
+void Player::set_connexion(net::TCPConnexion new_value) {
+    _connexion = std::move(new_value);
+    _connexion.set(this);
 }
 
 // =============================================================================
@@ -133,7 +135,7 @@ bool Server::accept(net::TCPConnexion& connexion) {
     // Make sure we’re not full yet.
     auto connected_players = rgs::distance(players | vws::filter(&Player::get_connected));
     if (connected_players + pending_connexions.size() == PlayersNeeded) {
-        connexion.send(packets::sc::Disconnect{ServerFull});
+        connexion.send(sc::Disconnect{ServerFull});
         return false;
     }
 
@@ -220,44 +222,38 @@ void Server::handle(net::TCPConnexion& client, cs::Login login) {
     if (login.password != password) return Kick(client, WrongPassword);
 
     // Try to match this connexion to an existing player.
-    for (auto& p : players) {
-        if (p.name == login.name) {
-            // Someone is trying to connect to a player that is
-            // already connected.
-            if (p.connected) {
-                Log("{} is already connected", login.name);
-                return Kick(client, UsernameInUse);
-            }
-
-            Log("Player {} logging back in", login.name);
-            p.client_connexion = client;
-            client.set(&p);
-
-            // Get the player up to date with the current game state.
-            switch (state) {
-                case State::WaitingForPlayerRegistration: break;
-                case State::WaitingForWords:
-                    if (not p.submitted_word) p.send(sc::WordChoice{p.word.ids()});
-                    break;
-
-                case State::Running:
-                    SendGameState(p);
-                    if (current_player == p.id) {
-                        p.send(sc::StartTurn{});
-                        p.send_active_challenge();
-                    }
-                    break;
-            }
-            return;
-        }
-    }
+    auto existing = rgs::find(players, login.name, &Player::name);
 
     // Create a new player. This is also the only place where we can
     // reach the player limit for the first time, so perform game
     // initialisation here if we have enough players.
-    players.push_back(std::make_unique<Player>(client, std::move(login.name)));
-    client.set(&players.back());
-    if (players.size() == PlayersNeeded) SetUpGame();
+    if (existing == players.end()) {
+        players.push_back(std::make_unique<Player>(std::move(client), std::move(login.name)));
+        if (players.size() == PlayersNeeded) SetUpGame();
+        return;
+    }
+
+    // If someone is already connected to this player, then we
+    // can’t connect to it again.
+    auto& p = *existing;
+    if (p.connected) return Kick(client, UsernameInUse);
+    p.connexion = std::move(client);
+
+    // Get the player up to date with the current game state.
+    switch (state) {
+        case State::WaitingForPlayerRegistration: break;
+        case State::WaitingForWords:
+            if (not p.submitted_word) p.send(sc::WordChoice{p.word.ids()});
+            break;
+
+        case State::Running:
+            SendGameState(p);
+            if (current_player == p.id) {
+                p.send(sc::StartTurn{});
+                p.send_active_challenge();
+            }
+            break;
+    }
 }
 
 // =============================================================================
@@ -336,7 +332,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlayPlayerTarget packet) {
             if (p == target_player) return Kick(client, InvalidPacket);
 
             // Show the target player’s hand to the player.
-            p->add_challenge(challenge::CardChoice{
+            p->add_challenge(challenge::CardChoice{// clang-format off
                 .target_player = target_player->id,
                 .data = {
                     .title = std::format("from {}’s hand", target_player->name),
@@ -344,7 +340,7 @@ void Server::handle(net::TCPConnexion& client, cs::PlayPlayerTarget packet) {
                     .count = 1,
                     .mode = packets::CardChoiceChallenge::Mode::AtMost,
                 }
-            });
+            }); // clang-format on
         } break;
     }
 
@@ -678,8 +674,8 @@ void Server::SetUpGame() {
 
         // FIXME: TESTING ONLY. REMOVE THIS LATER: Hallucinate whatever
         // power card we’re currently testing into the player’s hand.
-        /*p.hand.emplace_back(CardId::P_Babel);
-        p.hand.emplace_back(CardId::P_Negation);*/
+        p.hand.emplace_back(CardId::P_Superstratum);
+        p.hand.emplace_back(CardId::P_Negation);
     }
     rgs::shuffle(players.elements(), rng);
 

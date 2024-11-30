@@ -343,10 +343,7 @@ void GameScreen::ResetWords(
 auto GameScreen::SelectedPlayer() -> Player& {
     Assert(selected_element, "No element selected");
     auto& l = selected_element->as<Label>();
-    for (auto& p : other_players)
-        if (p.name_widget == &l)
-            return p;
-    Unreachable();
+    return *rgs::find(other_players, &l, &Player::name_widget);
 }
 
 void GameScreen::SetPlayerNamesSelectable(Selectable s) {

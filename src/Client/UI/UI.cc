@@ -94,16 +94,9 @@ Widget::Widget(Element* parent, Position pos) : _parent(parent), pos(pos) {
 }
 
 auto Widget::absolute_position() -> xy {
-    auto p = scaled_bounding_box.origin();
-    auto e = &parent;
-    for (;;) {
-        if (auto w = e->cast<Widget>()) {
-            p += w->scaled_bounding_box.origin();
-            e = &w->parent;
-        } else {
-            return p;
-        }
-    }
+    return rgs::fold_left(parents<Widget>(), scaled_bounding_box.origin(), [](auto acc, auto w) {
+        return acc + w->scaled_bounding_box.origin();
+    });
 }
 
 void Widget::draw_absolute(Renderer& r, xy a, f32 scale) {
@@ -112,13 +105,7 @@ void Widget::draw_absolute(Renderer& r, xy a, f32 scale) {
 }
 
 bool Widget::has_parent(Element* other) {
-    auto p = &parent;
-    for (;;) {
-        if (p == other) return true;
-        auto w = p->cast<Widget>();
-        if (not w) return false;
-        p = &w->parent;
-    }
+    return rgs::contains(parents(), other);
 }
 
 auto Widget::hovered_child(xy) -> HoverResult {
@@ -127,11 +114,7 @@ auto Widget::hovered_child(xy) -> HoverResult {
 }
 
 auto Widget::parent_screen() -> Screen& {
-    Element* e = &parent;
-    for (;;) {
-        if (auto screen = e->cast<Screen>()) return *screen;
-        e = &e->as<Widget>().parent;
-    }
+    return utils::last(parents())->as<Screen>();
 }
 
 auto Widget::PushTransform(Renderer& r) -> Renderer::MatrixRAII {

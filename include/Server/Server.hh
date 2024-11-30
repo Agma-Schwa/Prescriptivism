@@ -91,7 +91,13 @@ using Challenge = Variant< // clang-format off
 class pr::server::Player {
     LIBBASE_IMMOVABLE(Player);
 
-    ComputedReadonly(bool, connected, not client_connexion.disconnected);
+    /// The connexion for this player, if there is an established
+    /// one. This may be unset if the player has (temporarily) left
+    /// the game.
+    Property(net::TCPConnexion, connexion);
+
+    /// Whether the player is currently connected.
+    ComputedReadonly(bool, connected, not connexion.disconnected);
     ComputedReadonly(bool, disconnected, not connected);
 
     /// The currently pending challenges for the player, if any.
@@ -106,12 +112,8 @@ class pr::server::Player {
     /// resolved, the next one is sent and so on.
     Queue<challenge::Challenge> challenges;
 
-public:
-    /// The connexion for this player, if there is an established
-    /// one. This may be unset if the player has (temporarily) left
-    /// the game.
-    net::TCPConnexion client_connexion;
 
+public:
     /// The player's name.
     std::string name;
 
@@ -128,9 +130,10 @@ public:
     u8 id{};
 
     /// Create a new player.
-    Player(net::TCPConnexion client_connexion, std::string name)
-        : client_connexion(std::move(client_connexion)),
-          name(std::move(name)) {}
+    Player(net::TCPConnexion conn, std::string name)
+        : name(std::move(name)) {
+        connexion = std::move(conn);
+    }
 
     /// Add a challenge to the player.
     void add_challenge(challenge::Challenge c);
@@ -150,7 +153,7 @@ public:
 
     /// Send a packet to the player.
     template <typename T>
-    void send(const T& t) { client_connexion.send(t); }
+    void send(const T& t) { _connexion.send(t); }
 
     /// Send the active challenge, if any.
     void send_active_challenge();

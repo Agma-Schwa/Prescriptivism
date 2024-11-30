@@ -85,6 +85,24 @@ namespace pr {
 void LogImpl(std::string);
 }
 
+namespace base::utils {
+/// Return the last element in a range; this has undefined behaviour
+/// if the range is empty.
+template <typename Range>
+requires (not std::is_reference_v<rgs::range_value_t<Range>>)
+auto last(Range&& r) -> rgs::range_value_t<Range> {
+    auto t = rgs::begin(r);
+    auto e = rgs::end(r);
+    Assert(t != e, "Cannot get the last element of an empty range!");
+    if constexpr (requires { *rgs::prev(e); }) return *rgs::prev(e);
+    else {
+        auto last = *t;
+        while (++t != e) last = *t;
+        return last;
+    }
+}
+}
+
 template <typename T>
 struct pr::Debug {
     T* value;

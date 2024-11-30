@@ -230,7 +230,7 @@ void WordChoiceScreen::enter(const constants::Word& word) {
     for (auto s : word) cards->add_stack(s);
     cards->make_selectable();
     client.set_screen(*this);
-    //if (client.autoconfirm_word) SendWord();
+    if (client.autoconfirm_word) SendWord();
 }
 
 void WordChoiceScreen::on_refresh(Renderer& r) {

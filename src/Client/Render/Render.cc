@@ -1174,7 +1174,7 @@ void AssetLoader::finalise(Renderer& r) {
 
     // Build font textures.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    for (auto& [_, f] : r.font_data.fonts) {
+    for (auto& f : r.font_data.fonts | vws::values) {
         f._renderer = &r;
         f.atlas_width = Texture::MaxSize();
     }

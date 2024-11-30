@@ -222,6 +222,8 @@ public:
 
 /// The root of the UI element hierarchy.
 class pr::client::Element {
+    LIBBASE_IMMOVABLE(Element);
+
     /// The bounding box of this element, *relative* to its parent.
     Readonly(AABB, bounding_box);
 
@@ -314,6 +316,17 @@ public:
 
     /// Get the widget’s parent screen
     auto parent_screen() -> Screen&;
+
+    /// Iterate over the parents of this widget, bottom to top.
+    template <std::derived_from<Element> Type = Element>
+    auto parents() -> std::generator<Type*> {
+        auto* p = &parent;
+        for (;;) {
+            if (auto el = dynamic_cast<Type*>(p)) co_yield el;
+            if (auto w = p->cast<Widget>()) p = &w->parent;
+            else co_return;
+        }
+    }
 
     /// Set the origin and scale used to draw the children of this widget;
     /// this *must* be called before any children are drawn, otherwise, the
