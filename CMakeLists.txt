@@ -212,6 +212,10 @@ target_compile_definitions(Prescriptivism PRIVATE
     "PRESCRIPTIVISM_DEFAULT_FONT_PATH=\"${PRESCRIPTIVISM_DEFAULT_FONT_PATH}\""
 )
 
+set_target_properties(Prescriptivism PROPERTIES
+    WIN32_EXECUTABLE ON
+)
+
 ## ============================================================================
 ##  Shared Properties
 ## ============================================================================
