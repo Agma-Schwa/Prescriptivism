@@ -187,6 +187,9 @@ struct Style {
     Size gap() { return Size{horizontal.gap, vertical.gap}; }
 
     /// Set the layout to be horizontal, with a gap.
+    ///
+    /// Diagonal layouts can be achieved by setting a non-overlapped
+    /// layout for both axes.
     auto layout_horizontal(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
         horizontal.policy = p;
         horizontal.gap = gap;
@@ -195,6 +198,8 @@ struct Style {
     }
 
     /// Set the layout to be vertical, with a gap.
+    ///
+    /// \see layout_horizontal()
     auto layout_vertical(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
         vertical.policy = p;
         vertical.gap = gap;
