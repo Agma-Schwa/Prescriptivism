@@ -273,7 +273,7 @@ public:
 
     /// Cast this to a certain type, asserting on failure.
     template <std::derived_from<Element> T>
-    auto as() -> T& {
+    [[nodiscard]] auto as() -> T& {
         auto ptr = cast<T>();
         Assert(ptr, "Failed to cast widget to desired type!");
         return *ptr;
@@ -281,11 +281,11 @@ public:
 
     /// Cast this to a certain type, returning nullptr on failure.
     template <std::derived_from<Element> T>
-    auto cast() -> T* { return dynamic_cast<T*>(this); }
+    [[nodiscard]] auto cast() -> T* { return dynamic_cast<T*>(this); }
 
     /// Iterate over the children of this element.
     template <std::derived_from<Element> CastTo = Element>
-    auto children() { return elements | vws::transform(&Element::as<CastTo>); }
+    [[nodiscard]] auto children() { return elements | vws::transform(&Element::as<CastTo>); }
 
     /*
     /// Check whether an element is a parent of this element.
@@ -294,7 +294,7 @@ public:
 
     /// Check if a widget has a certain type.
     template <std::derived_from<Element>... Ts>
-    bool is() { return (dynamic_cast<Ts*>(this) or ...); }
+    [[nodiscard]] bool is() { return (dynamic_cast<Ts*>(this) or ...); }
 
     /*
     /// Check if this widget is currently being hovered over.
@@ -306,7 +306,7 @@ public:
 
     /// Iterate over the parents of this widget, bottom to top.
     template <std::derived_from<Element> Type = Element>
-    auto parents() -> std::generator<Type*> {
+    [[nodiscard]] auto parents() -> std::generator<Type*> {
         for (auto* p = parent; p; p = p->parent)
             if (auto* el = dynamic_cast<Type*>(p))
                 co_yield el;
@@ -317,12 +317,18 @@ public:
     void unselect();*/
 
     /// Get all visible elements.
-    auto visible_elements() {
+    [[nodiscard]] auto visible_elements() {
         return elements | vws::filter([](auto& e) { return e.visible; });
     }
 
     /// Get the element’s z order.
-    auto z_order() const -> i32 { return style.z; }
+    ///
+    /// This only applies to elements in the same group, e.g. if A, B, and
+    /// C have increasing Z orders, and A and B are in the same group, and C
+    /// is a child of A, then C will still be drawn below B—even though it
+    /// has a larger z order—because the z order of its parent A in the same
+    /// group as B is less than B’s z order.
+    [[nodiscard]] auto z_order() const -> i32 { return style.z; }
 
     /// Draw this element.
     virtual void draw(Renderer& r);
