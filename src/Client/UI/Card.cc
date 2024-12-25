@@ -484,11 +484,11 @@ void Card::set_id(CardId ct) {
 
         middle.update_text(std::string{data.center});
         description.update_text( // clang-format off
-            utils::join(data.converts_to | vws::transform([](auto& vec) {
-                return std::format("→ {}", utils::join(vec | vws::transform([](CardId id) {
+            utils::join(data.converts_to, "\n", "{}", [](const auto& vec) {
+                return std::format("→ {}", utils::join(vec, ", ", "{}", [](CardId id) {
                     return CardDatabase[+id].center;
-                }), ", "));
-            }), "\n")
+                }));
+            })
         ); // clang-format on
         description.reflow = Reflow::None;
         name.align = TextAlign::Left;
