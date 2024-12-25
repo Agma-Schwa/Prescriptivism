@@ -190,14 +190,20 @@ public:
 
     constexpr auto vec4() const -> glm::vec4 { return {r, g, b, a}; }
 
-    static constinit const Colour White;
+    [[nodiscard]] friend bool operator==(Colour, Colour) = default;
+
     static constinit const Colour Black;
     static constinit const Colour Grey;
+    static constinit const Colour Red;
+    static constinit const Colour Transparent;
+    static constinit const Colour White;
 };
 
-constexpr pr::client::Colour pr::client::Colour::White = {255, 255, 255, 255};
 constexpr pr::client::Colour pr::client::Colour::Black = {0, 0, 0, 255};
 constexpr pr::client::Colour pr::client::Colour::Grey = {128, 128, 128, 255};
+constexpr pr::client::Colour pr::client::Colour::Red = {200, 80, 80, 255};
+constexpr pr::client::Colour pr::client::Colour::Transparent = {0, 0, 0, 0};
+constexpr pr::client::Colour pr::client::Colour::White = {255, 255, 255, 255};
 
 // XY position that is destructurable.
 //
@@ -219,6 +225,9 @@ struct pr::client::xy {
 
     constexpr auto extent(Axis a) const -> i32 { return a == Axis::X ? x : y; }
     constexpr auto vec() const -> vec2 { return {f32(x), f32(y)}; }
+
+    constexpr auto operator[](Axis a) -> i32& { return a == Axis::X ? x : y; }
+    constexpr auto operator[](Axis a) const -> const i32& { return a == Axis::X ? x : y; }
 
 private:
     friend constexpr bool operator==(xy, xy) = default;

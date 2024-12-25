@@ -111,6 +111,15 @@ struct pr::client::Size {
     /// Get this as a vector.
     constexpr auto vec() const -> vec2 { return {wd, ht}; }
 
+    constexpr auto operator+=(Size other) -> Size& {
+        wd += other.wd;
+        ht += other.ht;
+        return *this;
+    }
+
+    constexpr auto operator[](Axis a) -> i32& { return a == Axis::X ? wd : ht; }
+    constexpr auto operator[](Axis a) const -> const i32& { return a == Axis::X ? wd : ht; }
+
 private:
     friend constexpr bool operator==(Size, Size) = default;
     friend constexpr auto operator+(Size a, Size b) -> Size {

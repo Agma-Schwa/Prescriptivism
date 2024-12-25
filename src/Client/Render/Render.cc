@@ -803,6 +803,7 @@ void Renderer::clear(Colour c) {
 }
 
 void Renderer::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
+    if (c.a8 == 0) return;
     use(primitive_shader, {});
     primitive_shader.uniform("in_colour", c.vec4());
 
@@ -849,6 +850,7 @@ void Renderer::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
 }
 
 void Renderer::draw_line(xy start, xy end, Colour c) {
+    if (c.a8 == 0) return;
     glLineWidth(1);
     use(primitive_shader, {});
     primitive_shader.uniform("in_colour", c.vec4());
@@ -864,6 +866,7 @@ void Renderer::draw_outline_rect(
     Colour c,
     i32 border_radius
 ) {
+    if (c.a8 == 0) return;
     box = box.grow(thickness.wd, thickness.ht);
     auto pos = box.origin();
     auto size = box.size();
@@ -922,6 +925,7 @@ void Renderer::draw_outline_rect(
 }
 
 void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
+    if (c.a8 == 0) return; // Don’t draw transparent rectangles.
     use(rect_shader, pos);
     rect_shader.uniform("in_colour", c.vec4());
     rect_shader.uniform("size", size.vec());
@@ -942,7 +946,7 @@ void Renderer::draw_text(
     xy pos,
     Colour colour
 ) {
-    if (text.empty) return;
+    if (colour.a8 == 0 or text.empty) return;
 
     // Initialise the text shader.
     use(text_shader, pos);

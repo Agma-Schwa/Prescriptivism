@@ -11,6 +11,7 @@
 #include <functional>
 #include <ranges>
 #include <thread>
+#include <Client/UI/UI2.hh>
 
 using namespace pr;
 using namespace pr::client;
@@ -311,7 +312,18 @@ void Client::TickNetworking() {
 // =============================================================================
 //  API
 // =============================================================================
+ui::Screen* TestScreen;
 Client::Client(Renderer r) : renderer(std::move(r)) {
+    // Testing.
+    TestScreen = new ui::Screen(renderer);
+    TestScreen->style.background = Colour::Black;
+    for (int i = 0; i < 10; i++) {
+        auto& el = TestScreen->create<ui::Element>();
+        el.style.background = Colour::Red;
+        el.style.size = {40, 40};
+    }
+
+
     /*
     std::array pi{
         sc::StartGame::PlayerInfo{constants::Word{CardId::C_b, CardId::V_a, CardId::V_e, CardId::C_b, CardId::C_b, CardId::C_b}, "Player"},
@@ -366,7 +378,12 @@ void Client::Tick() {
     // Start a new frame.
     Renderer::Frame _ = renderer.frame();
 
-    // Refresh screen info.
+    // Testing.
+    TestScreen->style.size = renderer.size();
+    TestScreen->refresh();
+    TestScreen->draw();
+
+    /*// Refresh screen info.
     for (auto s : screen_stack) s->refresh(renderer);
 
     // Tick the screen.
@@ -378,7 +395,7 @@ void Client::Tick() {
             s->draw(renderer);
             if (s != screen_stack.back()) renderer.draw_rect(xy{}, renderer.size(), Veil);
         }
-    }
+    }*/
 }
 
 void Client::RunGame() {
