@@ -19,23 +19,37 @@ void Element::BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_extent) {
         return 0;
     };
 
+    // Arrange the widgets in the right order; due to the way coordinates in
+    // opengl work, the default is left to right or bottom to top; we want the
+    // default for the latter to be top to bottom, and we also want to allow the
+    // user to reverse the order.
+    auto LayOutElements = [&](auto layout_func) {
+        bool reverse = l.reverse;
+        if (a == Axis::Y) reverse = not reverse;
+        if (reverse) {
+            for (auto& e : elements | vws::reverse) layout_func(e);
+        } else {
+            for (auto& e : elements) layout_func(e);
+        }
+    };
+
     // Apply the layout policy.
     switch (l.policy) {
         // Pack the elements along the layout axis.
         case Layout::Packed:
         case Layout::PackedCenter: {
             auto pos = ComputeStartingPosition(total_extent);
-            for (auto& e : elements) {
+            LayOutElements([&](auto& e) {
                 e.computed_pos[a] = pos;
                 pos += e.computed_size[a] + l.gap;
-            }
+            });
         } break;
 
         // Put all elements in the same place.
         case Layout::Overlap:
         case Layout::OverlapCenter: {
             auto pos = ComputeStartingPosition(max_extent);
-            for (auto& e : elements) e.computed_pos[a] = pos;
+            LayOutElements([&](auto& e) { e.computed_pos[a] = pos; });
         } break;
     }
 }

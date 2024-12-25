@@ -156,8 +156,17 @@ struct Layout {
     };
 
     using enum Policy;
+
+    /// Layout policy (see above).
     Policy policy = Packed;
+
+    /// Gap between each pair of elements; can be negative to cause
+    /// them to overlap.
     i32 gap = 0;
+
+    /// Lay out elements in reverse order. By default, elements are
+    /// arranged left to right or top to bottom.
+    bool reverse = false;
 
     [[nodiscard]] bool is_centered() const {
         return policy == PackedCenter or policy == OverlapCenter;
