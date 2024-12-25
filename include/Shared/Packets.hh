@@ -3,11 +3,11 @@
 
 #include <Shared/Cards.hh>
 #include <Shared/Constants.hh>
-#include <Shared/Serialisation.hh>
 #include <Shared/TCP.hh>
 #include <Shared/Utils.hh>
 
 #include <base/Base.hh>
+#include <base/Serialisation.hh>
 
 #include <cstring>
 #include <utility>
@@ -81,7 +81,7 @@ private:                       \
 public:                        \
     name
 
-#define Serialisable(...) PR_SERIALISE(id __VA_OPT__(, ) __VA_ARGS__)
+#define Serialisable(...) LIBBASE_SERIALISE(id __VA_OPT__(, ) __VA_ARGS__)
 
 // =============================================================================
 //  Enumerations
@@ -127,7 +127,7 @@ COMMON_PACKETS(X)
 // =============================================================================
 namespace pr::packets {
 struct CardChoiceChallenge {
-    PR_SERIALISE(title, cards, count, mode);
+    LIBBASE_SERIALISE(title, cards, count, mode);
     enum struct Mode {
         Exact,   ///< Choose exactly `count` cards.
         AtMost,  ///< Choose at most (up to and including) `count` cards.
@@ -215,7 +215,7 @@ DefinePacket(Draw) {
 
 DefinePacket(StartGame) {
     struct PlayerInfo {
-        PR_SERIALISE(word, name);
+        LIBBASE_SERIALISE(word, name);
         constants::Word word;
         std::string name;
     };

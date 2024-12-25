@@ -3,10 +3,11 @@
 
 #include <Client/Render/GL.hh>
 
-#include <Shared/Serialisation.hh>
 #include <Shared/Utils.hh>
 
 #include <base/Macros.hh>
+#include <base/Properties.hh>
+#include <base/Serialisation.hh>
 #include <base/Text.hh>
 #include <freetype/freetype.h>
 #include <glm/glm.hpp>
@@ -93,7 +94,7 @@ LIBBASE_DEFINE_FLAG_ENUM(TextStyle);
 }
 
 struct pr::client::Colour {
-    PR_SERIALISE(r8, g8, b8, a8);
+    LIBBASE_SERIALISE(r8, g8, b8, a8);
 
     u8 r8{};
     u8 g8{};
@@ -204,7 +205,7 @@ constexpr pr::client::Colour pr::client::Colour::Grey = {128, 128, 128, 255};
 // I don’t quite like GLM’s API (e.g. the horrible hack wrt how they are
 // made destructurable isn’t necessary if you use properties)...
 struct pr::client::xy {
-    PR_SERIALISE(x, y);
+    LIBBASE_SERIALISE(x, y);
 
     i32 x{};
     i32 y{};
@@ -234,7 +235,7 @@ private:
 
 /// Axis-aligned bounding box.
 struct pr::client::AABB {
-    PR_SERIALISE(min, max);
+    LIBBASE_SERIALISE(min, max);
 
     xy min;
     xy max;
@@ -333,7 +334,7 @@ private:
     using HarfBuzzFontHandle = Handle<hb_font_t*, hb_font_destroy>;
     using HarfBuzzBufferHandle = Handle<hb_buffer_t*, hb_buffer_destroy>;
     struct Metrics {
-        PR_SERIALISE(atlas_index, size, bearing);
+        LIBBASE_SERIALISE(atlas_index, size, bearing);
 
         u32 atlas_index;
         vec2 size;

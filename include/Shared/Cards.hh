@@ -1,8 +1,9 @@
 #ifndef PRESCRIPTIVISM_SHARED_CARDS_HH
 #define PRESCRIPTIVISM_SHARED_CARDS_HH
 
-#include <Shared/Serialisation.hh>
 #include <Shared/Utils.hh>
+
+#include <base/Serialisation.hh>
 
 #include <array>
 #include <ranges>
@@ -108,7 +109,7 @@ enum struct CardType : u8 {
 struct CardId {
     using enum CardIdValue;
 
-    PR_SERIALISE(value);
+    LIBBASE_SERIALISE(value);
     CardIdValue value = $$Count;
 
     constexpr CardId() = default;

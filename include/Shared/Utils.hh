@@ -2,6 +2,7 @@
 #define PRESCRIPTIVISM_SHARED_UTILS_HH
 
 #include <base/Base.hh>
+#include <base/Properties.hh>
 
 #include <chrono>
 #include <cstdarg>
@@ -101,7 +102,7 @@ auto last(Range&& r) -> rgs::range_value_t<Range> {
         return last;
     }
 }
-}
+} // namespace base::utils
 
 template <typename T>
 struct pr::Debug {

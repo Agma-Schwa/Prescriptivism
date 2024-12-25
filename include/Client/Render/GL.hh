@@ -1,11 +1,12 @@
 #ifndef PRESCRIPTIVISM_CLIENT_RENDER_GL_HH
 #define PRESCRIPTIVISM_CLIENT_RENDER_GL_HH
 
-#include <Shared/Serialisation.hh>
 #include <Shared/Utils.hh>
 
 #include <base/Base.hh>
 #include <base/FS.hh>
+#include <base/Properties.hh>
+#include <base/Serialisation.hh>
 #include <glbinding-aux/types_to_string.h>
 #include <glbinding/AbstractFunction.h>
 #include <glbinding/FunctionCall.h>
@@ -60,13 +61,13 @@ struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
     }
 };
 
-template <typename T, std::size_t n>
-struct pr::ser::Serialiser<glm::vec<n, T>> {
-    static void Serialise(Writer& w, const glm::vec<n, T>& vec) {
+template <typename T, std::size_t n, std::endian E>
+struct base::ser::Serialiser<glm::vec<n, T>, E> {
+    static void Serialise(Writer<E>& w, const glm::vec<n, T>& vec) {
         for (int i = 0; i < int(n); ++i) w(vec[i]);
     }
 
-    static void Deserialise(Reader& r, glm::vec<n, T>& vec) {
+    static void Deserialise(Reader<E>& r, glm::vec<n, T>& vec) {
         for (int i = 0; i < int(n); ++i) r(vec[i]);
     }
 };
@@ -87,7 +88,7 @@ constexpr auto pr::client::flip(Axis a) -> Axis {
 }
 
 struct pr::client::Size {
-    PR_SERIALISE(wd, ht);
+    LIBBASE_SERIALISE(wd, ht);
 
     i32 wd{};
     i32 ht{};

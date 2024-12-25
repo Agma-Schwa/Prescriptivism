@@ -1,10 +1,11 @@
 #ifndef PRESCRIPTIVISM_SHARED_TCP_HH
 #define PRESCRIPTIVISM_SHARED_TCP_HH
 
-#include <Shared/Serialisation.hh>
 #include <Shared/Utils.hh>
 
 #include <base/Base.hh>
+#include <base/Properties.hh>
+#include <base/Serialisation.hh>
 
 #include <bit>
 #include <cstring>
@@ -21,6 +22,13 @@ class TCPServer;
 class TCPConnexion;
 class ReceiveBuffer;
 class SendBuffer;
+
+// We use little-endian for serialisation rather than network byte order
+// because this is what most systems we care about use, which means we don’t
+// need to do any conversion on those systems.
+constexpr auto Endianness = std::endian::little;
+using Reader = ser::Reader<Endianness>;
+using Writer = ser::Writer<Endianness>;
 
 constexpr u16 DefaultPort = 33'014;
 } // namespace pr::net
@@ -75,12 +83,12 @@ public:
     template <typename T>
     [[nodiscard]] auto read() -> std::optional<T> {
         static_assert(
-            requires (T t, ser::Reader& r) { r >> t; },
+            requires (T t, Reader& r) { r >> t; },
             "Type must be serialisable"
         );
 
         T res;
-        ser::Reader reader{data};
+        Reader reader{data};
         reader >> res;
         if (not reader) return std::nullopt;
         data = data.subspan(data.size() - reader.size());
@@ -158,8 +166,8 @@ public:
     template <typename T>
     void send(const T& t) {
         // Type requires serialisation.
-        if constexpr (requires (T t, ser::Writer& s) { s << t; }) {
-            send(std::span<const std::byte>{ser::Serialise(t)});
+        if constexpr (requires (T t, Writer& s) { s << t; }) {
+            send(std::span<const std::byte>{ser::Serialise<Endianness>(t)});
         }
 
         // Type can be sent as-is.

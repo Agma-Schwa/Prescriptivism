@@ -8,6 +8,7 @@
 #include <Shared/Utils.hh>
 
 #include <base/Base.hh>
+#include <base/Properties.hh>
 
 #include <algorithm>
 #include <chrono>
@@ -83,8 +84,8 @@ struct NegatePowerCard {
 };
 
 using Challenge = Variant< // clang-format off
-    challenge::CardChoice,
-    challenge::NegatePowerCard
+    CardChoice,
+    NegatePowerCard
 >; // clang-format on
 } // namespace pr::server::challenge
 
@@ -111,7 +112,6 @@ class pr::server::Player {
     /// Challenges are processed one-by-one, i.e. after one has been
     /// resolved, the next one is sent and so on.
     Queue<challenge::Challenge> challenges;
-
 
 public:
     /// The player's name.
