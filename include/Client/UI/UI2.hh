@@ -126,18 +126,81 @@ struct SizePolicy {
 };
 
 /// Controls how elements are laid out.
-enum struct LayoutPolicy {
-    /// Elements are packed at the start of the container.
-    Packed,
+struct Layout {
+    enum struct Policy {
+        /// Elements are packed at the start of the container.
+        ///
+        /// [xxx      ]
+        Packed,
+
+        /// Elements are packed at the center of the container.
+        ///
+        /// [   xxx   ]
+        PackedCenter,
+
+        /// All elements are placed in the same position.
+        ///
+        /// This and OverlapCenter can be used to effectively disable
+        /// layout along one axis.
+        ///
+        /// [x        ]
+        ///  ^ all 3 'x's are here
+        Overlap,
+
+        /// All elements are placed in the same position, but centered
+        /// in the middle of the container.
+        ///
+        /// [    x    ]
+        ///      ^ all 3 'x's are here
+        OverlapCenter,
+    };
+
+    using enum Policy;
+    Policy policy = Packed;
+    i32 gap = 0;
+
+    [[nodiscard]] bool is_centered() const {
+        return policy == PackedCenter or policy == OverlapCenter;
+    }
 };
 
 /// Style data of an element.
 struct Style {
+    /// The background colour of this element; not rendered
+    /// if it is set to transparent.
     Colour background = Colour::Transparent;
+
+    /// The border radius of the background.
     i32 border_radius = 0;
+
+    /// The intended size of this element, which may be either
+    /// static or dynamic.
     SizePolicy size = {0, 0};
-    LayoutPolicy layout = LayoutPolicy::Packed;
-    bool vertical = false;
+
+    /// Layout along the X axis.
+    Layout horizontal;
+
+    /// Layout along the Y axis.
+    Layout vertical;
+
+    /// The total gap on both axes.
+    Size gap() { return Size{horizontal.gap, vertical.gap}; }
+
+    /// Set the layout to be horizontal, with a gap.
+    auto layout_horizontal(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
+        horizontal.policy = p;
+        horizontal.gap = gap;
+        vertical.policy = Layout::OverlapCenter;
+        return *this;
+    }
+
+    /// Set the layout to be vertical, with a gap.
+    auto layout_vertical(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
+        vertical.policy = p;
+        vertical.gap = gap;
+        horizontal.policy = Layout::OverlapCenter;
+        return *this;
+    }
 };
 
 /// The root of the UI element hierarchy.
@@ -264,7 +327,7 @@ public:
     virtual void refresh();
 
 private:
-    void BuildPackedLayout();
+    void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_extent);
     void RecomputeLayout();
 };
 

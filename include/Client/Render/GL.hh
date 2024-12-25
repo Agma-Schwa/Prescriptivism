@@ -126,9 +126,10 @@ private:
         return Size(a.wd + b.wd, a.ht + b.ht);
     }
 
-    friend constexpr auto operator*(Size sz, f32 scale) -> Size {
-        return Size(sz.wd * scale, sz.ht * scale);
-    }
+    friend constexpr auto operator*(Size sz, f32 scale) -> Size { return Size(sz.wd * scale, sz.ht * scale); }
+    friend constexpr auto operator*(Size sz, i32 scale) -> Size { return Size(sz.wd * scale, sz.ht * scale); }
+    friend constexpr auto operator*(f32 scale, Size sz) -> Size { return Size(sz.wd * scale, sz.ht * scale); }
+    friend constexpr auto operator*(i32 scale, Size sz) -> Size { return Size(sz.wd * scale, sz.ht * scale); }
 };
 
 /// Helper to keep track of and delete OpenGL objects.

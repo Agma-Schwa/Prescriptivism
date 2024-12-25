@@ -317,6 +317,7 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
     // Testing.
     TestScreen = new ui::Screen(renderer);
     TestScreen->style.background = Colour::Black;
+    TestScreen->style.layout_horizontal(10);
     for (int i = 0; i < 10; i++) {
         auto& el = TestScreen->create<ui::Element>();
         el.style.background = Colour::Red;

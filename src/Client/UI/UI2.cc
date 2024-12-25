@@ -4,14 +4,59 @@ using namespace pr;
 using namespace pr::client;
 using namespace pr::client::ui;
 
-void Element::BuildPackedLayout() {
+void Element::BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_extent) {
+    Assert(not elements.empty());
+
+    // Apply centering by adjusting the position of the first element,
+    // assuming the elements don’t overflow the container.
+    //
+    // Note that the total size of a group of elements along an axis
+    // depends on whether the elements are next to each other or overlap
+    // on that axis.
+    auto ComputeStartingPosition = [&](i32 extent) {
+        if (l.is_centered() and extent < computed_size[a])
+            return (computed_size[a] - extent) / 2;
+        return 0;
+    };
+
+    // Apply the layout policy.
+    switch (l.policy) {
+        // Pack the elements along the layout axis.
+        case Layout::Packed:
+        case Layout::PackedCenter: {
+            auto pos = ComputeStartingPosition(total_extent);
+            for (auto& e : elements) {
+                e.computed_pos[a] = pos;
+                pos += e.computed_size[a] + l.gap;
+            }
+        } break;
+
+        // Put all elements in the same place.
+        case Layout::Overlap:
+        case Layout::OverlapCenter: {
+            auto pos = ComputeStartingPosition(max_extent);
+            for (auto& e : elements) e.computed_pos[a] = pos;
+        } break;
+    }
+}
+
+void Element::RecomputeLayout() {
+    if (elements.empty()) return;
+
     // First, refresh each fixed-sized element and collect the minimum extent
-    // of this container.
-    Size total_fixed_size = 0;
+    // of this container. Start with the gap, which is inserted between every
+    // pair of elements.
+    Size total_size = (i32(elements.size()) - 1) * style.gap();
+    Size max_size = {};
     for (auto& e : elements) {
         if (e.style.size.fixed()) {
             e.refresh();
-            total_fixed_size += e.computed_size;
+            e.computed_pos = {};
+            total_size += e.computed_size;
+            max_size = Size{
+                std::max(max_size.wd, e.computed_size.wd),
+                std::max(max_size.ht, e.computed_size.ht),
+            };
         } else {
             Todo("TODO below");
         }
@@ -19,20 +64,9 @@ void Element::BuildPackedLayout() {
 
     // TODO: Dynamic elements.
 
-    // Stack the elements along the layout axis.
-    auto layout_axis = style.vertical ? Axis::Y : Axis::X;
-    xy pos = {0, 0};
-    for (auto& e : elements) {
-        e.computed_pos = pos;
-        pos[layout_axis] += e.computed_size[layout_axis];
-    }
-}
-
-
-void Element::RecomputeLayout() {
-    switch (style.layout) {
-        case LayoutPolicy::Packed: BuildPackedLayout(); break;
-    }
+    // Lay out both axes.
+    BuildLayout(style.horizontal, Axis::X, total_size[Axis::X], max_size[Axis::X]);
+    BuildLayout(style.vertical, Axis::Y, total_size[Axis::Y], max_size[Axis::Y]);
 }
 
 void Element::draw(Renderer& r) {
