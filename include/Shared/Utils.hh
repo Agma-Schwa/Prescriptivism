@@ -87,6 +87,9 @@ void LogImpl(std::string);
 }
 
 namespace base::utils {
+constexpr auto addrof = vws::transform([](auto& x) { return std::addressof(x); });
+constexpr auto deref = vws::transform([](auto* x) -> decltype(*x) { return *x; });
+
 /// Return the last element in a range; this has undefined behaviour
 /// if the range is empty.
 template <typename Range>
