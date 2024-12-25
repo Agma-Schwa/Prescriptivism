@@ -192,6 +192,10 @@ struct Style {
     /// Layout along the Y axis.
     Layout vertical;
 
+    /// Z-order relative to other elements in the same group; positive
+    /// means in front.
+    i32 z = 0;
+
     /// The total gap on both axes.
     Size gap() { return Size{horizontal.gap, vertical.gap}; }
 
@@ -316,6 +320,9 @@ public:
     auto visible_elements() {
         return elements | vws::filter([](auto& e) { return e.visible; });
     }
+
+    /// Get the element’s z order.
+    auto z_order() const -> i32 { return style.z; }
 
     /// Draw this element.
     virtual void draw(Renderer& r);

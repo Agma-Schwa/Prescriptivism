@@ -88,7 +88,26 @@ void Element::draw(Renderer& r) {
     r.draw_rect(computed_pos, computed_size, style.background);
 
     // Draw children.
-    for (auto& e : visible_elements()) e.draw(r);
+    auto DrawElements = [&](auto&& elems) {
+        for (auto& e : FWD(elems)) e.draw(r);
+    };
+
+    // Determine if we need to sort the widgets by z order before drawing. We
+    // only need to do this if at least two widgets differ in z order.
+    auto v = visible_elements();
+    if (rgs::adjacent_find(v, rgs::not_equal_to{}, &Element::z_order) == v.end()) DrawElements(v);
+    else { // clang-format off
+        std::vector<Element*> sorted_elements = v
+            | vws::transform([](auto& e) { return &e; })
+            | rgs::to<std::vector>();
+
+        // Use a stable sort to avoid messing up the z order of elements with
+        // the same z value (they should be drawn in layout order). This places
+        // the elements with the largest z value last, which means they are drawn
+        // on top of the others.
+        rgs::stable_sort(sorted_elements, {}, &Element::z_order);
+        DrawElements(sorted_elements | vws::transform([](auto* e) -> Element& { return *e; }));
+    } // clang-format on
 }
 
 void Element::refresh() {
