@@ -70,8 +70,8 @@ class pr::client::ByAxis {
 public:
     LIBBASE_SERIALISE(x, y);
 
-    T x;
-    T y;
+    T x{};
+    T y{};
 
     ByAxis() requires std::is_default_constructible_v<T> {}
     ByAxis(T both) : x(both), y(both) {}
