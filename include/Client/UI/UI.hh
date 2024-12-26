@@ -57,6 +57,9 @@ class Group;
 class Player;
 class Arrow;
 using ui::MouseState;
+using ui::InactiveButtonColour;
+using ui::DefaultButtonColour;
+using ui::HoverButtonColour;
 
 class RemoveGroupElement;
 

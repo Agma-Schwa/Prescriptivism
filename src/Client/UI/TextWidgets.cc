@@ -13,10 +13,6 @@ using namespace pr::client;
 // =============================================================================
 //  Colours
 // =============================================================================
-constexpr Colour InactiveButtonColour{55, 55, 55, 255};
-constexpr Colour DefaultButtonColour{36, 36, 36, 255};
-constexpr Colour HoverButtonColour{23, 23, 23, 255};
-
 constexpr Colour ButtonTextColour = Colour::White;
 constexpr Colour InactiveButtonTextColour = Colour::Grey;
 

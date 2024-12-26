@@ -12,6 +12,10 @@ namespace pr::client::ui {
 class Element;
 class Screen;
 
+constexpr Colour InactiveButtonColour{55, 55, 55, 255};
+constexpr Colour DefaultButtonColour{36, 36, 36, 255};
+constexpr Colour HoverButtonColour{23, 23, 23, 255};
+
 /// An anchor point for positioning elements.
 enum class Anchor : u8 {
     North,
@@ -27,7 +31,7 @@ enum class Anchor : u8 {
 };
 
 /// Selection or hover behaviour.
-enum class Selectable : u8 {
+enum class Focusable : u8 {
     /// Can be selected or hovered over.
     Yes,
 
@@ -38,7 +42,7 @@ enum class Selectable : u8 {
     Transparent,
 };
 
-using Hoverable = Selectable;
+using Hoverable = Focusable;
 
 /// Current state of the mouse buttons.
 struct MouseState {
@@ -230,9 +234,9 @@ public:
     Style style;
 
 private:
-    /// Whether the element can be selected or hovered over.
-    Selectable selectable : 2 = Selectable::No;
-    Hoverable hoverable   : 2 = Hoverable::Yes;
+    /// Whether the element can be focused or hovered over.
+    //Focusable focusable : 2 = Focusable::No;
+    Hoverable hoverable : 2 = Hoverable::Yes;
 
     /// Whether the element’s layout needs to be recomputed, e.g. because
     /// its size changed or it gained a child that needs to be laid out.
@@ -282,6 +286,9 @@ public:
     auto create(Args&&... args) -> El& {
         return CreateImpl<El>(std::forward<Args>(args)...);
     }
+
+    /// Focus this element.
+    void focus();
 
     /*
     /// Check whether an element is a parent of this element.
@@ -337,6 +344,17 @@ public:
     /// \return Whether the click should be consumed.
     virtual bool event_click() { return false; }
 
+    /// Event handler for when this element gains focus.
+    ///
+    /// Even for elements that are focused by being clicked on (which is
+    /// most elements), prefer to implement any actions that should happen
+    /// on focus in here, as there may be other ways to select an element
+    /// besides clicking.
+    virtual void event_focus_gained() {}
+
+    /// Event handler for when this element loses focus.
+    virtual void event_focus_lost() {}
+
     /// Event handler for when the mouse enters this element.
     virtual void event_mouse_enter() {}
 
@@ -361,25 +379,44 @@ private:
     void recompute_layout();
 };
 
-/// A text element.
-class Label : public Element {
+/// Single-line text element.
+class TextElement : public Element {
+protected:
     Text text;
 
-public:
-    explicit Label(
+    TextElement(
         Element* parent,
         std::string_view contents,
         FontSize sz,
         TextStyle text_style = TextStyle::Regular
     );
 
+public:
     void draw(Renderer& r) override;
     void refresh() override;
+
+protected:
+    void RefreshImpl(const Text& text);
+    void DrawCenteredText(Renderer& r, const Text& text, Colour colour);
+};
+
+/// A text element.
+class Label : public TextElement {
+public:
+    explicit Label(
+        Element* parent,
+        std::string_view contents,
+        FontSize sz,
+        TextStyle text_style = TextStyle::Regular
+    ) : TextElement(parent, contents, sz, text_style) {}
 };
 
 class Screen : public Element {
     using Element::draw;
     using Element::tick;
+
+    /// The currently focused element, if any.
+    Property(Element*, active_element, nullptr);
 
 public:
     Renderer& renderer;
@@ -392,7 +429,24 @@ public:
 
     /// Tick the screen.
     void tick(MouseState& mouse) { tick(mouse, mouse.pos); }
+
+    bool event_click() override;
 };
+
+/// A single-line text editor.
+class TextEdit : public TextElement {
+    Text placeholder;
+
+public:
+    TextEdit(Element* parent, FontSize sz, TextStyle = TextStyle::Regular);
+
+    void draw(Renderer& r) override;
+    bool event_click() override;
+    void event_focus_gained() override;
+    void event_focus_lost() override;
+    void refresh() override;
+};
+
 } // namespace pr::client::ui
 
 #endif // PRESCRIPTIVISM_UI_UI2_HH

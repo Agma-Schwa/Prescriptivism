@@ -339,12 +339,16 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
         el.style.background = c = c.darken(.05f);
         el.style.size = {80, 80};
         if (i == 5) {
-            el.style.size.xval = 300;
+            el.style.size.xval = 200;
             el.style.z = 100;
             el.style.background = Colour::Grey;
             el.style.layout_horizontal();
             auto& l = el.create<ui::Label>("fooq", FontSize::Large);
             l.style.background = Colour::Blue;
+            l.style.size.xval = l.style.size.yval = ui::SizePolicy::Fill;
+        } else if (i == 6) {
+            auto& l = el.create<ui::TextEdit>(FontSize::Large);
+            el.style.size.xval = 200;
             l.style.size.xval = l.style.size.yval = ui::SizePolicy::Fill;
         } else {
             {

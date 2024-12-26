@@ -7,7 +7,29 @@ using namespace pr::client::ui;
 // =============================================================================
 //  Screen
 // =============================================================================
+bool Screen::event_click() {
+    // Remove focus from the active element.
+    active_element = nullptr;
+    return true;
+}
 
+void Screen::set_active_element(Element* new_value) {
+    // If there is a new focused element, it must be a child of this screen.
+    Assert(
+        not new_value or &new_value->parent_screen() == this,
+        "Cannot focus element on a different screen"
+    );
+
+    // If the element was already active, do nothing.
+    if (_active_element == new_value) return;
+
+    // Remove focus from the old element.
+    if (_active_element) _active_element->event_focus_lost();
+    _active_element = new_value;
+
+    // Focus the new element.
+    if (_active_element) _active_element->event_focus_gained();
+}
 
 // =============================================================================
 //  Element
@@ -149,7 +171,7 @@ void Element::draw(Renderer& r) {
     // Draw background.
     r.draw_rect(computed_pos, computed_size, style.background);
 
-    // Draw overlay last.
+    // Draw overlay last, after popping the matrix.
     defer { r.draw_rect(computed_pos, computed_size, style.overlay); };
 
     // Push transform matrix for this element.
@@ -176,7 +198,12 @@ void Element::draw(Renderer& r) {
     } // clang-format on
 }
 
+void Element::focus() {
+    parent_screen().active_element = this;
+}
+
 auto Element::parent_screen() -> Screen& {
+    if (auto* s = cast<Screen>()) return *s;
     return utils::last(parents())->as<Screen>();
 }
 
@@ -213,12 +240,20 @@ void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
             event_mouse_enter();
         }
 
-        // Apply click events.
-        if (mouse.left and event_click()) mouse.left = false;
-
         // Tick children.
         for (auto& e : children())
             e.tick_mouse(mouse, rel_pos - box().origin());
+
+        // Apply click events *after* ticking the children as one of
+        // them may want to consume the click first (this makes focus
+        // on click work properly, for instance).
+        if (mouse.left and event_click()) {
+            mouse.left = false;
+
+            // If this element didn’t take focus, unfocus the active element.
+            if (parent_screen().active_element != this)
+                parent_screen().active_element = nullptr;
+        }
     }
 
     // We aren’t; fire the leave event if we were inside before.
@@ -231,7 +266,7 @@ void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
 void Element::set_ui_scale(f32 new_value) { _ui_scale = new_value; }
 
 // =============================================================================
-//  Label
+//  Text Widgets
 // =============================================================================
 /// Compute the offset of text from the bottom left corner of the box
 /// that achieves horizontal and vertical centering.
@@ -284,26 +319,64 @@ static auto CenterTextInBox(const Text& text, Size box_size) -> xy {
     return xy{x, box_size.ht - top_offs};
 }
 
-Label::Label(Element* parent, std::string_view contents, FontSize sz, TextStyle text_style)
+TextEdit::TextEdit(Element* parent, FontSize sz, TextStyle text_style)
+    : TextElement(parent, "", sz, text_style),
+      placeholder{parent_screen().renderer.font(sz, text_style), "Placeholder"} {
+    style.background = InactiveButtonColour;
+}
+
+TextElement::TextElement(Element* parent, std::string_view contents, FontSize sz, TextStyle text_style)
     : Element(parent),
       text{parent_screen().renderer.font(sz, text_style), contents} {
     style.size = SizePolicy::ComputedSize();
 }
 
-void Label::draw(Renderer& r) {
-    Element::draw(r);
-    auto pos = computed_pos + CenterTextInBox(text, computed_size);
-    r.draw_text(text, pos, style.text_colour);
+void TextEdit::draw(Renderer& r) {
+    TextElement::draw(r);
+    if (text.empty) DrawCenteredText(r, placeholder, style.text_colour.darken(.2f));
 }
 
-void Label::refresh() { // clang-format off
+bool TextEdit::event_click() {
+    focus();
+    return true;
+}
+
+void TextEdit::event_focus_gained() {
+    style.background = DefaultButtonColour;
+}
+
+void TextEdit::event_focus_lost() {
+    style.background = InactiveButtonColour;
+}
+
+void TextEdit::refresh() {
+    RefreshImpl(text.empty ? placeholder : text);
+}
+
+void TextElement::DrawCenteredText(Renderer& r, const Text& text, Colour colour) {
+    auto pos = computed_pos + CenterTextInBox(text, computed_size);
+    r.draw_text(text, pos, colour);
+}
+
+void TextElement::RefreshImpl(const Text& text) {
     // Compute the size based on the text contents.
-    if (style.size.is_partially_computed()) computed_size = {
-        i32(text.width),
-        std::max(i32(text.height), text.font.strut()),
-    };
+    if (style.size.is_partially_computed()) {
+        computed_size = {
+            i32(text.width),
+            std::max(i32(text.height), text.font.strut()),
+        };
+    }
 
     // Call into the parent to apply fixed sizes.
     Element::refresh();
-} // clang-format on
+}
+
+void TextElement::draw(Renderer& r) {
+    Element::draw(r);
+    DrawCenteredText(r, text, style.text_colour);
+}
+
+void TextElement::refresh() {
+    RefreshImpl(text);
+}
 
