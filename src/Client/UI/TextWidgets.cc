@@ -26,7 +26,7 @@ constexpr Colour InactiveButtonTextColour = Colour::Grey;
 /// Compute the absolute coordinates for positioning
 /// text in the center of a box. The box must be in
 /// absolute coordinates.
-auto CenterTextInBox(
+static auto CenterTextInBox(
     const Text& text,
     i32 box_height,
     AABB absolute_box

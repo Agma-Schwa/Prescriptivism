@@ -324,23 +324,27 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
         el.style.background = c = c.darken(.05);
         el.style.size = {80, 80};
         if (i == 5) {
+            el.style.size.xval = 300;
             el.style.z = 100;
             el.style.background = Colour::Grey;
-        }
+            el.style.layout_horizontal();
+            auto& l = el.create<ui::Label>("fooq", FontSize::Large);
+            l.style.background = Colour::Blue;
+            l.style.size.xval = 200;
+        } else {
+            {
+                auto& nested = el.create<ui::Element>();
+                nested.style.background = Colour::Green;
+                nested.style.size = {40, 40};
+            }
 
-        {
-            auto& nested = el.create<ui::Element>();
-            nested.style.background = Colour::Green;
-            nested.style.size = {40, 40};
-        }
-
-        {
-            auto& nested = el.create<ui::Element>();
-            nested.style.background = Colour::Blue;
-            nested.style.size = {40, 40};
+            {
+                auto& nested = el.create<ui::Element>();
+                nested.style.background = Colour::Blue;
+                nested.style.size = {40, 40};
+            }
         }
     }
-
 
     /*
     std::array pi{
