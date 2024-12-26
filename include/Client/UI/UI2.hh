@@ -40,6 +40,14 @@ enum class Selectable : u8 {
 
 using Hoverable = Selectable;
 
+/// Current state of the mouse buttons.
+struct MouseState {
+    xy pos{};
+    bool left{};
+    bool right{};
+    bool middle{};
+};
+
 /// Size policy of an element.
 struct SizePolicy {
     /// Negative values are special.
@@ -322,7 +330,9 @@ public:
     virtual void draw(Renderer& r);
 
     /// Event handler for when the mouse is clicked on this element.
-    virtual void event_click() {}
+    ///
+    /// \return Whether the click should be consumed.
+    virtual bool event_click() { return false; }
 
     /// Event handler for when the mouse enters this element.
     virtual void event_mouse_enter() {}
@@ -340,11 +350,11 @@ public:
     virtual void refresh();
 
     /// Tick the element.
-    virtual void tick(xy rel_pos);
+    virtual void tick(MouseState& mouse, xy rel_pos);
 
 private:
     void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_static_extent, i32 dynamic_els);
-    void tick_mouse(xy rel_pos);
+    void tick_mouse(MouseState& mouse, xy rel_pos);
     void recompute_layout();
 };
 
@@ -366,6 +376,7 @@ public:
 
 class Screen : public Element {
     using Element::draw;
+    using Element::tick;
 
 public:
     Renderer& renderer;
@@ -375,6 +386,9 @@ public:
 
     /// Draw the screen.
     void draw() { draw(renderer); }
+
+    /// Tick the screen.
+    void tick(MouseState& mouse) { tick(mouse, mouse.pos); }
 };
 } // namespace pr::client::ui
 

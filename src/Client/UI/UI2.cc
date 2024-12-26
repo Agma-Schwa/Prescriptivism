@@ -197,23 +197,32 @@ void Element::refresh() {
     recompute_layout();
 }
 
-void Element::tick(xy mouse_xy) {
-    tick_mouse(mouse_xy);
+void Element::tick(MouseState& mouse, xy rel_pos) {
+    tick_mouse(mouse, rel_pos);
 }
 
-void Element::tick_mouse(xy rel_pos) {
-    // Apply hover events.
-    bool inside = box().contains(rel_pos);
-    if (inside != under_mouse) {
-        under_mouse = inside;
-        if (inside) event_mouse_enter();
-        else event_mouse_leave();
+void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
+    // We’re inside this element.
+    if (box().contains(rel_pos)) {
+        // Apply hover state.
+        if (not under_mouse) {
+            under_mouse = true;
+            event_mouse_enter();
+        }
+
+        // Apply click events.
+        if (mouse.left and event_click()) mouse.left = false;
+
+        // Tick children.
+        for (auto& e : children())
+            e.tick_mouse(mouse, rel_pos - box().origin());
     }
 
-    // Tick mouse events for our children if we’re inside this element.
-    if (inside)
-        for (auto& e : children())
-            e.tick_mouse(rel_pos - box().origin());
+    // We aren’t; fire the leave event if we were inside before.
+    else if (under_mouse) {
+        under_mouse = false;
+        event_mouse_leave();
+    }
 }
 
 void Element::set_ui_scale(f32 new_value) { _ui_scale = new_value; }

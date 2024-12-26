@@ -322,6 +322,11 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
         void event_mouse_enter() override {
             old_background = std::exchange(style.background, style.background.darken(.2f));
         }
+
+        bool event_click() override {
+            Log("Clicked");
+            return true;
+        }
     };
 
     TestScreen = new ui::Screen(renderer);
@@ -412,7 +417,7 @@ void Client::Tick() {
     // Testing.
     TestScreen->style.size = renderer.size();
     TestScreen->refresh();
-    TestScreen->tick(input_system.mouse.pos);
+    TestScreen->tick(input_system.mouse);
     TestScreen->draw();
 
     /*// Refresh screen info.

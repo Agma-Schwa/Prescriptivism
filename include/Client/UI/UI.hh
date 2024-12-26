@@ -4,6 +4,7 @@
 #include <Client/Render/GL.hh>
 #include <Client/Render/Render.hh>
 #include <Client/UI/Effect.hh>
+#include <Client/UI/UI2.hh>
 
 #include <Shared/Cards.hh>
 #include <Shared/Constants.hh>
@@ -55,6 +56,7 @@ class CardStacks;
 class Group;
 class Player;
 class Arrow;
+using ui::MouseState;
 
 class RemoveGroupElement;
 
@@ -192,13 +194,6 @@ struct pr::client::Position {
 
 /// User input handler.
 class pr::client::InputSystem {
-    struct MouseState {
-        xy pos{};
-        bool left{};
-        bool right{};
-        bool middle{};
-    };
-
     struct Event {
         SDL_Keycode key;
         SDL_Keymod mod;
