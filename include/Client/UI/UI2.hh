@@ -255,6 +255,9 @@ public:
         return *ptr;
     }
 
+    /// Get the element’s bounding box.
+    [[nodiscard]] auto box() const -> AABB { return {computed_pos, computed_size}; }
+
     /// Cast this to a certain type, returning nullptr on failure.
     template <std::derived_from<Element> T>
     [[nodiscard]] auto cast() -> T* { return dynamic_cast<T*>(this); }
@@ -322,9 +325,7 @@ public:
     virtual void event_click() {}
 
     /// Event handler for when the mouse enters this element.
-    ///
-    /// \param rel_pos Mouse position relative to the parent element.
-    virtual void event_mouse_enter(xy rel_pos) {}
+    virtual void event_mouse_enter() {}
 
     /// Event handler for when the mouse leaves this element.
     virtual void event_mouse_leave() {}
@@ -338,8 +339,12 @@ public:
     /// Refresh the element.
     virtual void refresh();
 
+    /// Tick the element.
+    virtual void tick(xy rel_pos);
+
 private:
     void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_static_extent, i32 dynamic_els);
+    void tick_mouse(xy rel_pos);
     void recompute_layout();
 };
 

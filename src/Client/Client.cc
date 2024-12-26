@@ -315,12 +315,21 @@ void Client::TickNetworking() {
 ui::Screen* TestScreen;
 Client::Client(Renderer r) : renderer(std::move(r)) {
     // Testing.
+    struct HoverWidget : ui::Element {
+        Colour old_background;
+        explicit HoverWidget(Element* parent) : Element(parent) {}
+        void event_mouse_leave() override { style.background = old_background; }
+        void event_mouse_enter() override {
+            old_background = std::exchange(style.background, style.background.darken(.2f));
+        }
+    };
+
     TestScreen = new ui::Screen(renderer);
     TestScreen->style.background = Colour::Black;
     TestScreen->style.layout_horizontal(20);
-    auto c = Colour::Red.lighten(.2f);
+    auto c = Colour::Red.lighten(.3f);
     for (int i = 0; i < 10; i++) {
-        auto& el = TestScreen->create<ui::Element>();
+        auto& el = TestScreen->create<HoverWidget>();
         el.style.background = c = c.darken(.05f);
         el.style.size = {80, 80};
         if (i == 5) {
@@ -403,6 +412,7 @@ void Client::Tick() {
     // Testing.
     TestScreen->style.size = renderer.size();
     TestScreen->refresh();
+    TestScreen->tick(input_system.mouse.pos);
     TestScreen->draw();
 
     /*// Refresh screen info.

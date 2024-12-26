@@ -5,6 +5,11 @@ using namespace pr::client;
 using namespace pr::client::ui;
 
 // =============================================================================
+//  Screen
+// =============================================================================
+
+
+// =============================================================================
 //  Element
 // =============================================================================
 void Element::BuildLayout(
@@ -190,6 +195,25 @@ void Element::refresh() {
 
     // Recompute the layout.
     recompute_layout();
+}
+
+void Element::tick(xy mouse_xy) {
+    tick_mouse(mouse_xy);
+}
+
+void Element::tick_mouse(xy rel_pos) {
+    // Apply hover events.
+    bool inside = box().contains(rel_pos);
+    if (inside != under_mouse) {
+        under_mouse = inside;
+        if (inside) event_mouse_enter();
+        else event_mouse_leave();
+    }
+
+    // Tick mouse events for our children if we’re inside this element.
+    if (inside)
+        for (auto& e : children())
+            e.tick_mouse(rel_pos - box().origin());
 }
 
 void Element::set_ui_scale(f32 new_value) { _ui_scale = new_value; }
