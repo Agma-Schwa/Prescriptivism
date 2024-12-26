@@ -193,6 +193,8 @@ public:
     [[nodiscard]] friend bool operator==(Colour, Colour) = default;
 
     static constinit const Colour Black;
+    static constinit const Colour Blue;
+    static constinit const Colour Green;
     static constinit const Colour Grey;
     static constinit const Colour Red;
     static constinit const Colour Transparent;
@@ -200,6 +202,8 @@ public:
 };
 
 constexpr pr::client::Colour pr::client::Colour::Black = {0, 0, 0, 255};
+constexpr pr::client::Colour pr::client::Colour::Blue = {80, 80, 200, 255};
+constexpr pr::client::Colour pr::client::Colour::Green = {80, 200, 80, 255};
 constexpr pr::client::Colour pr::client::Colour::Grey = {128, 128, 128, 255};
 constexpr pr::client::Colour pr::client::Colour::Red = {200, 80, 80, 255};
 constexpr pr::client::Colour pr::client::Colour::Transparent = {0, 0, 0, 0};

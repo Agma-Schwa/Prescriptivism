@@ -87,6 +87,9 @@ void Element::draw(Renderer& r) {
     // Draw background.
     r.draw_rect(computed_pos, computed_size, style.background);
 
+    // Push transform matrix for this element.
+    auto _ = r.push_matrix(computed_pos, ui_scale);
+
     // Draw children.
     auto DrawElements = [&](auto&& elems) {
         for (auto& e : FWD(elems)) e.draw(r);

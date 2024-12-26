@@ -190,7 +190,7 @@ struct Style {
     Layout horizontal;
 
     /// Layout along the Y axis.
-    Layout vertical;
+    Layout vertical = {Layout::OverlapCenter};
 
     /// Z-order relative to other elements in the same group; positive
     /// means in front.
@@ -287,6 +287,12 @@ public:
     template <std::derived_from<Element> CastTo = Element>
     [[nodiscard]] auto children() { return elements | vws::transform(&Element::as<CastTo>); }
 
+    /// Create a new element.
+    template <std::derived_from<Element> El, typename... Args>
+    auto create(Args&&... args) -> El& {
+        return CreateImpl<El>(std::forward<Args>(args)...);
+    }
+
     /*
     /// Check whether an element is a parent of this element.
     bool has_parent(Element* other);
@@ -366,12 +372,6 @@ public:
 
     /// Create a new screen.
     explicit Screen(Renderer& r) : Element(nullptr), renderer(r) {}
-
-    /// Create a new element.
-    template <std::derived_from<Element> El, typename... Args>
-    auto create(Args&&... args) -> El& {
-        return CreateImpl<El>(std::forward<Args>(args)...);
-    }
 
     /// Draw the screen.
     void draw() { draw(renderer); }
