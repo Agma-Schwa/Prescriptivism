@@ -149,6 +149,9 @@ void Element::draw(Renderer& r) {
     // Draw background.
     r.draw_rect(computed_pos, computed_size, style.background);
 
+    // Draw overlay last.
+    defer { r.draw_rect(computed_pos, computed_size, style.overlay); };
+
     // Push transform matrix for this element.
     auto _ = r.push_matrix(computed_pos, ui_scale);
 

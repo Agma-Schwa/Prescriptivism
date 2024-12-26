@@ -161,6 +161,9 @@ struct Style {
     /// The background colour of this element.
     Colour background = Colour::Transparent;
 
+    /// The overlay colour of this element.
+    Colour overlay = Colour::Transparent;
+
     /// The text colour of this element.
     Colour text_colour = Colour::White;
 

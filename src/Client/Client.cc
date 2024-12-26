@@ -20,7 +20,7 @@ namespace sc = packets::sc;
 namespace cs = packets::cs;
 
 // Colour used to draw a veil on top of a screen if it is not the topmost one.
-static constexpr Colour Veil = Colour{0, 0, 0, 200};
+[[maybe_unused]] static constexpr Colour Veil = Colour{0, 0, 0, 200};
 
 // =============================================================================
 //  Error Screen
@@ -324,7 +324,8 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
         }
 
         bool event_click() override {
-            Log("Clicked");
+            if (style.overlay == Colour::Transparent) style.overlay = Colour{128, 64, 64, 64};
+            else style.overlay = Colour::Transparent;
             return true;
         }
     };
