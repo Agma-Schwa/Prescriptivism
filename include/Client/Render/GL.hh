@@ -41,36 +41,14 @@ using glm::vec4;
 enum class Axis : u8;
 enum class VertexLayout : u8;
 
+template <typename T>
+class ByAxis;
+
 template <glm::length_t size>
 using Vertices = std::span<const vec<size, f32>>;
 
 constexpr Axis flip(Axis a);
 } // namespace pr::client
-
-template <typename T, std::size_t n>
-struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(glm::vec<n, T> vec, FormatContext& ctx) const {
-        std::string s{"("};
-        s += std::to_string(vec.x);
-        if constexpr (n >= 2) s += std::format(", {}", vec.y);
-        if constexpr (n >= 3) s += std::format(", {}", vec.z);
-        if constexpr (n >= 4) s += std::format(", {}", vec.w);
-        s += ")";
-        return std::formatter<std::string_view>::format(s, ctx);
-    }
-};
-
-template <typename T, std::size_t n, std::endian E>
-struct base::ser::Serialiser<glm::vec<n, T>, E> {
-    static void Serialise(Writer<E>& w, const glm::vec<n, T>& vec) {
-        for (int i = 0; i < int(n); ++i) w(vec[i]);
-    }
-
-    static void Deserialise(Reader<E>& r, glm::vec<n, T>& vec) {
-        for (int i = 0; i < int(n); ++i) r(vec[i]);
-    }
-};
 
 /// Supported vertex layouts.
 enum class pr::client::VertexLayout : base::u8 {
@@ -81,6 +59,26 @@ enum class pr::client::VertexLayout : base::u8 {
 enum class pr::client::Axis : base::u8 {
     X,
     Y,
+};
+
+namespace pr::client {
+constexpr Axis Axes[2] = {Axis::X, Axis::Y};
+}
+
+template <typename T>
+class pr::client::ByAxis {
+public:
+    LIBBASE_SERIALISE(x, y);
+
+    T x;
+    T y;
+
+    ByAxis() requires std::is_default_constructible_v<T> {}
+    ByAxis(T both) : x(both), y(both) {}
+    ByAxis(T x, T y) : x(x), y(y) {}
+
+    auto operator[](Axis a) -> T& { return a == Axis::X ? x : y; }
+    auto operator[](Axis a) const -> const T& { return a == Axis::X ? x : y; }
 };
 
 constexpr auto pr::client::flip(Axis a) -> Axis {
@@ -340,6 +338,39 @@ public:
 
 private:
     static auto MakeVerts(f32 wd, f32 ht, f32 u, f32 v) -> std::array<vec4, 4>;
+};
+
+template <typename T, std::size_t n>
+struct std::formatter<glm::vec<n, T>> : std::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(glm::vec<n, T> vec, FormatContext& ctx) const {
+        std::string s{"("};
+        s += std::to_string(vec.x);
+        if constexpr (n >= 2) s += std::format(", {}", vec.y);
+        if constexpr (n >= 3) s += std::format(", {}", vec.z);
+        if constexpr (n >= 4) s += std::format(", {}", vec.w);
+        s += ")";
+        return std::formatter<std::string_view>::format(s, ctx);
+    }
+};
+
+template <typename T, std::size_t n, std::endian E>
+struct base::ser::Serialiser<glm::vec<n, T>, E> {
+    static void Serialise(Writer<E>& w, const glm::vec<n, T>& vec) {
+        for (int i = 0; i < int(n); ++i) w(vec[i]);
+    }
+
+    static void Deserialise(Reader<E>& r, glm::vec<n, T>& vec) {
+        for (int i = 0; i < int(n); ++i) r(vec[i]);
+    }
+};
+
+template <typename T>
+struct std::formatter<pr::client::ByAxis<T>> : std::formatter<T> {
+    template <typename FormatContext>
+    auto format(const pr::client::ByAxis<T>& value, FormatContext& ctx) const {
+        return std::format_to(ctx.out(), "(x: {}, y: {})", value.x, value.y);
+    }
 };
 
 #endif // PRESCRIPTIVISM_CLIENT_RENDER_GL_HH

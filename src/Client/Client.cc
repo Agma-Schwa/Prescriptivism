@@ -318,10 +318,10 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
     TestScreen = new ui::Screen(renderer);
     TestScreen->style.background = Colour::Black;
     TestScreen->style.layout_horizontal(20);
-    auto c = Colour::Red.lighten(.2);
+    auto c = Colour::Red.lighten(.2f);
     for (int i = 0; i < 10; i++) {
         auto& el = TestScreen->create<ui::Element>();
-        el.style.background = c = c.darken(.05);
+        el.style.background = c = c.darken(.05f);
         el.style.size = {80, 80};
         if (i == 5) {
             el.style.size.xval = 300;
@@ -330,7 +330,7 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
             el.style.layout_horizontal();
             auto& l = el.create<ui::Label>("fooq", FontSize::Large);
             l.style.background = Colour::Blue;
-            l.style.size.xval = 200;
+            l.style.size.xval = l.style.size.yval = ui::SizePolicy::Fill;
         } else {
             {
                 auto& nested = el.create<ui::Element>();

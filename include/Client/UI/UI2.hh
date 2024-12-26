@@ -43,9 +43,16 @@ using Hoverable = Selectable;
 /// Size policy of an element.
 struct SizePolicy {
     /// Negative values are special.
-    enum struct V : i32 {
-        /// A label that resizes based on its text content.
+    enum V : i32 {
+        /// Used to indicate that a dimension is computed dynamically during
+        /// the refresh step.
         Computed = -1,
+
+        /// First dynamic layout.
+        DynamicLayoutStart = -100,
+
+        /// Used to indicate that this element should fill all available space.
+        Fill = DynamicLayoutStart - 0,
     };
 
     /// These may be fixed values, or special, dynamic values.
@@ -58,22 +65,22 @@ struct SizePolicy {
     SizePolicy(Size size) : xval(size.wd), yval(size.ht) {}
 
     /// Dynamic size policies.
-    static auto Computed() -> SizePolicy { return V::Computed; }
+    static auto ComputedSize() -> SizePolicy { return Computed; }
 
-    /// Get this as a fixed size.
-    [[nodiscard]] Size as_fixed() const {
-        if (not is_fixed()) Log("Warning: Non-fixed size requested as fixed");
-        return {xval, yval};
-    }
+    /// Check if this has a computed dimension.
+    [[nodiscard]] bool is_partially_computed() const { return xval == Computed or yval == Computed; }
 
-    /// Whether this element has a fixed size.
-    [[nodiscard]] bool is_fixed() const { return xval >= 0 and yval >= 0; }
+    /// Check if the size of this element must be computed when it is laid out.
+    [[nodiscard]] bool is_partially_dynamic() const { return is_dynamic(Axis::X) or is_dynamic(Axis::Y); }
+    [[nodiscard]] bool is_dynamic(Axis a) const { return operator[](a) <= DynamicLayoutStart; }
+
+    /// Check if the size of this element never changes.
+    [[nodiscard]] bool is_fixed() const { return is_fixed(Axis::X) and is_fixed(Axis::Y); }
     [[nodiscard]] bool is_fixed(Axis a) const { return operator[](a) >= 0; }
 
-    /// Whether this element has a special dynamic size.
-    [[nodiscard]] bool is_computed() const {
-        return xval == +V::Computed or yval == +V::Computed;
-    }
+    /// Check if the size of this element can be computed statically, i.e. without
+    /// taking into account other elements in the surrounding layout.
+    [[nodiscard]] bool is_static() const { return not is_partially_dynamic(); }
 
     [[nodiscard]] auto operator[](Axis a) -> i32& { return a == Axis::X ? xval : yval; }
     [[nodiscard]] auto operator[](Axis a) const -> i32 { return a == Axis::X ? xval : yval; }
@@ -131,6 +138,17 @@ struct Layout {
 ///
 /// TODO: Changing a style needs to refresh the layout, but we’ll
 ///       do that once we start caching and reusing styles.
+///
+/// TODO: Caching styles, as follows:
+///
+///   - Never expose a mutable style, always return a const& from the element.
+///   - Store shared_ptrs to a style.
+///   - When a style is changed (create a copy, and cascade the change down).
+///   - It’s important not to override any properties the children have already
+///     set while doing this, so add a bitset w/ a bit for every property that
+///     indicates whether this child has overridden that property.
+///   - Then, visit each child transitively and override the property.
+///   - Also have a bit in the bitset to stop propagation (a la shadow dom).
 struct Style {
     /// The background colour of this element.
     Colour background = Colour::Transparent;
@@ -150,22 +168,19 @@ struct Style {
     SizePolicy size = {0, 0};
 
     /// Layout along the X axis.
-    Layout horizontal;
-
-    /// Layout along the Y axis.
-    Layout vertical = {Layout::OverlapCenter};
+    ByAxis<Layout> layout{{}, {Layout::OverlapCenter}};
 
     /// The total gap on both axes.
-    Size gap() { return Size{horizontal.gap, vertical.gap}; }
+    Size gap() { return Size{layout.x.gap, layout.y.gap}; }
 
     /// Set the layout to be horizontal, with a gap.
     ///
     /// Diagonal layouts can be achieved by setting a non-overlapped
     /// layout for both axes.
     auto layout_horizontal(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
-        horizontal.policy = p;
-        horizontal.gap = gap;
-        vertical.policy = Layout::OverlapCenter;
+        layout.x.policy = p;
+        layout.x.gap = gap;
+        layout.y.policy = Layout::OverlapCenter;
         return *this;
     }
 
@@ -173,9 +188,9 @@ struct Style {
     ///
     /// \see layout_horizontal()
     auto layout_vertical(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
-        vertical.policy = p;
-        vertical.gap = gap;
-        horizontal.policy = Layout::OverlapCenter;
+        layout.y.policy = p;
+        layout.y.gap = gap;
+        layout.x.policy = Layout::OverlapCenter;
         return *this;
     }
 };
@@ -324,8 +339,8 @@ public:
     virtual void refresh();
 
 private:
-    void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_extent);
-    void RecomputeLayout();
+    void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_static_extent, i32 dynamic_els);
+    void recompute_layout();
 };
 
 /// A text element.

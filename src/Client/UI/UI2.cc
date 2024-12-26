@@ -7,7 +7,13 @@ using namespace pr::client::ui;
 // =============================================================================
 //  Element
 // =============================================================================
-void Element::BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_extent) {
+void Element::BuildLayout(
+    Layout l,
+    Axis a,
+    i32 total_extent,
+    i32 max_static_extent,
+    i32 dynamic_els
+) {
     Assert(not elements.empty());
 
     // Apply centering by adjusting the position of the first element,
@@ -36,7 +42,42 @@ void Element::BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_extent) {
         }
     };
 
-    // Apply the layout policy.
+    // Distribute dynamic space first so we can handle centering properly. Also add
+    // the gap to the calculation while we’re at it.
+    switch (l.policy) {
+        // Packed fill elements distribute the remaining space among themselves.
+        case Layout::Packed:
+        case Layout::PackedCenter: {
+            total_extent += (i32(elements.size()) - 1) * l.gap;
+            for (auto& e : elements) {
+                if (e.style.size.is_dynamic(a)) {
+                    Assert(e.style.size[a] == SizePolicy::Fill, "Unknown dynamic layout mode");
+                    e.computed_size[a] = (computed_size[a] - total_extent) / dynamic_els;
+                }
+            }
+        } break;
+
+        // Overlapping fill elements simply have maximum size. Don’t apply the gap
+        // here since the elements are all in the same place.
+        case Layout::Overlap:
+        case Layout::OverlapCenter: {
+            for (auto& e : elements) {
+                if (e.style.size.is_dynamic(a)) {
+                    Assert(e.style.size[a] == SizePolicy::Fill, "Unknown dynamic layout mode");
+                    e.computed_size[a] = computed_size[a];
+                }
+            }
+        }
+    }
+
+    // If there are any dynamic elements, then this takes up the maximum available
+    // space. This effectively disables centering. There are easier ways of achieving
+    // just that, but we might introduce other dynamic sizing policies in the future,
+    // in which case this calculation is best done here rather than in the starting
+    // position callback.
+    if (dynamic_els != 0) total_extent = max_static_extent = computed_size[a];
+
+    // Finally, apply the layout policy.
     switch (l.policy) {
         // Pack the elements along the layout axis.
         case Layout::Packed:
@@ -51,37 +92,52 @@ void Element::BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_extent) {
         // Put all elements in the same place.
         case Layout::Overlap:
         case Layout::OverlapCenter: {
-            auto pos = ComputeStartingPosition(max_extent);
+            auto pos = ComputeStartingPosition(max_static_extent);
             LayOutElements([&](auto& e) { e.computed_pos[a] = pos; });
         } break;
     }
 }
 
-void Element::RecomputeLayout() {
+void Element::recompute_layout() {
+    layout_changed = false;
     if (elements.empty()) return;
 
     // First, refresh each fixed-sized element and collect the minimum extent
     // of this container. Start with the gap, which is inserted between every
     // pair of elements.
-    Size total_size = (i32(elements.size()) - 1) * style.gap();
-    Size max_size = {};
+    ByAxis<i32> total_size = {};
+    ByAxis<i32> max_size = {};
+    ByAxis<i32> dynamic_els = 0;
     for (auto& e : elements) {
-        if (e.style.size.is_fixed() or e.style.size.is_computed()) {
-            e.refresh();
-            e.computed_pos = {};
-            total_size += e.computed_size;
-            max_size = Size{
-                std::max(max_size.wd, e.computed_size.wd),
-                std::max(max_size.ht, e.computed_size.ht),
-            };
-        } else {
-            Todo();
+        e.refresh();
+        for (auto a : Axes) {
+            if (e.style.size.is_dynamic(a)) {
+                dynamic_els[a]++;
+                continue;
+            }
+
+            e.computed_pos[a] = {};
+            total_size[a] += e.computed_size[a];
+            max_size[a] = std::max(max_size[a], e.computed_size[a]);
         }
     }
 
     // Lay out both axes.
-    BuildLayout(style.horizontal, Axis::X, total_size[Axis::X], max_size[Axis::X]);
-    BuildLayout(style.vertical, Axis::Y, total_size[Axis::Y], max_size[Axis::Y]);
+    //
+    // FIXME: At this point, we probably want a LayoutBuilder class so we don’t have to pass 20
+    // arguments to this function.
+    for (auto a : Axes) BuildLayout(
+        style.layout[a],
+        a,
+        total_size[a],
+        max_size[a],
+        dynamic_els[a]
+    );
+
+    // Finally, compute the layout of dynamic elements.
+    for (auto& e : elements)
+        if (e.style.size.is_partially_dynamic())
+            e.recompute_layout();
 }
 
 void Element::draw(Renderer& r) {
@@ -117,24 +173,23 @@ auto Element::parent_screen() -> Screen& {
 }
 
 void Element::refresh() {
+    // Do not refresh the element if the size hasn’t changed and if the
+    // layout doesn’t need to be recomputed.
     if (style.size.is_fixed()) {
-        if (style.size.as_fixed() == computed_size and not layout_changed) return;
+        if (Size{style.size.xval, style.size.yval} == computed_size and not layout_changed) return;
     }
-
-    else if (style.size.is_computed()) {
-        if (not layout_changed) return;
-    }
-
-    // Dynamic.
-    else { Todo(); }
 
     // Apply the fixed size to non-computed dimensions.
-    for (Axis a : {Axis::X, Axis::Y})
+    for (auto a : Axes)
         if (style.size.is_fixed(a))
             computed_size[a] = style.size[a];
 
-    layout_changed = false;
-    RecomputeLayout();
+    // If the size is dynamic, we cannot recompute the layout until the
+    // size is known.
+    if (style.size.is_partially_dynamic()) return;
+
+    // Recompute the layout.
+    recompute_layout();
 }
 
 void Element::set_ui_scale(f32 new_value) { _ui_scale = new_value; }
@@ -196,7 +251,7 @@ static auto CenterTextInBox(const Text& text, Size box_size) -> xy {
 Label::Label(Element* parent, std::string_view contents, FontSize sz, TextStyle text_style)
     : Element(parent),
       text{parent_screen().renderer.font(sz, text_style), contents} {
-    style.size = SizePolicy::Computed();
+    style.size = SizePolicy::ComputedSize();
 }
 
 void Label::draw(Renderer& r) {
@@ -205,14 +260,14 @@ void Label::draw(Renderer& r) {
     r.draw_text(text, pos, style.text_colour);
 }
 
-void Label::refresh() {
+void Label::refresh() { // clang-format off
     // Compute the size based on the text contents.
-    if (style.size.is_computed()) computed_size = {
+    if (style.size.is_partially_computed()) computed_size = {
         i32(text.width),
-        std::max<i32>(text.height, text.font.strut()),
+        std::max(i32(text.height), text.font.strut()),
     };
 
     // Call into the parent to apply fixed sizes.
     Element::refresh();
-}
+} // clang-format on
 
