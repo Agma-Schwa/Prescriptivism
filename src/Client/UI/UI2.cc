@@ -5,6 +5,87 @@ using namespace pr::client;
 using namespace pr::client::ui;
 
 // =============================================================================
+//  Input Handler.
+// =============================================================================
+extern void DumpActiveScreen();
+
+bool InputSystem::has_input() {
+    return not text_input.empty() or not kb_events.empty();
+}
+
+void InputSystem::game_loop(std::function<void()> tick) {
+    constexpr auto ClientTickDuration = 16ms;
+    while (not quit) {
+        auto start_of_tick = chr::system_clock::now();
+
+        // Handle user input.
+        process_events();
+
+        tick();
+
+        const auto end_of_tick = chr::system_clock::now();
+        const auto tick_duration = chr::duration_cast<chr::milliseconds>(end_of_tick - start_of_tick);
+        if (tick_duration < ClientTickDuration) {
+            SDL_WaitEventTimeout(
+                nullptr,
+                i32((ClientTickDuration - tick_duration).count())
+            );
+        } else {
+#ifndef PRESCRIPTIVISM_ENABLE_SANITISERS
+            Log("Client tick took too long: {}ms", tick_duration.count());
+#endif
+        }
+    }
+}
+
+void InputSystem::process_events() {
+    kb_events.clear();
+    text_input.clear();
+
+    // Get mouse state.
+    mouse = {};
+    f32 x, y;
+    SDL_GetMouseState(&x, &y);
+    mouse.pos = {x, renderer.size().ht - y};
+
+    // Process events.
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+            default: break;
+            case SDL_EVENT_QUIT:
+                quit = true;
+                break;
+
+            // Record the button presses instead of acting on them immediately; this
+            // has the effect of debouncing clicks within a single tick.
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                if (event.button.button == SDL_BUTTON_LEFT) mouse.left = true;
+                if (event.button.button == SDL_BUTTON_RIGHT) mouse.right = true;
+                if (event.button.button == SDL_BUTTON_MIDDLE) mouse.middle = true;
+                break;
+
+            case SDL_EVENT_KEY_DOWN:
+                if (event.key.key == SDLK_F12) renderer.reload_shaders();
+                if (event.key.key == SDLK_F11) DumpActiveScreen();
+                kb_events.emplace_back(event.key.key, event.key.mod);
+                break;
+
+            case SDL_EVENT_TEXT_INPUT:
+                text_input += text::ToUTF32(event.text.text);
+                break;
+        }
+    }
+}
+
+void InputSystem::set_accept_text_input(bool new_value) {
+    if (_accept_text_input == new_value) return;
+    _accept_text_input = new_value;
+    if (new_value) SDL_StartTextInput(renderer.sdl_window());
+    else SDL_StopTextInput(renderer.sdl_window());
+}
+
+// =============================================================================
 //  Screen
 // =============================================================================
 bool Screen::event_click() {
@@ -28,6 +109,17 @@ void Screen::set_active_element(Element* new_value) {
 
     // Focus the new element.
     if (_active_element) _active_element->event_focus_gained();
+}
+
+void Screen::tick(InputSystem& input) {
+    tick(input.mouse, input.mouse.pos);
+
+    // If there is an active element, set it to receive text input.
+    input.accept_text_input = active_element != nullptr;
+
+    // If there is input, send it to the active element.
+    if (input.has_input() and active_element)
+        active_element->event_input(input);
 }
 
 // =============================================================================
@@ -254,46 +346,52 @@ void Element::refresh() {
     recompute_layout();
 }
 
+void Element::set_layout_changed(bool new_value) {
+    if (_layout_changed == new_value) return;
+    _layout_changed = new_value;
+
+    // Propagate layout changes upward.
+    if (_layout_changed and parent) parent->layout_changed = true;
+}
+
 void Element::tick(MouseState& mouse, xy rel_pos) {
     tick_mouse(mouse, rel_pos);
 }
 
 void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
-    // We’re inside this element.
-    if (box().contains(rel_pos)) {
+    bool inside = box().contains(rel_pos);
+
+    // Tick the mouse position if we’re inside the element or if we
+    // just left it.
+    if (inside or under_mouse) {
         // Apply hover state.
-        if (not under_mouse) {
-            under_mouse = true;
-            event_mouse_enter();
+        if (inside != under_mouse) {
+            under_mouse = inside;
+            if (inside) event_mouse_enter();
+            else event_mouse_leave();
         }
 
         // Tick children.
         for (auto& e : children())
             e.tick_mouse(mouse, rel_pos - box().origin());
-
-        // Check if we can focus or click on this element.
-        if (mouse.left) {
-            // Fire click events.
-            if (event_click()) mouse.left = false;
-
-            // Focus this element if possible. Consume the click so we don’t
-            // unfocus it again.
-            if (focusable) {
-                mouse.left = false;
-                focus();
-            }
-
-            // If the click was consumed, clear the active element if it’s not
-            // this one.
-            if (not mouse.left and parent_screen().active_element != this)
-                parent_screen().active_element = nullptr;
-        }
     }
 
-    // We aren’t; fire the leave event if we were inside before.
-    else if (under_mouse) {
-        under_mouse = false;
-        event_mouse_leave();
+    // Check if we can focus or click on this element.
+    if (inside and mouse.left) {
+        // Fire click events.
+        if (event_click()) mouse.left = false;
+
+        // Focus this element if possible. Consume the click so we don’t
+        // unfocus it again.
+        if (focusable) {
+            mouse.left = false;
+            focus();
+        }
+
+        // If the click was consumed, clear the active element if it’s not
+        // this one.
+        if (not mouse.left and parent_screen().active_element != this)
+            parent_screen().active_element = nullptr;
     }
 }
 
@@ -362,13 +460,97 @@ TextEdit::TextEdit(Element* parent, FontSize sz, TextStyle text_style)
 
 TextElement::TextElement(Element* parent, std::string_view contents, FontSize sz, TextStyle text_style)
     : Element(parent),
-      text{parent_screen().renderer.font(sz, text_style), contents} {
+      label{parent_screen().renderer.font(sz, text_style), contents} {
     style.size = SizePolicy::ComputedSize();
 }
 
+void TextEdit::RecomputeCursorOffset() {
+    // Use HarfBuzz cluster information to position the cursor: if the cursor
+    // position corresponds to an entry in the clusters array (e.g. the cursor
+    // is at position 3, and the array has an entry with value 3), position the
+    // cursor right before the character that starts at that cluster (i.e. the
+    // n-th character, where n is the index of the entry with value 3).
+    //
+    // If there is no entry, find the smallest cluster value 's' closest to the
+    // cursor position, take the difference between it and the next cluster, and
+    // lerp the cursor in the middle of the character at 's'.
+    //
+    // Concretely, there are 3 possible cases here:
+    //
+    //   1. The cursor is at the start/end of the text, in which case it has
+    //      index 0/n (where n is the number of characters in the text); draw
+    //      it before the first / after the last character.
+    //
+    //   2. The cursor corresponds to the index of a cluster; draw it before
+    //      that cluster.
+    //
+    //   3. The cursor corresponds to an index that is in between two clusters;
+    //      interpolate between them to position the cluster in the middle
+    //      somewhere.
+    if (
+        parent_screen().active_element == this and
+        not text.empty() and
+        not clusters.empty() and
+        (no_blink_ticks or parent_screen().renderer.blink_cursor())
+    ) {
+        cursor_offs = [&] -> i32 {
+            // Cursor is at the start/end of the text.
+            if (cursor == 0) return 0;
+            if (cursor == i32(text.size())) return i32(label.width);
+
+            // Find the smallest cluster with an index greater than or equal
+            // to the cursor position. We interpolate the cursor’s position
+            // between it and the previous cluster.
+            //
+            // Note that there *must* always be a cluster with an index *smaller*
+            // than the cursor, since there will always be a cluster with index
+            // 0, and the cursor index cannot be zero (because we checked for that
+            // above).
+            auto it = rgs::lower_bound(clusters, cursor, {}, &TextCluster::index);
+            auto prev = std::prev(it);
+            i32 x1 = prev->xoffs;
+            i32 i1 = prev->index;
+            i32 x2, i2;
+
+            // If we get here, the cursor must not be at the very start or end
+            // of the text; despite that, there may not be a cluster with an
+            // index larger than the cursor’s.
+            //
+            // This can happen e.g. if we have a ligature at the end of the text.
+            // For instance, if the text is 'fl', which is converted to a single
+            // ligature, the clusters array contains a single cluster with index 0.
+            //
+            // In this case, cursor index 1—despite being larger than the index of
+            // any cluster—is *not* at the end of the text. However, we can resolve
+            // this by pretending there is an additional cluster at the end of the
+            // array whose index is the size of the text, and then interpolate between
+            // that and the last actual cluster.
+            if (it != clusters.end()) {
+                // Cursor is right before a character.
+                if (it->index == cursor) return i32(it->xoffs);
+
+                // Cursor is between two clusters.
+                x2 = it->xoffs;
+                i2 = it->index;
+            }
+
+            // Interpolate between the last cluster and the end of the text.
+            else {
+                x2 = i32(label.width);
+                i2 = i32(text.size());
+            }
+
+            return i32(std::lerp(x1, x2, f32(cursor - i1) / f32(i2 - i1)));
+        }();
+    } else {
+        cursor_offs = -1;
+    }
+}
+
 void TextEdit::draw(Renderer& r) {
+    RecomputeCursorOffset();
     TextElement::draw(r);
-    if (text.empty) DrawCenteredText(r, placeholder, style.text_colour.darken(.2f));
+    if (text.empty()) DrawText(r, placeholder, style.text_colour.darken(.2f));
 }
 
 bool TextEdit::event_click() {
@@ -377,22 +559,100 @@ bool TextEdit::event_click() {
 }
 
 void TextEdit::event_focus_gained() {
-    placeholder.content = U"Focused!";
     style.background = DefaultButtonColour;
 }
 
 void TextEdit::event_focus_lost() {
-    placeholder.content = U"Not focused";
+    cursor_offs = -1;
     style.background = InactiveButtonColour;
 }
 
-void TextEdit::refresh() {
-    RefreshImpl(text.empty ? placeholder : text);
+void TextEdit::event_input(InputSystem& input) {
+    if (not input.text_input.empty()) {
+        text_changed = true;
+        no_blink_ticks = 20;
+        text.insert(cursor, input.text_input);
+        cursor += i32(input.text_input.size());
+    }
+
+    auto Paste = [&] {
+        if (SDL_HasClipboardText()) {
+            text += text::ToUTF32(SDL_GetClipboardText());
+            text_changed = true;
+        }
+    };
+
+    for (auto [key, mod] : input.kb_events) {
+        no_blink_ticks = 20;
+        switch (key) {
+            default: break;
+            case SDLK_BACKSPACE:
+                if (mod & SDL_KMOD_CTRL) {
+                    static constexpr std::u32string_view ws = U" \t\n\r\v\f";
+                    u32stream segment{text.data(), usz(cursor)};
+                    auto pos = segment.trim_back().drop_back_until_any(ws).size();
+                    text.erase(pos, cursor - pos);
+                    cursor = i32(pos);
+                    text_changed = true;
+                } else if (cursor != 0) {
+                    --cursor;
+                    text.erase(cursor, 1);
+                    text_changed = true;
+                }
+                break;
+            case SDLK_DELETE:
+                if (cursor != i32(text.size())) {
+                    text.erase(cursor, 1);
+                    text_changed = true;
+                }
+                break;
+            case SDLK_LEFT: cursor = std::max(0, cursor - 1); break;
+            case SDLK_RIGHT: cursor = std::min(i32(text.size()), cursor + 1); break;
+            case SDLK_HOME: cursor = 0; break;
+            case SDLK_END: cursor = i32(text.size()); break;
+            case SDLK_V:
+                if (mod & SDL_KMOD_CTRL) Paste();
+                break;
+            case SDLK_INSERT:
+                if (mod & SDL_KMOD_SHIFT) Paste();
+                break;
+        }
+    }
+
+    // Adding text may require to adjust the size of the text box, so
+    // mark us for a layout recomputation.
+    if (text_changed) layout_changed = true;
 }
 
-void TextElement::DrawCenteredText(Renderer& r, const Text& text, Colour colour) {
+void TextEdit::event_mouse_enter() {
+    parent_screen().renderer.set_cursor(Cursor::IBeam);
+}
+
+void TextEdit::event_mouse_leave() {
+    parent_screen().renderer.set_cursor(Cursor::Default);
+}
+
+void TextEdit::refresh() {
+    if (text_changed) {
+        text_changed = false;
+        label.content = hide_text ? std::u32string(text.size(), U'•') : text;
+        label.font.shape(label, &clusters);
+    }
+
+    RefreshImpl(text.empty() ? placeholder : label);
+}
+
+void TextElement::DrawText(Renderer& r, const Text& text, Colour colour) {
     auto pos = computed_pos + CenterTextInBox(text, computed_size);
     r.draw_text(text, pos, colour);
+    if (cursor_offs != -1) {
+        auto [asc, desc] = label.font.strut_split();
+        r.draw_line(
+            xy(i32(pos.x) + cursor_offs, pos.y - i32(desc)),
+            xy(i32(pos.x) + cursor_offs, pos.y + i32(asc)),
+            Colour::White
+        );
+    }
 }
 
 void TextElement::RefreshImpl(const Text& text) {
@@ -410,10 +670,9 @@ void TextElement::RefreshImpl(const Text& text) {
 
 void TextElement::draw(Renderer& r) {
     Element::draw(r);
-    DrawCenteredText(r, text, style.text_colour);
+    DrawText(r, label, style.text_colour);
 }
 
 void TextElement::refresh() {
-    RefreshImpl(text);
+    RefreshImpl(label);
 }
-

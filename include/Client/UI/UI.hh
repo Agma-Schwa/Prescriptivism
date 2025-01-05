@@ -46,7 +46,6 @@ class Element;
 class Button;
 class Screen;
 class TextEdit;
-class InputSystem;
 class Label;
 class Throbber;
 class Image;
@@ -58,6 +57,7 @@ class Player;
 class Arrow;
 using ui::MouseState;
 using ui::InactiveButtonColour;
+using ui::InputSystem;
 using ui::DefaultButtonColour;
 using ui::HoverButtonColour;
 
@@ -193,29 +193,6 @@ struct pr::client::Position {
         yadjust += std::saturate_cast<i16>(offset);
         return *this;
     }
-};
-
-/// User input handler.
-class pr::client::InputSystem {
-    struct Event {
-        SDL_Keycode key;
-        SDL_Keymod mod;
-    };
-
-    bool was_selected = false;
-
-public:
-    Renderer& renderer;
-    std::u32string text_input;
-    std::vector<Event> kb_events;
-    MouseState mouse;
-    bool quit = false;
-
-    InputSystem(Renderer& r) : renderer(r) {}
-
-    void game_loop(std::function<void()> tick);
-    void process_events();
-    void update_selection(bool is_element_selected);
 };
 
 /// The root of the UI element hierarchy.

@@ -487,57 +487,6 @@ TRIVIAL_CACHING_SETTER(Group, bool, vertical);
 TRIVIAL_CACHING_SETTER(Group, i32, alignment);
 
 // =============================================================================
-//  Input Handler.
-// =============================================================================
-extern void DumpActiveScreen();
-void InputSystem::process_events() {
-    kb_events.clear();
-    text_input.clear();
-
-    // Get mouse state.
-    mouse = {};
-    f32 x, y;
-    SDL_GetMouseState(&x, &y);
-    mouse.pos = {x, renderer.size().ht - y};
-
-    // Process events.
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-            default: break;
-            case SDL_EVENT_QUIT:
-                quit = true;
-                break;
-
-            // Record the button presses instead of acting on them immediately; this
-            // has the effect of debouncing clicks within a single tick.
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if (event.button.button == SDL_BUTTON_LEFT) mouse.left = true;
-                if (event.button.button == SDL_BUTTON_RIGHT) mouse.right = true;
-                if (event.button.button == SDL_BUTTON_MIDDLE) mouse.middle = true;
-                break;
-
-            case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_F12) renderer.reload_shaders();
-                if (event.key.key == SDLK_F11) DumpActiveScreen();
-                kb_events.emplace_back(event.key.key, event.key.mod);
-                break;
-
-            case SDL_EVENT_TEXT_INPUT:
-                text_input += text::ToUTF32(event.text.text);
-                break;
-        }
-    }
-}
-
-void InputSystem::update_selection(bool is_element_selected) {
-    if (was_selected == is_element_selected) return;
-    was_selected = is_element_selected;
-    if (is_element_selected) SDL_StartTextInput(renderer.sdl_window());
-    else SDL_StopTextInput(renderer.sdl_window());
-}
-
-// =============================================================================
 //  Screen
 // =============================================================================
 void Screen::DeleteAllChildren() {
@@ -649,7 +598,7 @@ void Screen::tick(InputSystem& input) {
 
     // In any case, tell the input system whether we have a
     // selected element.
-    input.update_selection(selected_element != nullptr);
+    input.accept_text_input = selected_element != nullptr;
 }
 
 void Screen::QueueImpl(std::unique_ptr<Effect> effect, bool flush_queue) {
@@ -660,32 +609,4 @@ void Screen::QueueImpl(std::unique_ptr<Effect> effect, bool flush_queue) {
 
     // And add this one at the end.
     effects.push_back(std::move(effect));
-}
-
-// =============================================================================
-//  Game Loop.
-// =============================================================================
-void InputSystem::game_loop(std::function<void()> tick) {
-    constexpr auto ClientTickDuration = 16ms;
-    while (not quit) {
-        auto start_of_tick = chr::system_clock::now();
-
-        // Handle user input.
-        process_events();
-
-        tick();
-
-        const auto end_of_tick = chr::system_clock::now();
-        const auto tick_duration = chr::duration_cast<chr::milliseconds>(end_of_tick - start_of_tick);
-        if (tick_duration < ClientTickDuration) {
-            SDL_WaitEventTimeout(
-                nullptr,
-                i32((ClientTickDuration - tick_duration).count())
-            );
-        } else {
-#ifndef PRESCRIPTIVISM_ENABLE_SANITISERS
-            Log("Client tick took too long: {}ms", tick_duration.count());
-#endif
-        }
-    }
 }

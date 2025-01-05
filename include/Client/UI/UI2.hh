@@ -5,6 +5,7 @@
 
 #include <base/Macros.hh>
 #include <base/Properties.hh>
+#include <SDL3/SDL.h>
 
 #include <numeric>
 
@@ -48,6 +49,29 @@ struct MouseState {
     bool left{};
     bool right{};
     bool middle{};
+};
+
+/// User input handler.
+class InputSystem {
+    struct Event {
+        SDL_Keycode key;
+        SDL_Keymod mod;
+    };
+
+    Property(bool, accept_text_input, false);
+
+public:
+    Renderer& renderer;
+    std::u32string text_input;
+    std::vector<Event> kb_events;
+    MouseState mouse;
+    bool quit = false;
+
+    InputSystem(Renderer& r) : renderer(r) {}
+
+    bool has_input();
+    void game_loop(std::function<void()> tick);
+    void process_events();
 };
 
 /// Size policy of an element.
@@ -224,6 +248,10 @@ private:
     /// Used to scale this widget (and its children) by a factor.
     Property(f32, ui_scale, 1);
 
+    /// Whether the element’s layout needs to be recomputed, e.g. because
+    /// its size changed or it gained a child that needs to be laid out.
+    Property(bool, layout_changed, true);
+
     /// The children of this element.
     StableVector<Element> elements;
 
@@ -234,10 +262,6 @@ public:
 private:
     /// Whether the element can  hovered over.
     Hoverable hoverable : 2 = Hoverable::Yes;
-
-    /// Whether the element’s layout needs to be recomputed, e.g. because
-    /// its size changed or it gained a child that needs to be laid out.
-    bool layout_changed : 1 = true;
 
     /// The mouse is currently on this element.
     bool under_mouse : 1 = false;
@@ -369,13 +393,13 @@ public:
     virtual void event_mouse_leave() {}
 
     /// Event handler for when a selected element is given text input.
-    virtual void event_input(std::string_view) {}
+    virtual void event_input(InputSystem&) {}
 
     /// Event handler for when the parent element is resized.
     virtual void event_resize() {}
 
     /// Get the name of this element.
-    virtual auto name() const -> std::string_view  { return "Element"; }
+    virtual auto name() const -> std::string_view { return "Element"; }
 
     /// Refresh the element.
     virtual void refresh();
@@ -393,7 +417,10 @@ private:
 /// Single-line text element.
 class TextElement : public Element {
 protected:
-    Text text;
+    Text label;
+
+    /// Cursor offset from the start of the text; -1 to disable.
+    i32 cursor_offs = -1;
 
     TextElement(
         Element* parent,
@@ -408,7 +435,7 @@ public:
 
 protected:
     void RefreshImpl(const Text& text);
-    void DrawCenteredText(Renderer& r, const Text& text, Colour colour);
+    void DrawText(Renderer& r, const Text& text, Colour colour);
 };
 
 /// A text element.
@@ -441,16 +468,37 @@ public:
     void draw() { draw(renderer); }
 
     /// Tick the screen.
-    void tick(MouseState& mouse) { tick(mouse, mouse.pos); }
+    void tick(InputSystem& input);
 
-    auto name() const -> std::string_view override {  return "Screen"; }
+    auto name() const -> std::string_view override { return "Screen"; }
 
     bool event_click() override;
 };
 
 /// A single-line text editor.
 class TextEdit : public TextElement {
+    /// Placeholder text which is rendered if the text box is empty.
     Text placeholder;
+
+    /// The actual contents of the text edit, which can be different
+    /// from the label of the underlying TextBox in case this is a
+    /// password input box.
+    std::u32string text;
+
+    /// Clusters for the *shaped* text; used mainly for cursor positioning.
+    std::vector<TextCluster> clusters;
+
+    /// Whether text should be replaced with '•'.
+    bool hide_text = false;
+
+    /// Whether the text has changed.
+    bool text_changed = false;
+
+    /// Used to inhibit cursor blinking during typing.
+    i32 no_blink_ticks = 0;
+
+    /// The current cursor index.
+    i32 cursor = 0;
 
 public:
     TextEdit(Element* parent, FontSize sz, TextStyle = TextStyle::Regular);
@@ -459,8 +507,14 @@ public:
     bool event_click() override;
     void event_focus_gained() override;
     void event_focus_lost() override;
+    void event_input(InputSystem& input) override;
+    void event_mouse_enter() override;
+    void event_mouse_leave() override;
     auto name() const -> std::string_view override { return "TextEdit"; }
     void refresh() override;
+
+private:
+    void RecomputeCursorOffset();
 };
 
 } // namespace pr::client::ui

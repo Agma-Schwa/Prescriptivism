@@ -426,7 +426,7 @@ void Client::Tick() {
     // Testing.
     TestScreen->style.size = renderer.size();
     TestScreen->refresh();
-    TestScreen->tick(input_system.mouse);
+    TestScreen->tick(input_system);
     TestScreen->draw();
 
     /*// Refresh screen info.
