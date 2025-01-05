@@ -372,8 +372,9 @@ public:
 
     /// Event handler for when the mouse is clicked on this element.
     ///
+    /// \param pos The position of the click relative to the element.
     /// \return Whether the click should stop propagating.
-    virtual bool event_click() { return false; }
+    virtual bool event_click([[maybe_unused]] xy pos) { return false; }
 
     /// Event handler for when this element gains focus.
     ///
@@ -472,7 +473,7 @@ public:
 
     auto name() const -> std::string_view override { return "Screen"; }
 
-    bool event_click() override;
+    bool event_click(xy pos) override;
 };
 
 /// A single-line text editor.
@@ -504,7 +505,7 @@ public:
     TextEdit(Element* parent, FontSize sz, TextStyle = TextStyle::Regular);
 
     void draw(Renderer& r) override;
-    bool event_click() override;
+    bool event_click(xy pos) override;
     void event_focus_gained() override;
     void event_focus_lost() override;
     void event_input(InputSystem& input) override;

@@ -323,7 +323,7 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
             old_background = std::exchange(style.background, style.background.darken(.2f));
         }
 
-        bool event_click() override {
+        bool event_click(xy) override {
             if (style.overlay == Colour::Transparent) style.overlay = Colour{128, 64, 64, 64};
             else style.overlay = Colour::Transparent;
             return false;

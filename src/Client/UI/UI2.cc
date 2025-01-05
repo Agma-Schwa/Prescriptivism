@@ -88,7 +88,7 @@ void InputSystem::set_accept_text_input(bool new_value) {
 // =============================================================================
 //  Screen
 // =============================================================================
-bool Screen::event_click() {
+bool Screen::event_click(xy) {
     // Consume the click.
     return true;
 }
@@ -379,7 +379,7 @@ void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
     // Check if we can focus or click on this element.
     if (inside and mouse.left) {
         // Fire click events.
-        if (event_click()) mouse.left = false;
+        if (event_click(rel_pos)) mouse.left = false;
 
         // Focus this element if possible. Consume the click so we don’t
         // unfocus it again.
@@ -554,9 +554,55 @@ void TextEdit::draw(Renderer& r) {
     if (text.empty()) DrawText(r, placeholder, style.text_colour.darken(.2f));
 }
 
-bool TextEdit::event_click() {
-    // TODO: Clicking into the middle of the text.
-    return false;
+bool TextEdit::event_click(xy pos) {
+    // Figure out where we clicked and set the cursor accordingly;
+    // we do this by iterating over all clusters; as soon as we find
+    // one whose offset brings us further away from the click position,
+    // we stop and go back to the one before it.
+    no_blink_ticks = 20;
+    i32 mx = pos.x;
+    i32 x0 = (computed_pos + CenterTextInBox(label, computed_size)).x;
+    i32 x1 = x0 + i32(label.width);
+    if (mx < x0) cursor = 0;
+    else if (mx > x1) cursor = i32(text.size());
+    else if (clusters.size() < 2) cursor = 0;
+    else {
+        cursor = 0;
+        i32 x = x0;
+        i32 d = std::abs(x - mx);
+        auto it = clusters.begin();
+
+        // A cluster might correspond to multiple glyphs, in which case
+        // we need to interpolate into it.
+        TextCluster* prev = nullptr;
+        while (cursor < i32(text.size()) and it != clusters.end()) {
+            auto xoffs = [&] {
+                // Cluster matches cursor index; we can use the x
+                // offset exactly.
+                if (cursor == it->index) return it->xoffs;
+
+                // Cluster index is too large; interpolate between the
+                // previous index and this one.
+                auto prev_x = prev ? prev->xoffs : 0;
+                auto prev_i = prev ? prev->index : 0;
+                return i32(std::lerp(prev_x, it->xoffs, f32(cursor - prev_i) / f32(it->index - prev_i)));
+            }();
+
+            auto nd = std::abs(x + xoffs - mx);
+            if (nd > d) {
+                cursor--;
+                break;
+            }
+
+            d = nd;
+            prev = &*it;
+            cursor++;
+            if (cursor > it->index) ++it;
+        }
+
+        cursor = std::clamp(cursor, 0, i32(text.size()));
+    }
+    return true;
 }
 
 void TextEdit::event_focus_gained() {
