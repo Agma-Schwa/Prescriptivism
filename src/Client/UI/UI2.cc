@@ -548,6 +548,7 @@ void TextEdit::RecomputeCursorOffset() {
 }
 
 void TextEdit::draw(Renderer& r) {
+    if (no_blink_ticks) no_blink_ticks--;
     RecomputeCursorOffset();
     TextElement::draw(r);
     if (text.empty()) DrawText(r, placeholder, style.text_colour.darken(.2f));
