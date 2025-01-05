@@ -489,6 +489,7 @@ TRIVIAL_CACHING_SETTER(Group, i32, alignment);
 // =============================================================================
 //  Input Handler.
 // =============================================================================
+extern void DumpActiveScreen();
 void InputSystem::process_events() {
     kb_events.clear();
     text_input.clear();
@@ -518,6 +519,7 @@ void InputSystem::process_events() {
 
             case SDL_EVENT_KEY_DOWN:
                 if (event.key.key == SDLK_F12) renderer.reload_shaders();
+                if (event.key.key == SDLK_F11) DumpActiveScreen();
                 kb_events.emplace_back(event.key.key, event.key.mod);
                 break;
 

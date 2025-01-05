@@ -326,8 +326,9 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
         bool event_click() override {
             if (style.overlay == Colour::Transparent) style.overlay = Colour{128, 64, 64, 64};
             else style.overlay = Colour::Transparent;
-            return true;
+            return false;
         }
+        auto name() const -> std::string_view override { return "HoverWidget"; }
     };
 
     TestScreen = new ui::Screen(renderer);
@@ -411,6 +412,9 @@ void Client::set_screen(Screen& s) {
     s.refresh(renderer);
     s.on_entered();
 }
+
+// FIXME: Hack.
+void DumpActiveScreen() { TestScreen->dump(); }
 
 void Client::Tick() {
     // Handle networking.

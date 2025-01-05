@@ -8,8 +8,7 @@ using namespace pr::client::ui;
 //  Screen
 // =============================================================================
 bool Screen::event_click() {
-    // Remove focus from the active element.
-    active_element = nullptr;
+    // Consume the click.
     return true;
 }
 
@@ -198,6 +197,34 @@ void Element::draw(Renderer& r) {
     } // clang-format on
 }
 
+void Element::dump() {
+    dump_impl(0);
+}
+
+void Element::dump_impl(i32 indent) {
+    auto n = name();
+    auto i = std::string(indent, ' ');
+    auto has_focus = parent_screen().active_element == this;
+
+    Log(
+        "{}{}\033[33m{} \033[34m{} \033[31m[\033[35m{}, {}×{}\033[31m]{}\033[m\033[31m{}\033[m",
+        i,
+        has_focus ? "\033[1m"sv : ""sv,
+        n,
+        static_cast<void*>(this),
+        computed_pos,
+        computed_size.wd,
+        computed_size.ht,
+        focusable ? "#"sv : ""sv,
+        children().empty() ? ""sv : " {{"sv
+    );
+
+    if (not children().empty()) {
+        for (auto& c : children()) c.dump_impl(indent + 2);
+        Log("{}\033[31m}}\033[m", i, n);
+    }
+}
+
 void Element::focus() {
     parent_screen().active_element = this;
 }
@@ -244,14 +271,21 @@ void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
         for (auto& e : children())
             e.tick_mouse(mouse, rel_pos - box().origin());
 
-        // Apply click events *after* ticking the children as one of
-        // them may want to consume the click first (this makes focus
-        // on click work properly, for instance).
-        if (mouse.left and event_click()) {
-            mouse.left = false;
+        // Check if we can focus or click on this element.
+        if (mouse.left) {
+            // Fire click events.
+            if (event_click()) mouse.left = false;
 
-            // If this element didn’t take focus, unfocus the active element.
-            if (parent_screen().active_element != this)
+            // Focus this element if possible. Consume the click so we don’t
+            // unfocus it again.
+            if (focusable) {
+                mouse.left = false;
+                focus();
+            }
+
+            // If the click was consumed, clear the active element if it’s not
+            // this one.
+            if (not mouse.left and parent_screen().active_element != this)
                 parent_screen().active_element = nullptr;
         }
     }
@@ -322,6 +356,7 @@ static auto CenterTextInBox(const Text& text, Size box_size) -> xy {
 TextEdit::TextEdit(Element* parent, FontSize sz, TextStyle text_style)
     : TextElement(parent, "", sz, text_style),
       placeholder{parent_screen().renderer.font(sz, text_style), "Placeholder"} {
+    focusable = true;
     style.background = InactiveButtonColour;
 }
 
@@ -337,15 +372,17 @@ void TextEdit::draw(Renderer& r) {
 }
 
 bool TextEdit::event_click() {
-    focus();
-    return true;
+    // TODO: Clicking into the middle of the text.
+    return false;
 }
 
 void TextEdit::event_focus_gained() {
+    placeholder.content = U"Focused!";
     style.background = DefaultButtonColour;
 }
 
 void TextEdit::event_focus_lost() {
+    placeholder.content = U"Not focused";
     style.background = InactiveButtonColour;
 }
 

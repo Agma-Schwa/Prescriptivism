@@ -30,19 +30,17 @@ enum class Anchor : u8 {
     Default = SouthWest,
 };
 
-/// Selection or hover behaviour.
-enum class Focusable : u8 {
-    /// Can be selected or hovered over.
+/// Hover behaviour.
+enum class Hoverable : u8 {
+    /// Can be hovered over.
     Yes,
 
-    /// Cannot be selected or hovered over.
+    /// Cannot be hovered over.
     No,
 
-    /// As 'No', but does not elements below it from being selected.
+    /// As 'No', but does not elements below it from being hovered.
     Transparent,
 };
-
-using Hoverable = Focusable;
 
 /// Current state of the mouse buttons.
 struct MouseState {
@@ -234,19 +232,22 @@ public:
     Style style;
 
 private:
-    /// Whether the element can be focused or hovered over.
-    //Focusable focusable : 2 = Focusable::No;
+    /// Whether the element can  hovered over.
     Hoverable hoverable : 2 = Hoverable::Yes;
 
     /// Whether the element’s layout needs to be recomputed, e.g. because
     /// its size changed or it gained a child that needs to be laid out.
     bool layout_changed : 1 = true;
 
-    /// Element is rendered, ticked, and interactable.
-    bool visible : 1 = true;
-
     /// The mouse is currently on this element.
     bool under_mouse : 1 = false;
+
+protected:
+    /// Whether the element can be focused.
+    bool focusable : 1 = false;
+
+    /// Element is rendered, ticked, and interactable.
+    bool visible : 1 = true;
 
 public:
     explicit Element(Element* parent) : _parent(parent) {}
@@ -287,7 +288,13 @@ public:
         return CreateImpl<El>(std::forward<Args>(args)...);
     }
 
+    /// Print the UI hierarchy.
+    void dump();
+
     /// Focus this element.
+    ///
+    /// This does not perform any checks as to whether the element is
+    /// supposed to be focusable.
     void focus();
 
     /*
@@ -341,7 +348,7 @@ public:
 
     /// Event handler for when the mouse is clicked on this element.
     ///
-    /// \return Whether the click should be consumed.
+    /// \return Whether the click should stop propagating.
     virtual bool event_click() { return false; }
 
     /// Event handler for when this element gains focus.
@@ -362,10 +369,13 @@ public:
     virtual void event_mouse_leave() {}
 
     /// Event handler for when a selected element is given text input.
-    virtual void event_input(std::string_view text) {}
+    virtual void event_input(std::string_view) {}
 
     /// Event handler for when the parent element is resized.
     virtual void event_resize() {}
+
+    /// Get the name of this element.
+    virtual auto name() const -> std::string_view  { return "Element"; }
 
     /// Refresh the element.
     virtual void refresh();
@@ -375,6 +385,7 @@ public:
 
 private:
     void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_static_extent, i32 dynamic_els);
+    void dump_impl(i32 indent);
     void tick_mouse(MouseState& mouse, xy rel_pos);
     void recompute_layout();
 };
@@ -409,6 +420,8 @@ public:
         FontSize sz,
         TextStyle text_style = TextStyle::Regular
     ) : TextElement(parent, contents, sz, text_style) {}
+
+    auto name() const -> std::string_view override { return "Label"; }
 };
 
 class Screen : public Element {
@@ -430,6 +443,8 @@ public:
     /// Tick the screen.
     void tick(MouseState& mouse) { tick(mouse, mouse.pos); }
 
+    auto name() const -> std::string_view override {  return "Screen"; }
+
     bool event_click() override;
 };
 
@@ -444,6 +459,7 @@ public:
     bool event_click() override;
     void event_focus_gained() override;
     void event_focus_lost() override;
+    auto name() const -> std::string_view override { return "TextEdit"; }
     void refresh() override;
 };
 
