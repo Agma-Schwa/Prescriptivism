@@ -204,6 +204,9 @@ struct Style {
     /// static or dynamic.
     SizePolicy size = {0, 0};
 
+    /// The cursor to be rendered when hovering over this element.
+    std::optional<Cursor> cursor_override;
+
     /// Layout along the X axis.
     ByAxis<Layout> layout{{}, {Layout::OverlapCenter}};
 
@@ -463,7 +466,7 @@ public:
     Renderer& renderer;
 
     /// Create a new screen.
-    explicit Screen(Renderer& r) : Element(nullptr), renderer(r) {}
+    explicit Screen(Renderer& r);
 
     /// Draw the screen.
     void draw() { draw(renderer); }
@@ -509,8 +512,6 @@ public:
     void event_focus_gained() override;
     void event_focus_lost() override;
     void event_input(InputSystem& input) override;
-    void event_mouse_enter() override;
-    void event_mouse_leave() override;
     auto name() const -> std::string_view override { return "TextEdit"; }
     void refresh() override;
 

@@ -88,6 +88,10 @@ void InputSystem::set_accept_text_input(bool new_value) {
 // =============================================================================
 //  Screen
 // =============================================================================
+Screen::Screen(Renderer& r) : Element(nullptr), renderer(r) {
+    style.cursor_override = Cursor::Default;
+}
+
 bool Screen::event_click(xy) {
     // Consume the click.
     return true;
@@ -361,6 +365,10 @@ void Element::tick(MouseState& mouse, xy rel_pos) {
 void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
     bool inside = box().contains(rel_pos);
 
+    // Apply the cursor for this element if we’re inside it.
+    if (inside and style.cursor_override)
+        parent_screen().renderer.set_cursor(style.cursor_override.value());
+
     // Tick the mouse position if we’re inside the element or if we
     // just left it.
     if (inside or under_mouse) {
@@ -456,6 +464,7 @@ TextEdit::TextEdit(Element* parent, FontSize sz, TextStyle text_style)
       placeholder{parent_screen().renderer.font(sz, text_style), "Placeholder"} {
     focusable = true;
     style.background = InactiveButtonColour;
+    style.cursor_override = Cursor::IBeam;
 }
 
 TextElement::TextElement(Element* parent, std::string_view contents, FontSize sz, TextStyle text_style)
@@ -669,14 +678,6 @@ void TextEdit::event_input(InputSystem& input) {
     // Adding text may require to adjust the size of the text box, so
     // mark us for a layout recomputation.
     if (text_changed) layout_changed = true;
-}
-
-void TextEdit::event_mouse_enter() {
-    parent_screen().renderer.set_cursor(Cursor::IBeam);
-}
-
-void TextEdit::event_mouse_leave() {
-    parent_screen().renderer.set_cursor(Cursor::Default);
 }
 
 void TextEdit::refresh() {
