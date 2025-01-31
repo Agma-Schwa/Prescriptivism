@@ -38,6 +38,9 @@ class LateInit;
 template <typename ResultType>
 class Thread;
 
+template <typename T>
+struct TupleFormat;
+
 void CloseLoggingThread();
 
 struct SilenceLog {
@@ -260,6 +263,14 @@ public:
     }
 };
 
+template <typename T>
+struct pr::TupleFormat {
+    T* value;
+    TupleFormat(T* t) : value(t) {}
+    TupleFormat(T& t) : value(&t) {}
+    TupleFormat(T&& t) : value(&t) {}
+};
+
 /// Wrapper around a null-terminated string; this is non-owning
 /// and should only be used in function parameters.
 struct pr::ZTermString {
@@ -280,6 +291,13 @@ template <typename... Args>
 void pr::Log(std::format_string<Args...> fmt, Args&&... args) {
     pr::LogImpl(std::format(fmt, std::forward<Args>(args)...));
 }
+
+#define DEBUG_ONCE(...)                 \
+    do {                                \
+        static bool _done = false;      \
+        if (not _done) { __VA_ARGS__; } \
+        _done = true;                   \
+    } while (false)
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
@@ -302,6 +320,32 @@ struct std::formatter<pr::Debug<T>> : std::formatter<std::string> {
         };
 
         __builtin_dump_struct(t.value, Formatter);
+        return std::formatter<std::string>::format(s, ctx);
+    }
+};
+
+template <typename T>
+struct std::formatter<pr::TupleFormat<T>> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(pr::TupleFormat<T> t, FormatContext& ctx) const {
+        using Type = std::remove_cvref_t<T>;
+        std::string s;
+        if constexpr (std::formattable<Type, char>) {
+            s = std::format("{}", *t.value);
+        } else if constexpr (std::is_class_v<Type> or std::is_array_v<Type>) {
+            const auto& [...fields] = *t.value;
+            if constexpr (sizeof...(fields) == 1) s += std::format("{}", pr::TupleFormat(fields...[0]));
+            else {
+                s += "(";
+                ((s += std::format("{}, ", pr::TupleFormat(fields))), ...);
+                s.resize(s.size() - 2);
+                s += ")";
+            }
+        } else if constexpr (std::is_enum_v<Type>) {
+            s = std::format("{}", std::to_underlying(*t.value));
+        } else {
+            static_assert(false, "Don’t know how to format this");
+        }
         return std::formatter<std::string>::format(s, ctx);
     }
 };

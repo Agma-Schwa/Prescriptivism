@@ -146,6 +146,18 @@ FetchContent_Declare(glm
 
 FetchContent_MakeAvailable(base sdl3 webp glbinding freetype harfbuzz glm)
 
+## Disable this warning in third-party dependencies.
+file(GLOB_RECURSE prescriptivism_deps
+    "${CMAKE_CURRENT_BINARY_DIR}/*.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/*.hh"
+)
+
+set_source_files_properties(
+    ${prescriptivism_deps}
+    PROPERTIES
+    COMPILE_FLAGS "-Wno-nontrivial-memcall"
+)
+
 ## ============================================================================
 ##  Tools
 ## ============================================================================

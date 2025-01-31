@@ -4,8 +4,15 @@ using namespace pr;
 using namespace pr::client;
 using namespace pr::client::ui;
 
+#define DEFAULT_ELEMENT_STYLE(...)                                                         \
+    do {                                                                                   \
+        static constexpr DeclaredStyleProperties DefaultStyle{__VA_ARGS__};                \
+        static auto DefaultStylePtr = std::make_shared<const DeclaredStyle>(DefaultStyle); \
+        style->parent = DefaultStylePtr;                                                   \
+    } while (false)
+
 // =============================================================================
-//  Input Handler.
+//  Input Handler
 // =============================================================================
 extern void DumpActiveScreen();
 
@@ -86,10 +93,88 @@ void InputSystem::set_accept_text_input(bool new_value) {
 }
 
 // =============================================================================
+//  Styles
+// =============================================================================
+// The only reason this is a template is because we can’t have structured
+// binding packs in non-templates...
+template <typename>
+auto DeclaredStyle::ApplyOwnProps(ComputedStyleProperties props) const -> const ComputedStyle& {
+    // FIXME: Make this a lambda once Clang stops crashing on that.
+    const auto& [...our_prop] = *static_cast<const DeclaredStyleProperties*>(this);
+    auto& [...computed_prop] = props;
+    ([&]{ if (our_prop.is_set()) computed_prop = our_prop.get_existing();  }(), ...);
+    cached = std::make_shared<const ComputedStyle>(std::move(props));
+    return *cached;
+}
+
+template <typename>
+auto DeclaredStyle::ComputeStyle() const -> const ComputedStyle& {
+    // Recompute the style; if we don’t override anything, then simply
+    // inherit the parent’s style.
+    if (not has_overrides()) {
+        Assert(parent, "Style with no overrides must have a parent");
+        return parent->computed();
+    }
+
+    // If we don’t have a parent, then just compute our own styles.
+    if (not parent) return ApplyOwnProps({});
+
+    // Otherwise, we need to inherit our parent’s styles. If our overrides
+    // happen to be the same as our parent’s simply return its style as well.
+    const auto& [...our_prop] = *static_cast<const DeclaredStyleProperties*>(this);
+    const auto& [...parent_prop] = static_cast<const ComputedStyleProperties&>(parent->computed());
+    if (((not our_prop.is_set() or our_prop.get_existing() == parent_prop) and ...))
+        return parent->computed();
+
+    // In any other case, we need to merge styles.
+    return ApplyOwnProps(parent->computed());
+}
+
+template <typename>
+bool DeclaredStyle::HasOverrides() const {
+    const auto& [...our_prop] = *static_cast<const DeclaredStyleProperties*>(this);
+    return (our_prop.is_set() or ...);
+}
+
+auto DeclaredStyle::computed() const -> const ComputedStyle& {
+    if (cached) return *cached;
+    return ComputeStyle();
+}
+
+void DeclaredStyle::dump(i32 indent) const {
+    auto i = std::string(indent, ' ');
+    auto Dump = [&](auto& val, std::string_view name) {
+        if (val.is_set()) Log("{} \033[33m{}: \033[36m{}\033[m", i, name, TupleFormat(val.get_existing()));
+    };
+
+#define DUMP(x) Dump(x, #x);
+    DUMP(background);
+    DUMP(overlay);
+    DUMP(text_colour);
+    DUMP(border_radius);
+    DUMP(z);
+    DUMP(size);
+    DUMP(cursor);
+    DUMP(layout);
+#undef DUMP
+}
+
+bool DeclaredStyle::has_overrides() const { return HasOverrides(); }
+
+// =============================================================================
 //  Screen
 // =============================================================================
 Screen::Screen(Renderer& r) : Element(nullptr), renderer(r) {
-    style.cursor_override = Cursor::Default;
+    DEFAULT_ELEMENT_STYLE(
+        .background = Colour::Transparent,
+        .overlay = Colour::Transparent,
+        .text_colour =  Colour::White,
+        .border_radius = 0,
+        .z = 0,
+        .size = {0, 0},
+        .cursor = Cursor::Default,
+        .layout = ByAxis<Layout>{{},{Layout::OverlapCenter}},
+    );
 }
 
 bool Screen::event_click(xy) {
@@ -172,8 +257,8 @@ void Element::BuildLayout(
         case Layout::PackedCenter: {
             total_extent += (i32(elements.size()) - 1) * l.gap;
             for (auto& e : elements) {
-                if (e.style.size.is_dynamic(a)) {
-                    Assert(e.style.size[a] == SizePolicy::Fill, "Unknown dynamic layout mode");
+                if (e.computed_style.size.is_dynamic(a)) {
+                    Assert(e.computed_style.size[a] == SizePolicy::Fill, "Unknown dynamic layout mode");
                     e.computed_size[a] = (computed_size[a] - total_extent) / dynamic_els;
                 }
             }
@@ -184,8 +269,8 @@ void Element::BuildLayout(
         case Layout::Overlap:
         case Layout::OverlapCenter: {
             for (auto& e : elements) {
-                if (e.style.size.is_dynamic(a)) {
-                    Assert(e.style.size[a] == SizePolicy::Fill, "Unknown dynamic layout mode");
+                if (e.computed_style.size.is_dynamic(a)) {
+                    Assert(e.computed_style.size[a] == SizePolicy::Fill, "Unknown dynamic layout mode");
                     e.computed_size[a] = computed_size[a];
                 }
             }
@@ -233,7 +318,7 @@ void Element::recompute_layout() {
     for (auto& e : elements) {
         e.refresh();
         for (auto a : Axes) {
-            if (e.style.size.is_dynamic(a)) {
+            if (e.computed_style.size.is_dynamic(a)) {
                 dynamic_els[a]++;
                 continue;
             }
@@ -249,7 +334,7 @@ void Element::recompute_layout() {
     // FIXME: At this point, we probably want a LayoutBuilder class so we don’t have to pass 20
     // arguments to this function.
     for (auto a : Axes) BuildLayout(
-        style.layout[a],
+        computed_style.layout[a],
         a,
         total_size[a],
         max_size[a],
@@ -258,16 +343,16 @@ void Element::recompute_layout() {
 
     // Finally, compute the layout of dynamic elements.
     for (auto& e : elements)
-        if (e.style.size.is_partially_dynamic())
+        if (e.computed_style.size.is_partially_dynamic())
             e.recompute_layout();
 }
 
 void Element::draw(Renderer& r) {
     // Draw background.
-    r.draw_rect(computed_pos, computed_size, style.background);
+    r.draw_rect(computed_pos, computed_size, computed_style.background);
 
     // Draw overlay last, after popping the matrix.
-    defer { r.draw_rect(computed_pos, computed_size, style.overlay); };
+    defer { r.draw_rect(computed_pos, computed_size, computed_style.overlay); };
 
     // Push transform matrix for this element.
     auto _ = r.push_matrix(computed_pos, ui_scale);
@@ -294,16 +379,18 @@ void Element::draw(Renderer& r) {
 }
 
 void Element::dump() {
-    dump_impl(0);
+    std::unordered_set<const DeclaredStyle*> printed_styles;
+    dump_impl(printed_styles, 0);
 }
 
-void Element::dump_impl(i32 indent) {
+void Element::dump_impl(std::unordered_set<const DeclaredStyle*>& printed_styles, i32 indent) {
     auto n = name();
     auto i = std::string(indent, ' ');
     auto has_focus = parent_screen().active_element == this;
 
+    // Dump main element data.
     Log(
-        "{}{}\033[33m{} \033[34m{} \033[31m[\033[35m{}, {}×{}\033[31m]{}\033[m\033[31m{}\033[m",
+        "{}{}\033[33m{} \033[34m{} \033[31m[\033[35m{}, {}×{}\033[31m]{}\033[m\033[31m {{\033[m",
         i,
         has_focus ? "\033[1m"sv : ""sv,
         n,
@@ -311,18 +398,59 @@ void Element::dump_impl(i32 indent) {
         computed_pos,
         computed_size.wd,
         computed_size.ht,
-        focusable ? "#"sv : ""sv,
-        children().empty() ? ""sv : " {{"sv
+        focusable ? "#"sv : ""sv
     );
 
-    if (not children().empty()) {
-        for (auto& c : children()) c.dump_impl(indent + 2);
-        Log("{}\033[31m}}\033[m", i, n);
-    }
+    auto DumpStyle = [&](std::string_view name, const DeclaredStyle& style) {
+        defer { printed_styles.insert(&style); };
+        auto parent = static_cast<const void*>(style.parent.get());
+        if (printed_styles.contains(&style) or not style.has_overrides()) {
+            Log(
+                "{}  \033[31m{}\033[31m inherit \033[34m{}\033[m",
+                i,
+                name,
+                parent
+            );
+            return;
+        }
+
+        Log(
+            "{}  \033[31m{}\033[34m {}\033[31m inherit {}\033[31m {{\033[m",
+            i,
+            name,
+            static_cast<const void*>(&style),
+            parent ? std::format("\033[34m{}", parent) : "\033[36mnone"sv
+        );
+        style.dump(indent + 4);
+        Log("{}  \033[31m}}\033[m", i);
+    };
+
+    // Dump styles.
+    DumpStyle("Style", *style);
+    if (hover_style->has_overrides() or hover_style->parent.get() != style.get())
+        DumpStyle("HoverStyle", *hover_style);
+
+    // Dump children.
+    if (not children().empty()) Log("");
+    for (auto& c : children()) c.dump_impl(printed_styles, indent + 2);
+
+    // Closing brace.
+    Log("{}\033[31m}}\033[m", i, n);
 }
 
 void Element::focus() {
     parent_screen().active_element = this;
+}
+
+void Element::invalidate_styles() {
+    if (style->already_invalidated()) return;
+    style->invalidate();
+    hover_style->invalidate();
+    for (auto& e : children()) e.invalidate_styles();
+}
+
+auto Element::get_computed_style() const -> const ComputedStyle& {
+    return under_mouse ? style->computed() : hover_style->computed();
 }
 
 auto Element::parent_screen() -> Screen& {
@@ -333,18 +461,21 @@ auto Element::parent_screen() -> Screen& {
 void Element::refresh() {
     // Do not refresh the element if the size hasn’t changed and if the
     // layout doesn’t need to be recomputed.
-    if (style.size.is_fixed()) {
-        if (Size{style.size.xval, style.size.yval} == computed_size and not layout_changed) return;
+    if (computed_style.size.is_fixed()) {
+        if (Size{computed_style.size.xval, computed_style.size.yval} == computed_size and not layout_changed) return;
     }
+
+    // Otherwise, we need to recompute styles that depend on the size.
+    invalidate_styles();
 
     // Apply the fixed size to non-computed dimensions.
     for (auto a : Axes)
-        if (style.size.is_fixed(a))
-            computed_size[a] = style.size[a];
+        if (computed_style.size.is_fixed(a))
+            computed_size[a] = computed_style.size[a];
 
     // If the size is dynamic, we cannot recompute the layout until the
     // size is known.
-    if (style.size.is_partially_dynamic()) return;
+    if (computed_style.size.is_partially_dynamic()) return;
 
     // Recompute the layout.
     recompute_layout();
@@ -366,8 +497,7 @@ void Element::tick_mouse(MouseState& mouse, xy rel_pos) {
     bool inside = box().contains(rel_pos);
 
     // Apply the cursor for this element if we’re inside it.
-    if (inside and style.cursor_override)
-        parent_screen().renderer.set_cursor(style.cursor_override.value());
+    if (inside) parent_screen().renderer.set_cursor(computed_style.cursor);
 
     // Tick the mouse position if we’re inside the element or if we
     // just left it.
@@ -459,18 +589,41 @@ static auto CenterTextInBox(const Text& text, Size box_size) -> xy {
     return xy{x, box_size.ht - top_offs};
 }
 
+Button::Button(
+    Element* parent,
+    std::string_view contents,
+    FontSize sz,
+    std::move_only_function<void()> click_handler
+) : TextElement(parent, contents, sz), on_click(std::move(click_handler)) {
+    DEFAULT_ELEMENT_STYLE(
+        .background = InactiveButtonColour,
+        .cursor = Cursor::Click,
+    );
+}
+
 TextEdit::TextEdit(Element* parent, FontSize sz, TextStyle text_style)
     : TextElement(parent, "", sz, text_style),
       placeholder{parent_screen().renderer.font(sz, text_style), "Placeholder"} {
+    DEFAULT_ELEMENT_STYLE(
+        .background = InactiveButtonColour,
+        .cursor = Cursor::IBeam,
+    );
+
+    hover_style->background = DefaultButtonColour;
     focusable = true;
-    style.background = InactiveButtonColour;
-    style.cursor_override = Cursor::IBeam;
 }
 
 TextElement::TextElement(Element* parent, std::string_view contents, FontSize sz, TextStyle text_style)
     : Element(parent),
       label{parent_screen().renderer.font(sz, text_style), contents} {
-    style.size = SizePolicy::ComputedSize();
+    DEFAULT_ELEMENT_STYLE(
+        .size = SizePolicy::ComputedSize(),
+    );
+}
+
+bool Button::event_click(xy) {
+    std::invoke(on_click);
+    return true;
 }
 
 void TextEdit::RecomputeCursorOffset() {
@@ -560,7 +713,7 @@ void TextEdit::draw(Renderer& r) {
     if (no_blink_ticks) no_blink_ticks--;
     RecomputeCursorOffset();
     TextElement::draw(r);
-    if (text.empty()) DrawText(r, placeholder, style.text_colour.darken(.2f));
+    if (text.empty()) DrawText(r, placeholder, computed_style.text_colour.darken(.2f));
 }
 
 bool TextEdit::event_click(xy pos) {
@@ -615,12 +768,12 @@ bool TextEdit::event_click(xy pos) {
 }
 
 void TextEdit::event_focus_gained() {
-    style.background = DefaultButtonColour;
+
 }
 
 void TextEdit::event_focus_lost() {
     cursor_offs = -1;
-    style.background = InactiveButtonColour;
+
 }
 
 void TextEdit::event_input(InputSystem& input) {
@@ -705,7 +858,7 @@ void TextElement::DrawText(Renderer& r, const Text& text, Colour colour) {
 
 void TextElement::RefreshImpl(const Text& text) {
     // Compute the size based on the text contents.
-    if (style.size.is_partially_computed()) {
+    if (computed_style.size.is_partially_computed()) {
         computed_size = {
             i32(text.width),
             std::max(i32(text.height), text.font.strut()),
@@ -718,7 +871,7 @@ void TextElement::RefreshImpl(const Text& text) {
 
 void TextElement::draw(Renderer& r) {
     Element::draw(r);
-    DrawText(r, label, style.text_colour);
+    DrawText(r, label, computed_style.text_colour);
 }
 
 void TextElement::refresh() {

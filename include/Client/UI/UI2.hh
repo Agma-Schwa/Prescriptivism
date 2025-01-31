@@ -7,6 +7,7 @@
 #include <base/Properties.hh>
 #include <SDL3/SDL.h>
 
+#include <bitset>
 #include <numeric>
 
 namespace pr::client::ui {
@@ -94,12 +95,13 @@ struct SizePolicy {
     i32 yval{};
 
     /// Create a fixed-size element.
-    SizePolicy(V v) : xval(+v), yval(+v) {}
-    SizePolicy(i32 x, i32 y) : xval(x), yval(y) {}
-    SizePolicy(Size size) : xval(size.wd), yval(size.ht) {}
+    constexpr SizePolicy() = default;
+    constexpr SizePolicy(V v) : xval(+v), yval(+v) {}
+    constexpr SizePolicy(i32 x, i32 y) : xval(x), yval(y) {}
+    constexpr SizePolicy(Size size) : xval(size.wd), yval(size.ht) {}
 
     /// Dynamic size policies.
-    static auto ComputedSize() -> SizePolicy { return Computed; }
+    static constexpr auto ComputedSize() -> SizePolicy { return Computed; }
 
     /// Check if this has a computed dimension.
     [[nodiscard]] bool is_partially_computed() const { return xval == Computed or yval == Computed; }
@@ -118,6 +120,7 @@ struct SizePolicy {
 
     [[nodiscard]] auto operator[](Axis a) -> i32& { return a == Axis::X ? xval : yval; }
     [[nodiscard]] auto operator[](Axis a) const -> i32 { return a == Axis::X ? xval : yval; }
+    [[nodiscard]] bool operator==(const SizePolicy&) const = default;
 };
 
 /// Controls how elements are laid out.
@@ -166,73 +169,139 @@ struct Layout {
     [[nodiscard]] bool is_centered() const {
         return policy == PackedCenter or policy == OverlapCenter;
     }
+
+    [[nodiscard]] bool operator==(const Layout&) const = default;
 };
 
-/// Style data of an element.
-///
-/// TODO: Changing a style needs to refresh the layout, but we’ll
-///       do that once we start caching and reusing styles.
-///
-/// TODO: Caching styles, as follows:
-///
-///   - Never expose a mutable style, always return a const& from the element.
-///   - Store shared_ptrs to a style.
-///   - When a style is changed (create a copy, and cascade the change down).
-///   - It’s important not to override any properties the children have already
-///     set while doing this, so add a bitset w/ a bit for every property that
-///     indicates whether this child has overridden that property.
-///   - Then, visit each child transitively and override the property.
-///   - Also have a bit in the bitset to stop propagation (a la shadow dom).
-struct Style {
+template <typename Ty>
+class StyleValueWrapper {
+    std::optional<Ty> value;
+
+public:
+    constexpr StyleValueWrapper(std::nullopt_t) = delete("Use unset() instead");
+    constexpr StyleValueWrapper() = default;
+    constexpr StyleValueWrapper(auto&& ...args) { value.emplace(LIBBASE_FWD(args)...); }
+
+    /// Get the underlying value; this asserts if the value is not set.
+    constexpr auto get_existing() const -> const Ty& {
+        Assert(value.has_value(), "Style value not set!");
+        return *value;
+    }
+
+    /// Check if a value is set for this.
+    constexpr bool is_set() const { return value.has_value(); }
+
+    /// Unset the value.
+    constexpr void unset() { value.reset(); }
+
+    /// Access the value and creates a default-constructed instance if it doesn’t exist yet.
+    constexpr auto operator->() -> Ty* {
+        if (not value.has_value()) value = Ty();
+        return &value.value();
+    }
+};
+
+enum struct StyleKind : bool {
+    Declared,
+    Computed,
+};
+
+template <StyleKind Kind>
+struct StyleProperties {
+    template <typename Ty>
+    using Value = std::conditional_t<Kind == StyleKind::Declared, StyleValueWrapper<Ty>, Ty>;
+
     /// The background colour of this element.
-    Colour background = Colour::Transparent;
+    Value<Colour> background{};
 
     /// The overlay colour of this element.
-    Colour overlay = Colour::Transparent;
+    Value<Colour> overlay{};
 
     /// The text colour of this element.
-    Colour text_colour = Colour::White;
+    Value<Colour> text_colour{};
 
     /// The border radius of the background.
-    i32 border_radius = 0;
+    Value<i32> border_radius{};
 
     /// Z-order relative to other elements in the same group; positive
     /// means in front.
-    i32 z = 0;
+    Value<i32> z{};
 
     /// The intended size of this element, which may be either
     /// static or dynamic.
-    SizePolicy size = {0, 0};
+    Value<SizePolicy> size{};
 
     /// The cursor to be rendered when hovering over this element.
-    std::optional<Cursor> cursor_override;
+    Value<Cursor> cursor{};
 
-    /// Layout along the X axis.
-    ByAxis<Layout> layout{{}, {Layout::OverlapCenter}};
+    /// Layout along either axis.
+    Value<ByAxis<Layout>> layout{};
+};
+
+using ComputedStyleProperties = StyleProperties<StyleKind::Computed>;
+using DeclaredStyleProperties = StyleProperties<StyleKind::Declared>;
+
+class ComputedStyle : public ComputedStyleProperties {
+public:
+    ComputedStyle(StyleProperties props) : StyleProperties(std::move(props)) {}
+};
+
+class DeclaredStyle : public DeclaredStyleProperties {
+    LIBBASE_IMMOVABLE(DeclaredStyle);
+
+    /// The computed style.
+    mutable std::shared_ptr<const ComputedStyle> cached;
+
+public:
+    /// The parent style from which to inherit properties, if any.
+    std::shared_ptr<const DeclaredStyle> parent;
+
+    explicit DeclaredStyle(std::shared_ptr<const DeclaredStyle> parent = {}) : parent(std::move(parent)) {}
+    explicit DeclaredStyle(StyleProperties props) : StyleProperties(std::move(props)) {}
+
+    /// Check if the style has already been invalidated.
+    bool already_invalidated() const { return cached == nullptr; }
+
+    /// Return the computed style.
+    auto computed() const -> const ComputedStyle&;
+
+    /// Dump the style to stdout.
+    void dump(i32 indent) const;
+
+    /// Check if this style declares any style overrides.
+    bool has_overrides() const;
 
     /// The total gap on both axes.
-    Size gap() { return Size{layout.x.gap, layout.y.gap}; }
+    Size gap() { return Size{layout->x.gap, layout->y.gap}; }
+
+    /// Invalidate the computed style.
+    void invalidate() { cached.reset(); }
 
     /// Set the layout to be horizontal, with a gap.
     ///
     /// Diagonal layouts can be achieved by setting a non-overlapped
     /// layout for both axes.
-    auto layout_horizontal(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
-        layout.x.policy = p;
-        layout.x.gap = gap;
-        layout.y.policy = Layout::OverlapCenter;
+    auto layout_horizontal(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> DeclaredStyle& {
+        layout->x.policy = p;
+        layout->x.gap = gap;
+        layout->y.policy = Layout::OverlapCenter;
         return *this;
     }
 
     /// Set the layout to be vertical, with a gap.
     ///
     /// \see layout_horizontal()
-    auto layout_vertical(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> Style& {
-        layout.y.policy = p;
-        layout.y.gap = gap;
-        layout.x.policy = Layout::OverlapCenter;
+    auto layout_vertical(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> DeclaredStyle& {
+        layout->y.policy = p;
+        layout->y.gap = gap;
+        layout->x.policy = Layout::OverlapCenter;
         return *this;
     }
+
+private:
+    template <typename = void> auto ApplyOwnProps(ComputedStyleProperties props) const -> const ComputedStyle&;
+    template <typename = void> auto ComputeStyle() const -> const ComputedStyle&;
+    template <typename = void> bool HasOverrides() const;
 };
 
 /// The root of the UI element hierarchy.
@@ -255,12 +324,20 @@ private:
     /// its size changed or it gained a child that needs to be laid out.
     Property(bool, layout_changed, true);
 
+    /// Get the current active style for this element.
+    ComputedReadonly(const ComputedStyle&, computed_style);
+
     /// The children of this element.
     StableVector<Element> elements;
 
 public:
-    /// Style of this element.
-    Style style;
+    /// Styles of this element.
+    ///
+    /// These are converted to computed styles when the element is first
+    /// drawn; any changes to these will not be propagated unless
+    /// Element::invalidate_styles() is called.
+    std::shared_ptr<DeclaredStyle> style = std::make_shared<DeclaredStyle>();
+    std::shared_ptr<DeclaredStyle> hover_style = std::make_shared<DeclaredStyle>(style);
 
 private:
     /// Whether the element can  hovered over.
@@ -329,6 +406,9 @@ public:
     bool has_parent(Element* other);
     */
 
+    /// Invalidate and recompute the styles of this element and its children.
+    void invalidate_styles();
+
     /// Check if a widget has a certain type.
     template <std::derived_from<Element>... Ts>
     [[nodiscard]] bool is() { return (dynamic_cast<Ts*>(this) or ...); }
@@ -368,7 +448,7 @@ public:
     /// is a child of A, then C will still be drawn below B—even though it
     /// has a larger z order—because the z order of its parent A in the same
     /// group as B is less than B’s z order.
-    [[nodiscard]] auto z_order() const -> i32 { return style.z; }
+    [[nodiscard]] auto z_order() const -> i32 { return computed_style.z; }
 
     /// Draw this element.
     virtual void draw(Renderer& r);
@@ -413,7 +493,7 @@ public:
 
 private:
     void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_static_extent, i32 dynamic_els);
-    void dump_impl(i32 indent);
+    void dump_impl(std::unordered_set<const DeclaredStyle*>& printed_styles, i32 indent);
     void tick_mouse(MouseState& mouse, xy rel_pos);
     void recompute_layout();
 };
@@ -440,6 +520,22 @@ public:
 protected:
     void RefreshImpl(const Text& text);
     void DrawText(Renderer& r, const Text& text, Colour colour);
+};
+
+/// A clickable button.
+class Button : public TextElement {
+    std::move_only_function<void()> on_click;
+
+public:
+    explicit Button(
+        Element* parent,
+        std::string_view contents,
+        FontSize sz,
+        std::move_only_function<void()> click_handler
+    );
+
+    bool event_click(xy pos) override;
+    auto name() const -> std::string_view override { return "Button"; }
 };
 
 /// A text element.

@@ -87,6 +87,7 @@ enum struct pr::client::Reflow : base::u8 {
 enum struct pr::client::Cursor : base::u32 {
     Default = SDL_SYSTEM_CURSOR_DEFAULT,
     IBeam = SDL_SYSTEM_CURSOR_TEXT,
+    Click = SDL_SYSTEM_CURSOR_POINTER,
 };
 
 namespace pr::client {
@@ -321,6 +322,21 @@ struct std::formatter<pr::client::xy> : std::formatter<std::string> {
     template <typename FormatContext>
     auto format(pr::client::xy p, FormatContext& ctx) const {
         return std::formatter<std::string>::format(std::format("({}, {})", p.x, p.y), ctx);
+    }
+};
+
+template <>
+struct std::formatter<pr::client::Colour> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(pr::client::Colour c, FormatContext& ctx) const {
+        return std::format_to(
+            ctx.out(),
+            "#{:02X}{:02X}{:02X}{:02X}",
+            c.r8,
+            c.g8,
+            c.b8,
+            c.a8
+        );
     }
 };
 

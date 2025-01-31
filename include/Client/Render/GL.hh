@@ -73,12 +73,13 @@ public:
     T x{};
     T y{};
 
-    ByAxis() requires std::is_default_constructible_v<T> {}
-    ByAxis(T both) : x(both), y(both) {}
-    ByAxis(T x, T y) : x(x), y(y) {}
+    constexpr ByAxis() requires std::is_default_constructible_v<T> {}
+    constexpr ByAxis(T both) : x(both), y(both) {}
+    constexpr ByAxis(T x, T y) : x(x), y(y) {}
 
-    auto operator[](Axis a) -> T& { return a == Axis::X ? x : y; }
-    auto operator[](Axis a) const -> const T& { return a == Axis::X ? x : y; }
+    constexpr auto operator[](Axis a) -> T& { return a == Axis::X ? x : y; }
+    constexpr auto operator[](Axis a) const -> const T& { return a == Axis::X ? x : y; }
+    constexpr bool operator==(const ByAxis&) const = default;
 };
 
 constexpr auto pr::client::flip(Axis a) -> Axis {

@@ -317,51 +317,47 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
     // Testing.
     struct HoverWidget : ui::Element {
         Colour old_background;
-        explicit HoverWidget(Element* parent) : Element(parent) {}
-        void event_mouse_leave() override { style.background = old_background; }
-        void event_mouse_enter() override {
-            old_background = std::exchange(style.background, style.background.darken(.2f));
+        explicit HoverWidget(Element* parent) : Element(parent) {
+            //hover_style->background = base_style->background.darken(.2f);
         }
 
         bool event_click(xy) override {
-            if (style.overlay == Colour::Transparent) style.overlay = Colour{128, 64, 64, 64};
-            else style.overlay = Colour::Transparent;
+            /*if (style.overlay == Colour::Transparent) style.overlay = Colour{128, 64, 64, 64};
+            else style.overlay = Colour::Transparent;*/
             return false;
         }
         auto name() const -> std::string_view override { return "HoverWidget"; }
     };
 
     TestScreen = new ui::Screen(renderer);
-    TestScreen->style.background = Colour::Black;
-    TestScreen->style.layout_horizontal(20);
+    TestScreen->style->background = Colour::Black;
+    TestScreen->style->layout_horizontal(20);
     auto c = Colour::Red.lighten(.3f);
     for (int i = 0; i < 10; i++) {
         auto& el = TestScreen->create<HoverWidget>();
-        el.style.background = c = c.darken(.05f);
-        el.style.size = {80, 80};
+        el.style->background = c = c.darken(.05f);
+        el.style->size = {80, 80};
         if (i == 5) {
-            el.style.size.xval = 200;
-            el.style.z = 100;
-            el.style.background = Colour::Grey;
-            el.style.layout_horizontal();
-            auto& l = el.create<ui::Label>("fooq", FontSize::Large);
-            l.style.background = Colour::Blue;
-            l.style.size.xval = l.style.size.yval = ui::SizePolicy::Fill;
+            el.style->size->xval = 200;
+            el.style->z = 100;
+            el.style->background = Colour::Grey;
+            el.style->layout_horizontal();
+            el.create<ui::Button>("fooq", FontSize::Large, [] { Log("Clicked"); });
         } else if (i == 6) {
             auto& l = el.create<ui::TextEdit>(FontSize::Large);
-            el.style.size.xval = 200;
-            l.style.size.xval = l.style.size.yval = ui::SizePolicy::Fill;
+            el.style->size->xval = 200;
+            l.style->size->xval = l.style->size->yval = ui::SizePolicy::Fill;
         } else {
             {
                 auto& nested = el.create<ui::Element>();
-                nested.style.background = Colour::Green;
-                nested.style.size = {40, 40};
+                nested.style->background = Colour::Green;
+                nested.style->size = {40, 40};
             }
 
             {
                 auto& nested = el.create<ui::Element>();
-                nested.style.background = Colour::Blue;
-                nested.style.size = {40, 40};
+                nested.style->background = Colour::Blue;
+                nested.style->size = {40, 40};
             }
         }
     }
@@ -424,7 +420,7 @@ void Client::Tick() {
     Renderer::Frame _ = renderer.frame();
 
     // Testing.
-    TestScreen->style.size = renderer.size();
+    TestScreen->style->size = renderer.size();
     TestScreen->refresh();
     TestScreen->tick(input_system);
     TestScreen->draw();
