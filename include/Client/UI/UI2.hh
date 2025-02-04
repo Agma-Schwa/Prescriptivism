@@ -178,9 +178,26 @@ class StyleValueWrapper {
     std::optional<Ty> value;
 
 public:
-    constexpr StyleValueWrapper(std::nullopt_t) = delete("Use unset() instead");
     constexpr StyleValueWrapper() = default;
-    constexpr StyleValueWrapper(auto&& ...args) { value.emplace(LIBBASE_FWD(args)...); }
+    constexpr StyleValueWrapper(const StyleValueWrapper&) = default;
+    constexpr StyleValueWrapper(StyleValueWrapper&&) = default;
+    constexpr StyleValueWrapper& operator=(const StyleValueWrapper&) = default;
+    constexpr StyleValueWrapper& operator=(StyleValueWrapper&&) = default;
+
+    constexpr StyleValueWrapper(std::nullopt_t) = delete("Use unset() instead");
+    constexpr StyleValueWrapper(std::optional<Ty> value) : value(std::move(value)) {}
+    constexpr StyleValueWrapper& operator=(Ty new_value) {
+        value = std::move(new_value);
+        return *this;
+    }
+
+    // Construct the underlying value from an argument list; the ugly requires clause
+    // is so this isn’t interpreted as a copy or move constructor.
+    template <typename ...Args>
+    requires utils::NotCopyOrMoveCtor<StyleValueWrapper, Args...>
+    constexpr StyleValueWrapper(Args&& ...args) {
+        value.emplace(LIBBASE_FWD(args)...);
+    }
 
     /// Get the underlying value; this asserts if the value is not set.
     constexpr auto get_existing() const -> const Ty& {
@@ -199,6 +216,8 @@ public:
         if (not value.has_value()) value = Ty();
         return &value.value();
     }
+
+    bool operator==(const StyleValueWrapper&) const = default;
 };
 
 enum struct StyleKind : bool {
@@ -207,7 +226,7 @@ enum struct StyleKind : bool {
 };
 
 template <StyleKind Kind>
-struct StyleProperties {
+struct StylePropertiesImpl {
     template <typename Ty>
     using Value = std::conditional_t<Kind == StyleKind::Declared, StyleValueWrapper<Ty>, Ty>;
 
@@ -236,72 +255,122 @@ struct StyleProperties {
 
     /// Layout along either axis.
     Value<ByAxis<Layout>> layout{};
-};
 
-using ComputedStyleProperties = StyleProperties<StyleKind::Computed>;
-using DeclaredStyleProperties = StyleProperties<StyleKind::Declared>;
-
-class ComputedStyle : public ComputedStyleProperties {
-public:
-    ComputedStyle(StyleProperties props) : StyleProperties(std::move(props)) {}
-};
-
-class DeclaredStyle : public DeclaredStyleProperties {
-    LIBBASE_IMMOVABLE(DeclaredStyle);
-
-    /// The computed style.
-    mutable std::shared_ptr<const ComputedStyle> cached;
-
-public:
-    /// The parent style from which to inherit properties, if any.
-    std::shared_ptr<const DeclaredStyle> parent;
-
-    explicit DeclaredStyle(std::shared_ptr<const DeclaredStyle> parent = {}) : parent(std::move(parent)) {}
-    explicit DeclaredStyle(StyleProperties props) : StyleProperties(std::move(props)) {}
-
-    /// Check if the style has already been invalidated.
-    bool already_invalidated() const { return cached == nullptr; }
-
-    /// Return the computed style.
-    auto computed() const -> const ComputedStyle&;
-
-    /// Dump the style to stdout.
-    void dump(i32 indent) const;
-
-    /// Check if this style declares any style overrides.
-    bool has_overrides() const;
-
-    /// The total gap on both axes.
-    Size gap() { return Size{layout->x.gap, layout->y.gap}; }
-
-    /// Invalidate the computed style.
-    void invalidate() { cached.reset(); }
 
     /// Set the layout to be horizontal, with a gap.
     ///
     /// Diagonal layouts can be achieved by setting a non-overlapped
     /// layout for both axes.
-    auto layout_horizontal(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> DeclaredStyle& {
+    void layout_horizontal(
+        i32 gap = 0,
+        Layout::Policy p = Layout::PackedCenter
+    ) requires (Kind == StyleKind::Declared) {
         layout->x.policy = p;
         layout->x.gap = gap;
         layout->y.policy = Layout::OverlapCenter;
-        return *this;
     }
 
     /// Set the layout to be vertical, with a gap.
     ///
     /// \see layout_horizontal()
-    auto layout_vertical(i32 gap = 0, Layout::Policy p = Layout::PackedCenter) -> DeclaredStyle& {
+    void layout_vertical(
+        i32 gap = 0,
+        Layout::Policy p = Layout::PackedCenter
+    ) requires (Kind == StyleKind::Declared) {
         layout->y.policy = p;
         layout->y.gap = gap;
         layout->x.policy = Layout::OverlapCenter;
-        return *this;
     }
 
+    /// Check if two property groups are equivalent.
+    bool operator==(const StylePropertiesImpl&) const = default;
+};
+
+using ComputedStyleProperties = StylePropertiesImpl<StyleKind::Computed>;
+
+class ComputedStyle : public ComputedStyleProperties {
+public:
+    using Ptr = std::shared_ptr<const ComputedStyle>;
+    ComputedStyle(ComputedStyleProperties props) : ComputedStyleProperties(std::move(props)) {}
+
+    auto props() const -> const ComputedStyleProperties& { return *this; }
+};
+
+/// A reference-type wrapper around style data. This can be passed around
+/// by copy without actually copying the style data, but as a result, it
+/// is also not mutable.
+class Style {
+public:
+    using Properties = StylePropertiesImpl<StyleKind::Declared>;
+
 private:
-    template <typename = void> auto ApplyOwnProps(ComputedStyleProperties props) const -> const ComputedStyle&;
-    template <typename = void> auto ComputeStyle() const -> const ComputedStyle&;
-    template <typename = void> bool HasOverrides() const;
+    class Data;
+
+    /// The actual style data.
+    std::shared_ptr<const Data> data;
+
+public:
+    /// Create an empty style.
+    Style() = default;
+
+    /// Create a new style.
+    Style(Style parent, Properties props);
+
+    /// Create a new style with the base style as its parent.
+    Style(Properties props) : Style{{}, std::move(props)} {}
+
+    /// Check if the style has already been invalidated.
+    bool already_invalidated() const;
+
+    /// Return the computed style.
+    auto computed() const -> const ComputedStyle&;
+
+    /// Return the declared properties of this style.
+    auto declared() const -> const Properties&;
+
+    /// Dump the style to stdout.
+    void dump(i32 indent) const;
+
+    /// Check if the style is empty.
+    bool empty() const;
+
+    /// Check if this style declares any style overrides.
+    bool has_overrides() const;
+
+    /// Invalidate the computed style.
+    void invalidate() const;
+
+    /// Get the parent style, if any.
+    auto parent() const -> const Style*;
+
+    /// Change the style by replacing certain properties.
+    ///
+    /// Any properties not specified are left unchanged.
+    ///
+    /// This only changes this style; any other styles that refer to the
+    /// same style that this used to refer to before this is called are not
+    /// updated.
+    ///
+    /// We don’t provide an && overload of this because the overhead of copying
+    /// a Style is minimal (it only increments a refcount).
+    auto with(Properties replacement_props) -> Style&;
+
+    /// Change the style by applying a function to it.
+    ///
+    /// The requires clause ensures that the user does not declare
+    /// a lambda that takes the properties by value.
+    template <typename Callable>
+    requires (
+        std::is_invocable_v<Callable, Properties&> and
+        not std::is_invocable_v<Callable, Properties&&>
+    ) auto update(Callable c) -> Style& {
+        Properties props = declared();
+        std::invoke(std::move(c), props);
+        return with(std::move(props));
+    }
+
+    /// Check if two styles are equivalent (i.e. whether they have the same properties).
+    bool operator==(const Style& other) const;
 };
 
 /// The root of the UI element hierarchy.
@@ -336,8 +405,8 @@ public:
     /// These are converted to computed styles when the element is first
     /// drawn; any changes to these will not be propagated unless
     /// Element::invalidate_styles() is called.
-    std::shared_ptr<DeclaredStyle> style = std::make_shared<DeclaredStyle>();
-    std::shared_ptr<DeclaredStyle> hover_style = std::make_shared<DeclaredStyle>(style);
+    Style style;
+    Style hover_style;
 
 private:
     /// Whether the element can  hovered over.
@@ -493,7 +562,7 @@ public:
 
 private:
     void BuildLayout(Layout l, Axis a, i32 total_extent, i32 max_static_extent, i32 dynamic_els);
-    void dump_impl(std::unordered_set<const DeclaredStyle*>& printed_styles, i32 indent);
+    void dump_impl(std::unordered_set<const Style*>& printed_styles, i32 indent);
     void tick_mouse(MouseState& mouse, xy rel_pos);
     void recompute_layout();
 };

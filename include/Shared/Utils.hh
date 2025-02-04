@@ -83,6 +83,8 @@ public:
 
 template <typename... Args>
 void Log(std::format_string<Args...> fmt, Args&&... args);
+
+constexpr bool& Flip(bool& b) { return b = not b; }
 } // namespace pr
 
 namespace pr {
@@ -92,6 +94,12 @@ void LogImpl(std::string);
 namespace base::utils {
 constexpr auto addrof = vws::transform([](auto& x) { return std::addressof(x); });
 constexpr auto deref = vws::transform([](auto* x) -> decltype(*x) { return *x; });
+
+/// Used on a constructor to prevent it from being interpreted as
+/// a copy or move constructor.
+template <typename Class, typename... CtorArgs>
+concept NotCopyOrMoveCtor = sizeof...(CtorArgs) > 0 and
+                            not is<Class, CtorArgs...[0]>;
 
 /// Return the last element in a range; this has undefined behaviour
 /// if the range is empty.

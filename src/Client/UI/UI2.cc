@@ -4,11 +4,11 @@ using namespace pr;
 using namespace pr::client;
 using namespace pr::client::ui;
 
-#define DEFAULT_ELEMENT_STYLE(...)                                                         \
-    do {                                                                                   \
-        static constexpr DeclaredStyleProperties DefaultStyle{__VA_ARGS__};                \
-        static auto DefaultStylePtr = std::make_shared<const DeclaredStyle>(DefaultStyle); \
-        style->parent = DefaultStylePtr;                                                   \
+#define DEFAULT_ELEMENT_STYLE(...)                                         \
+    do {                                                                   \
+        static constexpr Style::Properties DefaultStyleProps{__VA_ARGS__}; \
+        static const Style DefaultStyle{RootStyle, DefaultStyleProps};     \
+        hover_style = style = DefaultStyle;                                \
     } while (false)
 
 // =============================================================================
@@ -73,8 +73,12 @@ void InputSystem::process_events() {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_F12) renderer.reload_shaders();
-                if (event.key.key == SDLK_F11) DumpActiveScreen();
+                LIBBASE_DEBUG(
+                    if (event.key.key == SDLK_F12) renderer.reload_shaders();
+                    if (event.key.key == SDLK_F11) DumpActiveScreen();
+                    if (event.key.key == SDLK_F10) Flip(renderer.debug_rendering_enabled);
+                )
+
                 kb_events.emplace_back(event.key.key, event.key.mod);
                 break;
 
@@ -95,59 +99,138 @@ void InputSystem::set_accept_text_input(bool new_value) {
 // =============================================================================
 //  Styles
 // =============================================================================
+class Style::Data {
+    friend Style;
+    struct MakeSharedToken {};
+    using Ptr = std::shared_ptr<const Data>;
+
+    /// The parent style from which to inherit properties, if any.
+    Style parent;
+
+    /// The computed style.
+    mutable ComputedStyle::Ptr cached;
+
+    /// The properties of this style.
+    Properties props;
+
+public:
+    Data(MakeSharedToken, Style parent, Properties props) : parent(std::move(parent)), props(std::move(props)) {}
+
+private:
+    // Take care not to include the cache in the comparison.
+    [[nodiscard]] bool operator==(const Data& other) const {
+        return std::tie(parent, props) == std::tie(other.parent, other.props);
+    }
+
+    template <typename = void> auto apply_own_props(ComputedStyleProperties props) const -> const ComputedStyle&;
+    auto cache_parent_style() const -> const ComputedStyle&;
+    template <typename = void> auto compute_style() const -> const ComputedStyle&;
+    template <typename = void> bool has_overrides() const;
+    template <typename = void> auto with(Properties props) const -> Ptr;
+};
+
 // The only reason this is a template is because we can’t have structured
 // binding packs in non-templates...
 template <typename>
-auto DeclaredStyle::ApplyOwnProps(ComputedStyleProperties props) const -> const ComputedStyle& {
+auto Style::Data::apply_own_props(ComputedStyleProperties computed) const -> const ComputedStyle& {
     // FIXME: Make this a lambda once Clang stops crashing on that.
-    const auto& [...our_prop] = *static_cast<const DeclaredStyleProperties*>(this);
-    auto& [...computed_prop] = props;
+    const auto& [...our_prop] = props;
+    auto& [...computed_prop] = computed;
     ([&]{ if (our_prop.is_set()) computed_prop = our_prop.get_existing();  }(), ...);
-    cached = std::make_shared<const ComputedStyle>(std::move(props));
+    cached = std::make_shared<const ComputedStyle>(std::move(computed));
+    return *cached;
+}
+
+auto Style::Data::cache_parent_style() const -> const ComputedStyle& {
+    (void) parent.data->compute_style();
+    cached = parent.data->cached;
     return *cached;
 }
 
 template <typename>
-auto DeclaredStyle::ComputeStyle() const -> const ComputedStyle& {
+auto Style::Data::compute_style() const -> const ComputedStyle& {
     // Recompute the style; if we don’t override anything, then simply
     // inherit the parent’s style.
-    if (not has_overrides()) {
-        Assert(parent, "Style with no overrides must have a parent");
-        return parent->computed();
-    }
+    if (not has_overrides()) return cache_parent_style();
 
     // If we don’t have a parent, then just compute our own styles.
-    if (not parent) return ApplyOwnProps({});
+    if (parent.empty()) return apply_own_props({});
 
     // Otherwise, we need to inherit our parent’s styles. If our overrides
     // happen to be the same as our parent’s simply return its style as well.
-    const auto& [...our_prop] = *static_cast<const DeclaredStyleProperties*>(this);
-    const auto& [...parent_prop] = static_cast<const ComputedStyleProperties&>(parent->computed());
+    const auto& [...our_prop] = props;
+    const auto& [...parent_prop] = parent.computed().props();
     if (((not our_prop.is_set() or our_prop.get_existing() == parent_prop) and ...))
-        return parent->computed();
+        return cache_parent_style();
 
     // In any other case, we need to merge styles.
-    return ApplyOwnProps(parent->computed());
+    return apply_own_props(parent.computed());
 }
 
 template <typename>
-bool DeclaredStyle::HasOverrides() const {
-    const auto& [...our_prop] = *static_cast<const DeclaredStyleProperties*>(this);
+bool Style::Data::has_overrides() const {
+    const auto& [...our_prop] = props;
     return (our_prop.is_set() or ...);
 }
 
-auto DeclaredStyle::computed() const -> const ComputedStyle& {
-    if (cached) return *cached;
-    return ComputeStyle();
+template <typename>
+auto Style::Data::with(Properties replacement_props) const -> Ptr {
+    auto [...existing] = props;
+    auto [...replacement] = replacement_props;
+    return std::make_shared<const Data>(
+        MakeSharedToken{},
+        parent,
+        Properties{(replacement.is_set() ? replacement : existing)...}
+    );
 }
 
-void DeclaredStyle::dump(i32 indent) const {
+Style::Style(Style parent, Properties props) : data{std::make_shared<const Data>(
+    Data::MakeSharedToken{},
+    std::move(parent),
+    std::move(props)
+)} {}
+
+bool Style::already_invalidated() const {
+    // An empty style doesn’t need to be invalidated since it is
+    // effectively always valid.
+    return empty() or data->cached == nullptr;
+}
+
+auto Style::computed() const -> const ComputedStyle& {
+    if (empty()) {
+        static const ComputedStyle Empty{{}};
+        return Empty;
+    }
+
+    if (data->cached) return *data->cached;
+    return data->compute_style();
+}
+
+auto Style::declared() const -> const Properties& {
+    if (empty()) {
+        static const Properties Empty;
+        return Empty;
+    }
+
+    return data->props;
+}
+
+void Style::dump(i32 indent) const {
     auto i = std::string(indent, ' ');
-    auto Dump = [&](auto& val, std::string_view name) {
-        if (val.is_set()) Log("{} \033[33m{}: \033[36m{}\033[m", i, name, TupleFormat(val.get_existing()));
+    auto DoDump = [&](const auto& val, std::string_view name) {
+        Log("{}\033[33m{}: \033[36m{}\033[m", i, name, TupleFormat(val));
     };
 
-#define DUMP(x) Dump(x, #x);
+    auto Dump = [&](const auto& val, std::string_view name) {
+        if (val.is_set()) DoDump(val.get_existing(), name);
+    };
+
+    if (empty()) {
+        Log("{}\033[36mempty\033[m", i);
+        return;
+    }
+
+#define DUMP(x) Dump(data->props.x, #x)
     DUMP(background);
     DUMP(overlay);
     DUMP(text_colour);
@@ -157,22 +240,69 @@ void DeclaredStyle::dump(i32 indent) const {
     DUMP(cursor);
     DUMP(layout);
 #undef DUMP
+
+    auto& c = computed();
+    Log("{}\033[33mcomputed:\033[31m {{\033[m", i);
+    i += "  ";
+#define DUMP(x) DoDump(c.x, #x)
+    DUMP(background);
+    DUMP(overlay);
+    DUMP(text_colour);
+    DUMP(border_radius);
+    DUMP(z);
+    DUMP(size);
+    DUMP(cursor);
+    DUMP(layout);
+#undef DUMP
+    i.resize(i.size() - 1);
+    Log("{}\033[31m}}\033[m", i);
 }
 
-bool DeclaredStyle::has_overrides() const { return HasOverrides(); }
+bool Style::empty() const {
+    return data == nullptr;
+}
+
+bool Style::has_overrides() const {
+    return not empty() and data->has_overrides();
+}
+
+void Style::invalidate() const {
+    if (not empty()) data->cached.reset();
+}
+
+auto Style::parent() const -> const Style* {
+    return empty() ? nullptr : &data->parent;
+}
+
+auto Style::with(Properties replacement_props) -> Style& {
+    if (empty()) *this = Style(std::move(replacement_props));
+    else data = data->with(replacement_props);
+    invalidate();
+    return *this;
+}
+
+bool Style::operator==(const Style& other) const {
+    if (data == other.data) return true;
+    if (empty() or other.empty()) return false;
+    return *data == *other.data;
+}
+
+static const Style RootStyle(Style::Properties{
+    .background = Colour::Transparent,
+    .overlay = Colour::Transparent,
+    .text_colour =  Colour::White,
+    .border_radius = 0,
+    .z = 0,
+    .size = SizePolicy{0, 0},
+    .cursor = Cursor::Default,
+    .layout = ByAxis<Layout>{},
+});
 
 // =============================================================================
 //  Screen
 // =============================================================================
 Screen::Screen(Renderer& r) : Element(nullptr), renderer(r) {
     DEFAULT_ELEMENT_STYLE(
-        .background = Colour::Transparent,
-        .overlay = Colour::Transparent,
-        .text_colour =  Colour::White,
-        .border_radius = 0,
-        .z = 0,
-        .size = {0, 0},
-        .cursor = Cursor::Default,
         .layout = ByAxis<Layout>{{},{Layout::OverlapCenter}},
     );
 }
@@ -348,6 +478,14 @@ void Element::recompute_layout() {
 }
 
 void Element::draw(Renderer& r) {
+    // Debug rendering.
+    if (r.debug()) {
+        r.draw_outline_rect(computed_pos, computed_size, 1, Colour::White);
+        auto _ = r.push_matrix(computed_pos, ui_scale);
+        for (auto& e :children()) e.draw(r);
+        return;
+    }
+
     // Draw background.
     r.draw_rect(computed_pos, computed_size, computed_style.background);
 
@@ -379,11 +517,11 @@ void Element::draw(Renderer& r) {
 }
 
 void Element::dump() {
-    std::unordered_set<const DeclaredStyle*> printed_styles;
+    std::unordered_set<const Style*> printed_styles;
     dump_impl(printed_styles, 0);
 }
 
-void Element::dump_impl(std::unordered_set<const DeclaredStyle*>& printed_styles, i32 indent) {
+void Element::dump_impl(std::unordered_set<const Style*>& printed_styles, i32 indent) {
     auto n = name();
     auto i = std::string(indent, ' ');
     auto has_focus = parent_screen().active_element == this;
@@ -401,9 +539,9 @@ void Element::dump_impl(std::unordered_set<const DeclaredStyle*>& printed_styles
         focusable ? "#"sv : ""sv
     );
 
-    auto DumpStyle = [&](std::string_view name, const DeclaredStyle& style) {
+    auto DumpStyle = [&](std::string_view name, const Style& style) {
         defer { printed_styles.insert(&style); };
-        auto parent = static_cast<const void*>(style.parent.get());
+        auto parent = static_cast<const void*>(style.parent());
         if (printed_styles.contains(&style) or not style.has_overrides()) {
             Log(
                 "{}  \033[31m{}\033[31m inherit \033[34m{}\033[m",
@@ -421,14 +559,17 @@ void Element::dump_impl(std::unordered_set<const DeclaredStyle*>& printed_styles
             static_cast<const void*>(&style),
             parent ? std::format("\033[34m{}", parent) : "\033[36mnone"sv
         );
+
         style.dump(indent + 4);
         Log("{}  \033[31m}}\033[m", i);
     };
 
+    // TODO: Dump computed style.
+
     // Dump styles.
-    DumpStyle("Style", *style);
-    if (hover_style->has_overrides() or hover_style->parent.get() != style.get())
-        DumpStyle("HoverStyle", *hover_style);
+    DumpStyle("Style", style);
+    if (hover_style.has_overrides() or hover_style != style)
+        DumpStyle("HoverStyle", hover_style);
 
     // Dump children.
     if (not children().empty()) Log("");
@@ -443,14 +584,13 @@ void Element::focus() {
 }
 
 void Element::invalidate_styles() {
-    if (style->already_invalidated()) return;
-    style->invalidate();
-    hover_style->invalidate();
+    style.invalidate();
+    hover_style.invalidate();
     for (auto& e : children()) e.invalidate_styles();
 }
 
 auto Element::get_computed_style() const -> const ComputedStyle& {
-    return under_mouse ? style->computed() : hover_style->computed();
+    return under_mouse ? style.computed() : hover_style.computed();
 }
 
 auto Element::parent_screen() -> Screen& {
@@ -609,7 +749,7 @@ TextEdit::TextEdit(Element* parent, FontSize sz, TextStyle text_style)
         .cursor = Cursor::IBeam,
     );
 
-    hover_style->background = DefaultButtonColour;
+    hover_style = Style(style, {.background = DefaultButtonColour});
     focusable = true;
 }
 

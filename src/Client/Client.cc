@@ -329,35 +329,48 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
         auto name() const -> std::string_view override { return "HoverWidget"; }
     };
 
+    using Props = ui::Style::Properties;
     TestScreen = new ui::Screen(renderer);
-    TestScreen->style->background = Colour::Black;
-    TestScreen->style->layout_horizontal(20);
+    TestScreen->style.update([](Props& props){
+        props.background = Colour::Black;
+        props.layout_horizontal(20);
+    });
+
     auto c = Colour::Red.lighten(.3f);
     for (int i = 0; i < 10; i++) {
         auto& el = TestScreen->create<HoverWidget>();
-        el.style->background = c = c.darken(.05f);
-        el.style->size = {80, 80};
+        el.style.with({
+            .background = c = c.darken(.05f),
+            .size = ui::SizePolicy{80, 80},
+        });
+
         if (i == 5) {
-            el.style->size->xval = 200;
-            el.style->z = 100;
-            el.style->background = Colour::Grey;
-            el.style->layout_horizontal();
             el.create<ui::Button>("fooq", FontSize::Large, [] { Log("Clicked"); });
+            el.style.update([](Props& props){
+                props.size->xval = 200;
+                props.z = 100;
+                props.background = Colour::Grey;
+                props.layout_horizontal();
+            });
         } else if (i == 6) {
             auto& l = el.create<ui::TextEdit>(FontSize::Large);
-            el.style->size->xval = 200;
-            l.style->size->xval = l.style->size->yval = ui::SizePolicy::Fill;
+            el.style.update([](Props& props) { props.size->xval = 200; });
+            l.style.update([](Props& props) { props.size->xval = props.size->yval = ui::SizePolicy::Fill; });
         } else {
             {
                 auto& nested = el.create<ui::Element>();
-                nested.style->background = Colour::Green;
-                nested.style->size = {40, 40};
+                nested.style.with({
+                    .background = Colour::Green,
+                    .size = ui::SizePolicy{40, 40},
+                });
             }
 
             {
                 auto& nested = el.create<ui::Element>();
-                nested.style->background = Colour::Blue;
-                nested.style->size = {40, 40};
+                nested.style.with({
+                    .background = Colour::Blue,
+                    .size = ui::SizePolicy{40, 40},
+                });
             }
         }
     }
@@ -420,7 +433,9 @@ void Client::Tick() {
     Renderer::Frame _ = renderer.frame();
 
     // Testing.
-    TestScreen->style->size = renderer.size();
+    // FIXME: Move size out of style since it is updated all the time.
+    // FIXME: There should only be a single style with hover overrides or sth.
+    TestScreen->style.with({.size = renderer.size()});
     TestScreen->refresh();
     TestScreen->tick(input_system);
     TestScreen->draw();

@@ -625,6 +625,8 @@ public:
     ShaderProgram throbber_shader;
     ShaderProgram rect_shader;
 
+    LIBBASE_DEBUG(bool debug_rendering_enabled = false);
+
 private:
     FontData font_data;
     std::unordered_map<Cursor, SDL_Cursor*> cursor_cache;
@@ -658,6 +660,11 @@ public:
 
     /// Clear the screen.
     void clear(Colour c = Colour::White);
+
+    /// Enable debug rendering.
+    LIBBASE_RELEASE(consteval) bool debug() {
+        return LIBBASE_IF_DEBUG(debug_rendering_enabled, false);
+    }
 
     /// Draw an arrow from one point to another.
     void draw_arrow(xy start, xy end, i32 thickness = 2, Colour c = Colour::White);
