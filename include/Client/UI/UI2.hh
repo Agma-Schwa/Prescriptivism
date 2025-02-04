@@ -227,8 +227,10 @@ enum struct StyleKind : bool {
 
 template <StyleKind Kind>
 struct StylePropertiesImpl {
+    static constexpr bool IsDeclared = Kind == StyleKind::Declared;
+
     template <typename Ty>
-    using Value = std::conditional_t<Kind == StyleKind::Declared, StyleValueWrapper<Ty>, Ty>;
+    using Value = std::conditional_t<IsDeclared, StyleValueWrapper<Ty>, Ty>;
 
     /// The background colour of this element.
     Value<Colour> background{};
@@ -255,7 +257,6 @@ struct StylePropertiesImpl {
 
     /// Layout along either axis.
     Value<ByAxis<Layout>> layout{};
-
 
     /// Set the layout to be horizontal, with a gap.
     ///
@@ -307,7 +308,7 @@ private:
     class Data;
 
     /// The actual style data.
-    std::shared_ptr<const Data> data;
+    std::shared_ptr<const Data> data = nullptr;
 
 public:
     /// Create an empty style.
@@ -401,12 +402,7 @@ private:
 
 public:
     /// Styles of this element.
-    ///
-    /// These are converted to computed styles when the element is first
-    /// drawn; any changes to these will not be propagated unless
-    /// Element::invalidate_styles() is called.
     Style style;
-    Style hover_style;
 
 private:
     /// Whether the element can  hovered over.
@@ -423,7 +419,7 @@ protected:
     bool visible : 1 = true;
 
 public:
-    explicit Element(Element* parent) : _parent(parent) {}
+    explicit Element(Element* parent);
 
 protected:
     /// Create an element with this as its parent.

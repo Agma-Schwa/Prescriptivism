@@ -8,7 +8,7 @@ using namespace pr::client::ui;
     do {                                                                   \
         static constexpr Style::Properties DefaultStyleProps{__VA_ARGS__}; \
         static const Style DefaultStyle{RootStyle, DefaultStyleProps};     \
-        hover_style = style = DefaultStyle;                                \
+        style = DefaultStyle;                                              \
     } while (false)
 
 // =============================================================================
@@ -112,6 +112,7 @@ class Style::Data {
 
     /// The properties of this style.
     Properties props;
+    Properties hover_props;
 
 public:
     Data(MakeSharedToken, Style parent, Properties props) : parent(std::move(parent)), props(std::move(props)) {}
@@ -271,7 +272,7 @@ void Style::invalidate() const {
 }
 
 auto Style::parent() const -> const Style* {
-    return empty() ? nullptr : &data->parent;
+    return empty() or data->parent.empty() ? nullptr : &data->parent;
 }
 
 auto Style::with(Properties replacement_props) -> Style& {
@@ -344,6 +345,8 @@ void Screen::tick(InputSystem& input) {
 // =============================================================================
 //  Element
 // =============================================================================
+Element::Element(Element* parent) : _parent(parent), style{RootStyle} {}
+
 void Element::BuildLayout(
     Layout l,
     Axis a,
@@ -522,11 +525,39 @@ void Element::dump() {
 }
 
 void Element::dump_impl(std::unordered_set<const Style*>& printed_styles, i32 indent) {
+    auto DumpStyle = [&](std::string_view name, const Style& style, i32 ind) {
+        defer { printed_styles.insert(&style); };
+        auto i = std::string(ind, ' ');
+        auto parent = static_cast<const void*>(style.parent());
+        if (printed_styles.contains(&style) or not style.has_overrides()) {
+            Log(
+                "{}\033[31m{}\033[31m inherit \033[34m{}\033[m",
+                i,
+                name,
+                parent
+            );
+            return;
+        }
+
+        Log(
+            "{}\033[31m{}\033[34m {}\033[31m inherit {}\033[31m {{\033[m",
+            i,
+            name,
+            static_cast<const void*>(&style),
+            parent ? std::format("\033[34m{}", parent) : "\033[36mnone"sv
+        );
+
+        style.dump(ind + 2);
+        Log("{}\033[31m}}\033[m", i);
+    };
+
+    // Dump root style if this is a screen.
+    if (is<Screen>()) DumpStyle("Root Style", RootStyle, 0);
+
+    // Dump main element data.
     auto n = name();
     auto i = std::string(indent, ' ');
     auto has_focus = parent_screen().active_element == this;
-
-    // Dump main element data.
     Log(
         "{}{}\033[33m{} \033[34m{} \033[31m[\033[35m{}, {}×{}\033[31m]{}\033[m\033[31m {{\033[m",
         i,
@@ -539,37 +570,8 @@ void Element::dump_impl(std::unordered_set<const Style*>& printed_styles, i32 in
         focusable ? "#"sv : ""sv
     );
 
-    auto DumpStyle = [&](std::string_view name, const Style& style) {
-        defer { printed_styles.insert(&style); };
-        auto parent = static_cast<const void*>(style.parent());
-        if (printed_styles.contains(&style) or not style.has_overrides()) {
-            Log(
-                "{}  \033[31m{}\033[31m inherit \033[34m{}\033[m",
-                i,
-                name,
-                parent
-            );
-            return;
-        }
-
-        Log(
-            "{}  \033[31m{}\033[34m {}\033[31m inherit {}\033[31m {{\033[m",
-            i,
-            name,
-            static_cast<const void*>(&style),
-            parent ? std::format("\033[34m{}", parent) : "\033[36mnone"sv
-        );
-
-        style.dump(indent + 4);
-        Log("{}  \033[31m}}\033[m", i);
-    };
-
-    // TODO: Dump computed style.
-
     // Dump styles.
-    DumpStyle("Style", style);
-    if (hover_style.has_overrides() or hover_style != style)
-        DumpStyle("HoverStyle", hover_style);
+    DumpStyle("Style", style, indent + 2);
 
     // Dump children.
     if (not children().empty()) Log("");
@@ -585,12 +587,11 @@ void Element::focus() {
 
 void Element::invalidate_styles() {
     style.invalidate();
-    hover_style.invalidate();
     for (auto& e : children()) e.invalidate_styles();
 }
 
 auto Element::get_computed_style() const -> const ComputedStyle& {
-    return under_mouse ? style.computed() : hover_style.computed();
+    return style.computed();
 }
 
 auto Element::parent_screen() -> Screen& {
@@ -749,7 +750,7 @@ TextEdit::TextEdit(Element* parent, FontSize sz, TextStyle text_style)
         .cursor = Cursor::IBeam,
     );
 
-    hover_style = Style(style, {.background = DefaultButtonColour});
+    //hover_style = Style(style, {.background = DefaultButtonColour});
     focusable = true;
 }
 
