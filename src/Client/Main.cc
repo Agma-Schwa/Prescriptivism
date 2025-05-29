@@ -42,9 +42,9 @@ int main(int argc, char** argv) {
             *opts.get<"--name">(),
             *opts.get<"--password">()
         );
-        return 0;
+    } else {
+        client::Client::Run();
     }
 
-    // Run the client.
-    client::Client::Run();
+    client::Renderer::ShutdownRenderer();
 }

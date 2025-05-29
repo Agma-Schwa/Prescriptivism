@@ -24,7 +24,7 @@ static constexpr Colour Veil = Colour{0, 0, 0, 200};
 // =============================================================================
 //  Error Screen
 // =============================================================================
-ErrorScreen::ErrorScreen(Client& c) : Screen(c.renderer) {
+ErrorScreen::ErrorScreen(Client& c) {
     msg = &Create<Label>("", FontSize::Large, Position::Center());
     msg->align = TextAlign::Center;
 
@@ -44,7 +44,7 @@ void ErrorScreen::enter(Client& c, std::string t, Screen& return_to) {
 // =============================================================================
 //  Main Menu Screen
 // =============================================================================
-MenuScreen::MenuScreen(Client& c) : Screen(c.renderer) {
+MenuScreen::MenuScreen(Client& c) {
     auto& address = Create<TextEdit>(Position::HCenter(350), "Server Address");
     auto& username = Create<TextEdit>(Position::HCenter(287), "Your Name");
     auto& password = Create<TextEdit>(Position::HCenter(225), "Password");
@@ -73,7 +73,7 @@ MenuScreen::MenuScreen(Client& c) : Screen(c.renderer) {
 // =============================================================================
 //  Connexion Phase Screens
 // =============================================================================
-ConnexionScreen::ConnexionScreen(Client& c) : Screen(c.renderer), client{c} {
+ConnexionScreen::ConnexionScreen(Client& c) : client{c} {
     Create<Label>(
         "Connecting to server...",
         FontSize::Large,
@@ -159,7 +159,7 @@ void ConnexionScreen::set_address(std::string addr) {
     address = std::move(addr);
 }
 
-WaitingScreen::WaitingScreen(Client& c) : Screen(c.renderer) {
+WaitingScreen::WaitingScreen(Client& c) {
     Create<Throbber>(Position::Center());
     Create<Label>(
         "Waiting for players...",
@@ -171,7 +171,7 @@ WaitingScreen::WaitingScreen(Client& c) : Screen(c.renderer) {
 // =============================================================================
 //  Word Choice Screen
 // =============================================================================
-WordChoiceScreen::WordChoiceScreen(Client& c) : Screen(c.renderer), client{c} {
+WordChoiceScreen::WordChoiceScreen(Client& c) : client{c} {
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->autoscale = true;
     cards->animate = true;
@@ -233,8 +233,8 @@ void WordChoiceScreen::enter(const constants::Word& word) {
     if (client.autoconfirm_word) SendWord();
 }
 
-void WordChoiceScreen::on_refresh(Renderer& r) {
-    cards->max_width = r.size().wd;
+void WordChoiceScreen::on_refresh() {
+    cards->max_width = Renderer::GetWindowSize().wd;
 }
 
 void WordChoiceScreen::tick(InputSystem& input) {
@@ -311,7 +311,7 @@ void Client::TickNetworking() {
 // =============================================================================
 //  API
 // =============================================================================
-Client::Client(Renderer r) : renderer(std::move(r)) {
+Client::Client() {
     /*
     std::array pi{
         sc::StartGame::PlayerInfo{constants::Word{CardId::C_b, CardId::V_a, CardId::V_e, CardId::C_b, CardId::C_b, CardId::C_b}, "Player"},
@@ -326,12 +326,14 @@ Client::Client(Renderer r) : renderer(std::move(r)) {
 }
 
 void Client::Run() {
-    Client c{Startup()};
+    Startup();
+    Client c{};
     c.RunGame();
 }
 
 void Client::RunAndConnect(std::string address, std::string username, std::string password) {
-    Client c{Startup()};
+    Startup();
+    Client c{};
     c.connexion_screen.enter(
         std::move(address),
         std::move(username),
@@ -355,7 +357,7 @@ void Client::set_screen(Screen& s) {
     Assert(not screen_stack.empty(), "To set the initial screen, use push_screen() instead");
     Assert(not rgs::contains(screen_stack, &s), "Cannot enter a screen that has already been entered");
     screen_stack.back() = &s;
-    s.refresh(renderer);
+    s.refresh();
     s.on_entered();
 }
 
@@ -364,19 +366,19 @@ void Client::Tick() {
     TickNetworking();
 
     // Start a new frame.
-    Renderer::Frame _ = renderer.frame();
+    Frame _ = Renderer::StartFrame();
 
     // Refresh screen info.
-    for (auto s : screen_stack) s->refresh(renderer);
+    for (auto s : screen_stack) s->refresh();
 
     // Tick the screen.
     screen_stack.back()->tick(input_system);
 
     // Draw it if the window is visible.
-    if (renderer.should_render()) {
+    if (Renderer::ShouldRender()) {
         for (auto s : screen_stack) {
-            s->draw(renderer);
-            if (s != screen_stack.back()) renderer.draw_rect(xy{}, renderer.size(), Veil);
+            s->draw();
+            if (s != screen_stack.back()) Renderer::DrawRect(xy{}, Renderer::GetWindowSize(), Veil);
         }
     }
 }
@@ -385,7 +387,7 @@ void Client::RunGame() {
     input_system.game_loop([&] { Tick(); });
 }
 
-auto Client::Startup() -> Renderer {
+void Client::Startup() {
     // Load assets and display a minimal window in the meantime; we
     // can’t access most features of the renderer (e.g. text) while
     // this is happening, but we can clear the screen and draw a
@@ -395,10 +397,10 @@ auto Client::Startup() -> Renderer {
     // call finalise(), so the reason we can’t do much here is not
     // that another thread is using OpenGl, but rather simply the
     // fact that we don’t have the required assets yet.
-    Renderer r{1'800, 1'000};
-    Screen screen{r};
+    Renderer::Initialise(1'800, 1'000);
+    Screen screen;
     Thread asset_loader{AssetLoader::Create()};
-    InputSystem startup{r};
+    InputSystem startup;
     screen.Create<Throbber>(Position::Center());
 
     // Flag used to avoid a race condition in case the thread
@@ -409,8 +411,8 @@ auto Client::Startup() -> Renderer {
 
     // Display only the throbber until the assets are loaded.
     startup.game_loop([&] {
-        Renderer::Frame _ = r.frame();
-        screen.draw(r);
+        Frame _ = Renderer::StartFrame();
+        screen.draw();
         if (not asset_loader.running()) {
             done = true;
             startup.quit = true;
@@ -426,9 +428,8 @@ auto Client::Startup() -> Renderer {
     }
 
     // Finish asset loading.
-    asset_loader.value().value().finalise(r);
-    InitialiseUI(r);
-    return r;
+    asset_loader.value().value().finalise();
+    InitialiseUI();
 }
 
 void Client::show_error(std::string error, Screen& return_to) {

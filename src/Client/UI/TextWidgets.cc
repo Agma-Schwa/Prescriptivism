@@ -33,7 +33,7 @@ auto CenterTextInBox(
 ) -> xy {
     f32 ascender = text.font.strut_split().first;
     f32 strut = text.font.strut();
-    Size sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
+    Sz sz{text.width, f32(0)}; // Zero out the height to avoid it messing w/ up the calculation.
 
     // We need to add extra space for every line beyond the first.
     //
@@ -106,15 +106,15 @@ Button::Button(
     on_click = std::move(click_handler);
 }
 
-void Button::draw(Renderer& r) {
+void Button::draw() {
     bool active = selectable != Selectable::No;
     auto colour = not active ? InactiveButtonColour
                 : hovered    ? HoverButtonColour
                              : DefaultButtonColour;
-    r.draw_rect(bounding_box, colour);
-    r.draw_outline_rect(bounding_box, 1, colour.lighten(.1f));
+    Renderer::DrawRect(bounding_box, colour);
+    Renderer::DrawOutlineRect(bounding_box, 1, colour.lighten(.1f));
 
-    TextBox::draw(r, active ? ButtonTextColour : InactiveButtonTextColour);
+    TextBox::draw(active ? ButtonTextColour : InactiveButtonTextColour);
 }
 
 void Button::event_click(InputSystem&) {
@@ -135,31 +135,31 @@ Label::Label(
     std::string_view text,
     FontSize sz,
     Position pos
-) : Widget(parent, pos), _text(Renderer::current().text(text, sz)) {
+) : Widget(parent, pos), _text(Renderer::GetText(text, sz)) {
     reflow = Reflow::Soft;
 }
 
-void Label::draw(Renderer& r) {
+void Label::draw() {
     if (fixed_height != 0) {
-        auto _ = PushTransform(r);
+        auto _ = PushTransform();
         xy position = CenterTextInBox(text, fixed_height, bounding_box);
-        r.draw_text(text, position, colour);
+        Renderer::DrawText(text, position, colour);
     } else {
         xy position = auto{pos}.voffset(i32(text.depth)).resolve(parent.bounding_box, text.text_size);
-        r.draw_text(text, position, colour);
+        Renderer::DrawText(text, position, colour);
     }
 
-    if (selectable == Selectable::Yes) r.draw_outline_rect(
+    if (selectable == Selectable::Yes) Renderer::DrawOutlineRect(
         bounding_box.grow(5),
         3,
         Colour::RGBA(0xa4dc'a0ff)
     );
 }
 
-void Label::refresh(Renderer&, bool) {
+void Label::refresh(bool) {
     defer {
         auto sz = text.text_size;
-        UpdateBoundingBox(Size{sz.wd, std::max(sz.ht, fixed_height)});
+        UpdateBoundingBox(Sz{sz.wd, std::max(sz.ht, fixed_height)});
     };
 
     if (reflow == Reflow::None) return;
@@ -214,18 +214,18 @@ auto TextBox::TextPos(const Text& text) -> xy {
     return CenterTextInBox(text, bounding_box.height(), bounding_box);
 }
 
-void TextBox::draw(Renderer& r) {
-    draw(r, label.empty ? Colour::Grey : Colour::White);
+void TextBox::draw() {
+    draw(label.empty ? Colour::Grey : Colour::White);
 }
 
-void TextBox::draw(Renderer& r, Colour text_colour) {
+void TextBox::draw(Colour text_colour) {
     auto& text = label.empty and placeholder.has_value() ? *placeholder : label;
-    auto _ = PushTransform(r);
+    auto _ = PushTransform();
     auto pos = TextPos(text);
-    r.draw_text(text, pos, text_colour);
+    Renderer::DrawText(text, pos, text_colour);
     if (cursor_offs != -1) {
         auto [asc, desc] = text.font.strut_split();
-        r.draw_line(
+        Renderer::DrawLine(
             xy(i32(pos.x) + cursor_offs, pos.y - i32(desc)),
             xy(i32(pos.x) + cursor_offs, pos.y + i32(asc)),
             Colour::White
@@ -233,10 +233,10 @@ void TextBox::draw(Renderer& r, Colour text_colour) {
     }
 }
 
-void TextBox::refresh(Renderer&, bool full) {
+void TextBox::refresh(bool full) {
     if (not full) return RefreshBoundingBox();
     auto strut = label.font.strut();
-    Size sz{
+    Sz sz{
         std::max(min_wd, i32(label.width)) + 2 * padding,
         std::max({min_ht, i32(label.height + label.depth), strut}) + 2 * padding,
     };
@@ -268,7 +268,7 @@ TextEdit::TextEdit(
     selectable = Selectable::Yes;
 } // clang-format on
 
-void TextEdit::draw(Renderer& r) {
+void TextEdit::draw() {
     if (dirty) {
         dirty = false;
         label.content = hide_text ? std::u32string(text.size(), U'•') : text;
@@ -298,7 +298,7 @@ void TextEdit::draw(Renderer& r) {
     //      interpolate between them to position the cluster in the middle
     //      somewhere.
     if (no_blink_ticks) no_blink_ticks--;
-    if (selected and not clusters.empty() and (no_blink_ticks or r.blink_cursor())) {
+    if (selected and not clusters.empty() and (no_blink_ticks or Renderer::ShouldBlinkCursor())) {
         cursor_offs = [&] -> i32 {
             // Cursor is at the start/end of the text.
             if (cursor == 0) return 0;
@@ -352,12 +352,12 @@ void TextEdit::draw(Renderer& r) {
         cursor_offs = -1;
     }
 
-    if (hovered) r.set_cursor(Cursor::IBeam);
+    if (hovered) Renderer::SetActiveCursor(Cursor::IBeam);
 
     auto colour = hovered ? HoverButtonColour : DefaultButtonColour;
-    r.draw_rect(bounding_box, colour);
-    r.draw_outline_rect(bounding_box, 1, colour.lighten(.1f));
-    TextBox::draw(r);
+    Renderer::DrawRect(bounding_box, colour);
+    Renderer::DrawOutlineRect(bounding_box, 1, colour.lighten(.1f));
+    TextBox::draw();
 }
 
 void TextEdit::event_click(InputSystem& input) {

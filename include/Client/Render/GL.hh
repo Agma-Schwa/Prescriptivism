@@ -21,7 +21,7 @@
 namespace pr::client {
 using namespace gl;
 
-struct Size;
+struct Sz;
 
 class DrawableTexture;
 class ShaderProgram;
@@ -87,18 +87,18 @@ constexpr auto pr::client::flip(Axis a) -> Axis {
     return a == Axis::X ? Axis::Y : Axis::X;
 }
 
-struct pr::client::Size {
+struct pr::client::Sz {
     LIBBASE_SERIALISE(wd, ht);
 
     i32 wd{};
     i32 ht{};
 
-    constexpr Size() = default;
-    constexpr Size(i32 both) : wd(both), ht(both) {}
-    constexpr Size(i32 wd, i32 ht) : wd(wd), ht(ht) {}
-    constexpr Size(f32 wd, f32 ht) : wd(i32(wd)), ht(i32(ht)) {}
-    constexpr Size(u32 wd, u32 ht) : wd(i32(wd)), ht(i32(ht)) {}
-    constexpr Size(Axis a, i32 axis_value, i32 other)
+    constexpr Sz() = default;
+    constexpr Sz(i32 both) : wd(both), ht(both) {}
+    constexpr Sz(i32 wd, i32 ht) : wd(wd), ht(ht) {}
+    constexpr Sz(f32 wd, f32 ht) : wd(i32(wd)), ht(i32(ht)) {}
+    constexpr Sz(u32 wd, u32 ht) : wd(i32(wd)), ht(i32(ht)) {}
+    constexpr Sz(Axis a, i32 axis_value, i32 other)
         : wd(a == Axis::X ? axis_value : other),
           ht(a == Axis::Y ? axis_value : other) {}
 
@@ -112,13 +112,13 @@ struct pr::client::Size {
     constexpr auto vec() const -> vec2 { return {wd, ht}; }
 
 private:
-    friend constexpr bool operator==(Size, Size) = default;
-    friend constexpr auto operator+(Size a, Size b) -> Size {
-        return Size(a.wd + b.wd, a.ht + b.ht);
+    friend constexpr bool operator==(Sz, Sz) = default;
+    friend constexpr auto operator+(Sz a, Sz b) -> Sz {
+        return Sz(a.wd + b.wd, a.ht + b.ht);
     }
 
-    friend constexpr auto operator*(Size sz, f32 scale) -> Size {
-        return Size(sz.wd * scale, sz.ht * scale);
+    friend constexpr auto operator*(Sz sz, f32 scale) -> Sz {
+        return Sz(sz.wd * scale, sz.ht * scale);
     }
 };
 
@@ -248,7 +248,7 @@ class pr::client::Texture : Descriptor<glDeleteTextures> {
     GLenum type{};
     Readonly(u32, width);
     Readonly(u32, height);
-    ComputedReadonly(Size, size, Size(width, height));
+    ComputedReadonly(Sz, size, Sz(width, height));
 
 public:
     Texture() = default;
@@ -311,7 +311,7 @@ public:
     ) : DrawableTexture(data, width, height, format, type, GL_TEXTURE_2D, GL_TEXTURE0, tile) {}
 
     /// Create triangle strip texture vertices for a given size.
-    auto create_vertices(Size size) const -> std::array<vec4, 4>;
+    auto create_vertices(Sz size) const -> std::array<vec4, 4>;
 
     /// Create triangle strip texture vertices for a given size.
     auto create_vertices_scaled(f32 scale) const -> std::array<vec4, 4>;

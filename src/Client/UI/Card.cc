@@ -284,9 +284,7 @@ LateInit<DrawableTexture> LockedTexture;
 /// The card shadow texture.
 LateInit<DrawableTexture> CardShadow;
 
-// This only takes a renderer to ensure that it is called
-// after the renderer has been initialised.
-void client::InitialiseUI(Renderer&) {
+void client::InitialiseUI() {
     LockedTexture.init(DrawableTexture::LoadFromFile("assets/locked.webp"));
     CardShadow.init(DrawableTexture::LoadFromFile("assets/shadow.webp"));
     SilenceLog _;
@@ -313,14 +311,14 @@ Card::Card(
     description.colour = Colour::Black;
 }
 
-void Card::draw(Renderer& r) {
-    auto _ = PushTransform(r);
+void Card::draw() {
+    auto _ = PushTransform();
 
     // Draw a drop shadow before anything else; scale it to the card size
     // since we only have a single drop shadow texture.
     {
-        auto _ = r.push_matrix({}, CardSize[scale].wd / f32(CardSize[Preview].wd));
-        r.draw_texture(*CardShadow, {-20, -20});
+        auto _ = Renderer::PushMatrix({}, CardSize[scale].wd / f32(CardSize[Preview].wd));
+        Renderer::DrawTexture(*CardShadow, {-20, -20});
     }
 
     auto colour = variant == Variant::Regular ? outline_colour
@@ -329,34 +327,34 @@ void Card::draw(Renderer& r) {
                                               : outline_colour.darken(.2f);
 
     AABB rect{{0, 0}, CardSize[scale]};
-    r.draw_rect(rect, colour.lighten(.1f), BorderRadius[scale]);
-    if (selected) r.draw_outline_rect(
+    Renderer::DrawRect(rect, colour.lighten(.1f), BorderRadius[scale]);
+    if (selected) Renderer::DrawOutlineRect(
         rect,
         CardStacks::CardGaps[scale] / 2,
         Colour{50, 50, 200, 255},
         BorderRadius[scale]
     );
 
-    r.draw_outline_rect(
+    Renderer::DrawOutlineRect(
         rect.shrink(Border[scale].wd, Border[scale].ht),
-        Size{Border[scale]},
+        Sz{Border[scale]},
         colour,
         BorderRadius[scale]
     );
 
-    DrawChildren(r);
+    DrawChildren();
 
     // Draw the border *after* the children since it must be drawn
     // on top of the image.
     auto b = InnerBorder[scale];
-    r.draw_outline_rect(
+    Renderer::DrawOutlineRect(
         rect.shrink(Border[scale].wd + b, Border[scale].ht + b),
         b,
         colour.darken(.1f),
         b
     );
 
-    if (id.is_power()) r.draw_outline_rect(
+    if (id.is_power()) Renderer::DrawOutlineRect(
         image.bounding_box.shrink(b),
         b,
         colour.darken(.1f),
@@ -364,7 +362,7 @@ void Card::draw(Renderer& r) {
     );
 
     // Draw a white rectangle on top of this card if it is inactive.
-    if (overlay == Overlay::Inactive) r.draw_rect(
+    if (overlay == Overlay::Inactive) Renderer::DrawRect(
         rect,
         Colour{255, 255, 255, 200},
         BorderRadius[scale]
@@ -375,19 +373,19 @@ void Card::draw(Renderer& r) {
     //       respectively.
 }
 
-void Card::DrawChildren(Renderer& r) {
-    code.draw(r);
-    image.draw(r);
-    middle.draw(r);
-    description.draw(r);
+void Card::DrawChildren() {
+    code.draw();
+    image.draw();
+    middle.draw();
+    description.draw();
 
     // Do not draw the name if this is a small sound card.
     if (scale > OtherPlayer or id.is_power())
-        name.draw(r);
+        name.draw();
 
     if (id.is_sound()) {
         auto offs = Padding[scale];
-        for (int i = 0; i < count; ++i) r.draw_rect(
+        for (int i = 0; i < count; ++i) Renderer::DrawRect(
             Position{-3 * offs, -(2 * offs + 2 * i * offs)}
                 .hoffset(-Border[scale].ht)
                 .voffset(-Border[scale].wd)
@@ -398,7 +396,7 @@ void Card::DrawChildren(Renderer& r) {
     }
 }
 
-void Card::refresh(Renderer& r, bool full) {
+void Card::refresh(bool full) {
     // If the window was resized, we don’t need to update the
     // font size etc. every time. Crucially, this behaviour is
     // also used to manually override the card bounding box during
@@ -438,7 +436,7 @@ void Card::refresh(Renderer& r, bool full) {
         // add any extra vertical padding here.
         auto wd = CardSize[scale].wd - 2 * Border[scale].wd;
         auto ht = wd / 4 * 3; // Arbitrary aspect ratio.
-        image.fixed_size = Size{wd, ht};
+        image.fixed_size = Sz{wd, ht};
         image.pos = Position{Border[scale].wd, -Border[scale].ht}.voffset(-name_height);
 
         // The description is below the image.
@@ -454,11 +452,11 @@ void Card::refresh(Renderer& r, bool full) {
     }
 
     // Finally, refresh our children.
-    code.refresh(r, full);
-    name.refresh(r, full);
-    middle.refresh(r, full);
-    description.refresh(r, full);
-    image.refresh(r, full);
+    code.refresh(full);
+    name.refresh(full);
+    middle.refresh(full);
+    description.refresh(full);
+    image.refresh(full);
 }
 
 void Card::set_id(CardId ct) {
@@ -516,12 +514,12 @@ TRIVIAL_CACHING_SETTER(Card, Scale, scale)
 // =============================================================================
 //  Stack
 // =============================================================================
-void CardStacks::Stack::draw(Renderer& r) {
-    Group::draw(r);
+void CardStacks::Stack::draw() {
+    Group::draw();
     if (selected) {
         Assert(not widgets.empty(), "Selected empty stack?");
         auto& c = cards().front();
-        r.draw_outline_rect(
+        Renderer::DrawOutlineRect(
             bounding_box,
             CardGaps[c.scale] / 2,
             Colour{50, 50, 200, 255},
@@ -530,12 +528,12 @@ void CardStacks::Stack::draw(Renderer& r) {
     }
 
     if (locked) {
-        auto _ = PushTransform(r);
+        auto _ = PushTransform();
         auto cs = Card::CardSize[scale];
         auto b = Card::Border[scale];
         auto p = Card::Padding[scale];
         auto sz = LockedTexture->size * Card::IconScale[scale];
-        r.draw_texture_scaled(
+        Renderer::DrawTextureScaled(
             *LockedTexture,
             Position{b.wd + p, -cs.ht + 2 * (b.ht + p)}.resolve(bounding_box, sz),
             Card::IconScale[scale]
@@ -554,13 +552,13 @@ void CardStacks::Stack::push(CardId card) {
     if (full) c.variant = Card::Variant::FullStackTop;
 }
 
-void CardStacks::Stack::refresh(Renderer& r, bool full) {
+void CardStacks::Stack::refresh(bool full) {
     if (full) {
         for (auto& c : cards()) c.scale = scale;
         gap = -Card::CardSize[scale].ht + 2 * Card::Border[scale].ht;
     }
 
-    Group::refresh(r, full);
+    Group::refresh(full);
 }
 
 TRIVIAL_CACHING_SETTER(
@@ -602,7 +600,7 @@ auto CardStacks::selected_child(xy rel_pos) -> SelectResult {
     return res;
 }
 
-void CardStacks::refresh(Renderer& r, bool full) {
+void CardStacks::refresh(bool full) {
     auto ch = stacks();
     if (ch.empty()) return;
 
@@ -626,7 +624,7 @@ void CardStacks::refresh(Renderer& r, bool full) {
     }
 
     // And refresh the group.
-    Group::refresh(r, full);
+    Group::refresh(full);
 }
 
 void CardStacks::set_overlay(Card::Overlay new_value) {

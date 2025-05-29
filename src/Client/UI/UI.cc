@@ -17,11 +17,11 @@ using namespace pr::client;
 // =============================================================================
 //  Helpers
 // =============================================================================
-auto Position::resolve(AABB parent_box, Size object_size) -> xy {
+auto Position::resolve(AABB parent_box, Sz object_size) -> xy {
     return resolve(parent_box.size(), object_size);
 }
 
-auto Position::resolve(Size parent_size, Size object_size) -> xy {
+auto Position::resolve(Sz parent_size, Sz object_size) -> xy {
     static auto Clamp = [](i32 val, i32 obj_size, i32 total_size) -> i32 {
         if (val == Centered) return (total_size - obj_size) / 2;
         if (val < 0) return total_size + val - obj_size;
@@ -80,7 +80,7 @@ void Widget::RefreshBoundingBox() {
     UpdateBoundingBox(bounding_box.size());
 }
 
-void Widget::UpdateBoundingBox(Size size) {
+void Widget::UpdateBoundingBox(Sz size) {
     auto scaled = size * ui_scale;
     SetBoundingBox(AABB{pos.resolve(parent.bounding_box, size), size});
     scaled_bounding_box = AABB{pos.resolve(parent.bounding_box, scaled), scaled};
@@ -99,9 +99,9 @@ auto Widget::absolute_position() -> xy {
     });
 }
 
-void Widget::draw_absolute(Renderer& r, xy a, f32 scale) {
-    auto _ = r.push_matrix(a - scaled_bounding_box.origin(), scale);
-    draw(r);
+void Widget::draw_absolute(xy a, f32 scale) {
+    auto _ = Renderer::PushMatrix(a - scaled_bounding_box.origin(), scale);
+    draw();
 }
 
 bool Widget::has_parent(Element* other) {
@@ -117,8 +117,8 @@ auto Widget::parent_screen() -> Screen& {
     return utils::last(parents())->as<Screen>();
 }
 
-auto Widget::PushTransform(Renderer& r) -> Renderer::MatrixRAII {
-    return r.push_matrix(scaled_bounding_box.origin(), ui_scale);
+auto Widget::PushTransform() -> MatrixRAII {
+    return Renderer::PushMatrix(scaled_bounding_box.origin(), ui_scale);
 }
 
 auto Widget::selected_child(xy) -> SelectResult {
@@ -166,16 +166,16 @@ void Widget::set_needs_refresh(bool new_value) {
         g->needs_refresh = true;
 }
 
-void WidgetHolder::DrawVisibleElements(Renderer& r) {
-    for (auto& e : visible_elements()) e.draw(r);
+void WidgetHolder::DrawVisibleElements() {
+    for (auto& e : visible_elements()) e.draw();
 }
 
-void WidgetHolder::RefreshElement(Renderer& r, Widget& w) {
+void WidgetHolder::RefreshElement(Widget& w) {
     // Always clear out the refresh flag before refreshing the element
     // since it may decide to set it back to true immediately.
     bool requested = w.needs_refresh;
     w.needs_refresh = false;
-    w.refresh(r, requested);
+    w.refresh(requested);
 }
 
 auto WidgetHolder::index_of(Widget& c) -> std::optional<usz> {
@@ -199,56 +199,38 @@ void WidgetHolder::remove(usz idx) {
 // =============================================================================
 Arrow::Arrow(Element* parent, Position pos, vec2 direction, i32 length)
     : Widget(parent, pos), _direction(glm::normalize(direction)), length(length) {
-    UpdateBoundingBox(Size{length, thickness});
+    UpdateBoundingBox(Sz{length, thickness});
 }
 
-void Arrow::draw(Renderer& r) {
-    auto _ = PushTransform(r);
-    r.draw_arrow(xy(), xy(direction) * length, thickness, colour);
+void Arrow::draw() {
+    auto _ = PushTransform();
+    Renderer::DrawArrow(xy(), xy(direction) * length, thickness, colour);
 }
 
 void Arrow::set_direction(vec2 new_value) {
     _direction = glm::normalize(new_value);
 }
 
-Throbber::Throbber(Element* parent, Position pos)
-    : Widget(parent, pos), vao(VertexLayout::Position2D) {
-    vec2 verts[]{
-        {-R, -R},
-        {-R, R},
-        {R, -R},
-        {R, R}
-    };
-    vao.add_buffer(verts, gl::GL_TRIANGLE_STRIP);
-    UpdateBoundingBox(Size{i32(R), i32(R)});
+Throbber::Throbber(Element* parent, Position pos) : Widget(parent, pos)  {
+    UpdateBoundingBox(Sz{i32(R), i32(R)});
 }
 
-void Throbber::draw(Renderer& r) {
+void Throbber::draw() {
     static constexpr f32 Rate = 3; // Smaller means faster.
 
     // Uses absolute position because it may not have a parent.
-    auto at = pos.resolve(r.size(), {i32(R), i32(R)});
-    auto rads = f32(glm::radians(fmod(360 * Rate - SDL_GetTicks(), 360 * Rate) / Rate));
-    auto xfrm = glm::identity<mat4>();
-    xfrm = translate(xfrm, vec3(R, R, 0));
-    xfrm = rotate(xfrm, rads, vec3(0, 0, 1));
-
-    r.use(r.throbber_shader, {});
-    r.throbber_shader.uniform("position", at.vec());
-    r.throbber_shader.uniform("rotation", xfrm);
-    r.throbber_shader.uniform("r", R);
-
-    vao.draw_vertices();
+    auto at = pos.resolve(Renderer::GetWindowSize(), {i32(R), i32(R)});
+    Renderer::DrawThrobber(at, R, Rate);
 }
 
-void Image::draw(Renderer& r) {
-    if (texture) r.draw_texture_sized(*texture, bounding_box);
+void Image::draw() {
+    if (texture) Renderer::DrawTextureSized(*texture, bounding_box);
 }
 
-void Image::refresh(Renderer&, bool full) {
+void Image::refresh(bool full) {
     if (not full) return RefreshBoundingBox();
     if (not texture) {
-        UpdateBoundingBox(Size{});
+        UpdateBoundingBox(Sz{});
         return;
     }
 
@@ -258,7 +240,7 @@ void Image::refresh(Renderer&, bool full) {
     UpdateBoundingBox(sz);
 }
 
-TRIVIAL_CACHING_SETTER(Image, Size, fixed_size, );
+TRIVIAL_CACHING_SETTER(Image, Sz, fixed_size, );
 TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture);
 
 // =============================================================================
@@ -281,10 +263,9 @@ Group::InterpolateGroupPositions::InterpolateGroupPositions(
 }
 
 void Group::InterpolateGroupPositions::ComputeEndPositions() {
-    auto& r = g.parent_screen().renderer;
-    g.ComputeDefaultLayout(r);
+    g.ComputeDefaultLayout();
     for (auto& w : g.widgets) positions[&w].end = w.pos;
-    g.FinishLayout(r); // Recompute BB.
+    g.FinishLayout(); // Recompute BB.
 }
 
 void Group::InterpolateGroupPositions::on_done() {
@@ -293,14 +274,12 @@ void Group::InterpolateGroupPositions::on_done() {
 }
 
 void Group::InterpolateGroupPositions::tick() {
-    auto& r = g.parent_screen().renderer;
-
     // Another widget was added or removed.
     if (g.needs_refresh) {
         // Refresh the group in case a derived class needs to set
         // any properties on the widget that was just added (e.g.
         // the scale in case of a card stack).
-        g.refresh(r, true);
+        g.refresh(true);
 
         // Add the start positions of elements that were added.
         for (auto& w : g.widgets)
@@ -320,10 +299,10 @@ void Group::InterpolateGroupPositions::tick() {
     }
 
     // Refresh our children.
-    for (auto& c : g.widgets) g.RefreshElement(r, c);
+    for (auto& c : g.widgets) g.RefreshElement(c);
 }
 
-void Group::ComputeDefaultLayout(Renderer& r) {
+void Group::ComputeDefaultLayout() {
     // Reset our bounding box to our parent’s before refreshing the
     // children; otherwise, nested groups can get stuck at a smaller
     // size: the child group will base its width around the parent’s
@@ -338,7 +317,7 @@ void Group::ComputeDefaultLayout(Renderer& r) {
     Axis a = vertical ? Axis::Y : Axis::X;
     i32 total_extent = 0;
     for (auto& c : widgets) {
-        RefreshElement(r, c);
+        RefreshElement(c);
         total_extent += c.bounding_box.extent(a);
 
         // If the gap is *negative*, i.e. we’re supposed to overlap
@@ -366,11 +345,11 @@ void Group::ComputeDefaultLayout(Renderer& r) {
     }
 }
 
-void Group::FinishLayout(Renderer& r) {
+void Group::FinishLayout() {
     Assert(not widgets.empty());
 
     // Refresh the children once so the extent calculations below are correct.
-    for (auto& c : widgets) RefreshElement(r, c);
+    for (auto& c : widgets) RefreshElement(c);
 
     // Compute the combined extent along the layout axis.
     i32 extent{};
@@ -388,11 +367,11 @@ void Group::FinishLayout(Renderer& r) {
     auto max = rgs::max(widgets | vws::transform([&](auto& w) { return w.bounding_box.extent(flip(a)); }));
 
     // Update our bounding box.
-    auto sz = Size{a, extent, max};
+    auto sz = Sz{a, extent, max};
     UpdateBoundingBox(sz);
 
     // And refresh the children again now that we know where everything is.
-    for (auto& c : widgets) RefreshElement(r, c);
+    for (auto& c : widgets) RefreshElement(c);
 
     // Refreshing this group’s elements might have triggered the refresh
     // flag. Do not refresh again after we’re done here.
@@ -429,9 +408,9 @@ void Group::StartAnimation(chr::milliseconds duration) {
     parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this, duration));
 }
 
-void Group::RecomputeLayout(Renderer& r) {
-    ComputeDefaultLayout(r);
-    FinishLayout(r);
+void Group::RecomputeLayout() {
+    ComputeDefaultLayout();
+    FinishLayout();
 }
 
 void Group::clear() {
@@ -439,21 +418,21 @@ void Group::clear() {
     widgets.clear();
 }
 
-void Group::draw(Renderer& r) {
-    auto _ = PushTransform(r);
-    DrawVisibleElements(r);
+void Group::draw() {
+    auto _ = PushTransform();
+    DrawVisibleElements();
 }
 
 auto Group::hovered_child(xy rel_pos) -> SelectResult {
     return HoverSelectHelper(rel_pos, &Widget::hovered_child, &Widget::hoverable);
 }
 
-void Group::refresh(Renderer& r, bool full) {
+void Group::refresh(bool full) {
     if (widgets.empty()) return;
 
     // If we’re in an animation, then our layout is controlled
     // by it; don’t do anything here in that case.
-    if (not animation) RecomputeLayout(r);
+    if (not animation) RecomputeLayout();
 }
 
 auto Group::selected_child(xy rel_pos) -> SelectResult {
@@ -497,7 +476,7 @@ void InputSystem::process_events() {
     mouse = {};
     f32 x, y;
     SDL_GetMouseState(&x, &y);
-    mouse.pos = {x, renderer.size().ht - y};
+    mouse.pos = {x, Renderer::GetWindowSize().ht - y};
 
     // Process events.
     SDL_Event event;
@@ -517,7 +496,7 @@ void InputSystem::process_events() {
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_F12) renderer.reload_shaders();
+                if (event.key.key == SDLK_F12) Renderer::ReloadAllShaders();
                 kb_events.emplace_back(event.key.key, event.key.mod);
                 break;
 
@@ -526,13 +505,6 @@ void InputSystem::process_events() {
                 break;
         }
     }
-}
-
-void InputSystem::update_selection(bool is_element_selected) {
-    if (was_selected == is_element_selected) return;
-    was_selected = is_element_selected;
-    if (is_element_selected) SDL_StartTextInput(renderer.sdl_window());
-    else SDL_StopTextInput(renderer.sdl_window());
 }
 
 // =============================================================================
@@ -544,34 +516,34 @@ void Screen::DeleteAllChildren() {
     widgets.clear();
 }
 
-void Screen::draw(Renderer& r) {
-    r.set_cursor(Cursor::Default);
-    DrawVisibleElements(r);
+void Screen::draw() {
+    Renderer::SetActiveCursor(Cursor::Default);
+    DrawVisibleElements();
     for (auto& e : effects) {
-        if (auto a = dynamic_cast<Animation*>(&e)) a->draw(r);
+        if (auto a = dynamic_cast<Animation*>(&e)) a->draw();
         if (e.blocking) break;
     }
 }
 
-void Screen::refresh(Renderer& r) {
-    SetBoundingBox(AABB({0, 0}, r.size()));
-    on_refresh(r);
+void Screen::refresh() {
+    SetBoundingBox(AABB({0, 0}, Renderer::GetWindowSize()));
+    on_refresh();
 
     // Size hasn’t changed. Still update any elements that
     // requested a refresh. Also ignore visibility here.
-    if (prev_size == r.size()) {
+    if (prev_size == Renderer::GetWindowSize()) {
         for (auto& e : widgets)
             if (e.needs_refresh)
-                RefreshElement(r, e);
+                RefreshElement(e);
         return;
     }
 
     // Refresh every visible element, and every element that
     // requested a refresh.
-    prev_size = r.size();
+    prev_size = Renderer::GetWindowSize();
     for (auto& e : widgets)
         if (e.visible or e.needs_refresh)
-            RefreshElement(r, e);
+            RefreshElement(e);
 }
 
 void Screen::tick(InputSystem& input) {
@@ -592,7 +564,7 @@ void Screen::tick(InputSystem& input) {
     // this needs to weird in-between flickering for a single frame if
     // an effect happens to modify UI state in a way that requires a
     // refresh.
-    if (not effects.empty()) refresh(input.renderer);
+    if (not effects.empty()) refresh();
 
     // Remove any that are done.
     effects.erase_if(&Effect::done);

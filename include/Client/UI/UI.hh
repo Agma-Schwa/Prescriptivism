@@ -62,7 +62,7 @@ enum class Anchor : u8;
 enum class Selectable : u8;
 using Hoverable = Selectable;
 
-void InitialiseUI(Renderer& r);
+void InitialiseUI();
 
 /// Interpolate between two positions.
 ///
@@ -180,8 +180,8 @@ struct pr::client::Position {
     }
 
     /// Resolve centering and anchors relative to the parent box.
-    auto resolve(AABB parent_box, Size object_size) -> xy;
-    auto resolve(Size parent_size, Size object_size) -> xy;
+    auto resolve(AABB parent_box, Sz object_size) -> xy;
+    auto resolve(Sz parent_size, Sz object_size) -> xy;
 
     /// Offset vertically.
     constexpr auto voffset(i32 offset) -> Position& {
@@ -207,13 +207,12 @@ class pr::client::InputSystem {
     bool was_selected = false;
 
 public:
-    Renderer& renderer;
     std::u32string text_input;
     std::vector<Event> kb_events;
     MouseState mouse;
     bool quit = false;
 
-    InputSystem(Renderer& r) : renderer(r) {}
+    InputSystem() {}
 
     void game_loop(std::function<void()> tick);
     void process_events();
@@ -250,7 +249,7 @@ public:
     bool is() { return (dynamic_cast<Ts*>(this) or ...); }
 
     /// Draw this element.
-    virtual void draw(Renderer& r) = 0;
+    virtual void draw() = 0;
 
 protected:
     /// This is mainly intended to be used by Screen; widgets should
@@ -303,7 +302,7 @@ public:
     virtual void event_input(InputSystem&) {}
 
     /// Draw this widget at a fixed position.
-    void draw_absolute(Renderer& r, xy pos, f32 scale = 1.f);
+    void draw_absolute(xy pos, f32 scale = 1.f);
 
     /// Check whether an element is a parent of this widget.
     bool has_parent(Element* other);
@@ -336,7 +335,7 @@ public:
     /// elements may end up centered incorrectly.
     ///
     /// \see Renderer::push_matrix().
-    auto PushTransform(Renderer& r) -> Renderer::MatrixRAII;
+    auto PushTransform() -> MatrixRAII;
 
     /// Recompute bounding box etc.
     ///
@@ -346,10 +345,7 @@ public:
     /// Derived classes must call RefreshBoundingBox(), UpdateBoundingBox(),
     /// or (rarely) SetBoundingBox() whenever this is called (the first is
     /// usually appropriate if a full refresh is not needed).
-    virtual void refresh(
-        [[maybe_unused]] Renderer& r,
-        [[maybe_unused]] bool full
-    ) { RefreshBoundingBox(); }
+    virtual void refresh([[maybe_unused]] bool full) { RefreshBoundingBox(); }
 
     /// Determine which of our children is being selected, if any. Widgets
     /// that don’t have children can just return themselves.
@@ -361,7 +357,7 @@ public:
 protected:
     /// Set a new size for our bounding box and recalculate our
     /// position accordingly.
-    void UpdateBoundingBox(Size sz);
+    void UpdateBoundingBox(Sz sz);
 
     /// Refresh the position of our bounding box without changing
     /// its size. This needs to be called every time the parent
@@ -401,10 +397,10 @@ protected:
     void remove(usz idx);
 
     /// Draw all elements that are actually visible.
-    void DrawVisibleElements(Renderer& r);
+    void DrawVisibleElements();
 
     /// Refresh a child element.
-    void RefreshElement(Renderer& r, Widget& w);
+    void RefreshElement(Widget& w);
 };
 
 /// A screen that displays elements and controls user
@@ -416,11 +412,8 @@ class pr::client::Screen : public Element
 
     friend void Widget::unselect_impl(Screen&);
 
-    /// The renderer used to draw this screen.
-    Readonly(Renderer&, renderer);
-
     /// Previous size so we don’t refresh every frame.
-    Size prev_size = {};
+    Sz prev_size = {};
 
     /// Effects that are currently in flight.
     StableVector<Effect> effects;
@@ -436,7 +429,7 @@ public:
     /// The hovered element.
     Widget* hovered_element = nullptr;
 
-    explicit Screen(Renderer& r) : _renderer(&r) {}
+    explicit Screen() {}
 
     /// Create an element with this as its parent.
     template <std::derived_from<Widget> El, typename... Args>
@@ -476,13 +469,13 @@ public:
 
     /// Core to run when this screen is refreshed, before refreshing
     /// any child widgets.
-    virtual void on_refresh(Renderer&) {}
+    virtual void on_refresh() {}
 
     /// Render this screen.
     ///
     /// The default renderer renders all UI elements that are part of
     /// this screen.
-    void draw(Renderer& r) override;
+    void draw() override;
 
     /// Whether the effect queue is empty.
     auto effect_queue_empty() -> bool { return effects.empty(); }
@@ -491,7 +484,7 @@ public:
     ///
     /// This recomputes the position of each element after the screen
     /// has been resized and before ticking/rendering.
-    void refresh(Renderer& r);
+    void refresh();
 
     /// Tick this screen.
     ///
@@ -532,8 +525,8 @@ public:
     explicit Label(Element* parent, Text text, Position pos);
     explicit Label(Element* parent, std::string_view text, FontSize sz, Position pos);
 
-    void draw(Renderer& r) override;
-    void refresh(Renderer& r, bool full) override;
+    void draw() override;
+    void refresh(bool full) override;
     void update_text(std::string_view new_text);
 };
 
@@ -559,13 +552,13 @@ protected:
     auto TextPos(const Text& text) -> xy;
 
 public:
-    void draw(Renderer& r) override;
-    void refresh(Renderer& r, bool full) override;
+    void draw() override;
+    void refresh(bool full) override;
     void update_text(std::string_view new_text);
     void update_text(Text new_text);
 
 protected:
-    void draw(Renderer& r, Colour text_colour);
+    void draw(Colour text_colour);
 };
 
 class pr::client::Button : public TextBox {
@@ -576,7 +569,7 @@ public:
         Element* parent,
         std::string_view label,
         Position pos,
-        Font& font = Renderer::current().font(FontSize::Medium),
+        Font& font = Renderer::GetFont(FontSize::Medium),
         i32 padding = 0,
         i32 min_wd = 125,
         i32 min_ht = 0
@@ -590,7 +583,7 @@ public:
     );
 
     void event_click(InputSystem&) override;
-    void draw(Renderer& r) override;
+    void draw() override;
 };
 
 class pr::client::TextEdit : public TextBox {
@@ -627,14 +620,14 @@ public:
         Element* parent,
         Position pos,
         std::string_view placeholder,
-        Font& font = Renderer::current().font(FontSize::Medium),
+        Font& font = Renderer::GetFont(FontSize::Medium),
         i32 padding = 0,
         bool hide_text = false,
         i32 min_wd = 250,
         i32 min_ht = 0
     );
 
-    void draw(Renderer& r) override;
+    void draw() override;
     void event_click(InputSystem& input) override;
     void event_input(InputSystem& input) override;
     void set_hide_text(bool hide);
@@ -645,25 +638,23 @@ public:
 class pr::client::Throbber : public Widget {
     static constexpr f32 R = 20; // Radius of the throbber.
 
-    VertexArrays vao;
-
 public:
     Throbber(Element* parent, Position pos);
 
-    void draw(Renderer& r) override;
+    void draw() override;
 };
 
 class pr::client::Image : public Widget {
     Property(DrawableTexture*, texture, nullptr);
 
     /// The size of the image. If x or y is 0, they are set from the texture.
-    Property(Size, fixed_size, {});
+    Property(Sz, fixed_size, {});
 
 public:
     Image(Element* parent, Position pos) : Widget(parent, pos) {}
 
-    void draw(Renderer& r) override;
-    void refresh(Renderer&, bool full) override;
+    void draw() override;
+    void refresh(bool full) override;
 };
 
 class pr::client::Card : public Widget {
@@ -704,14 +695,14 @@ public:
         Added,
     };
 
-    static constexpr Size CardSize[NumScales] = {Size{70, 100}, Size{140, 200}, Size{280, 400}, Size{420, 600}};
+    static constexpr Sz CardSize[NumScales] = {Sz{70, 100}, Sz{140, 200}, Sz{280, 400}, Sz{420, 600}};
     static constexpr u16 Padding[NumScales] = {2, 3, 5, 7};
     static constexpr u16 InnerBorder[NumScales] = {1, 1, 2, 3};
 
     // The border is slightly uneven; this is because of an optical illusion
     // that makes vertical lines appear thinner than horizontal lines, so we
     // compensate for that here, by making the X border wider than the Y border.
-    static constexpr Size Border[NumScales] = {{5, 4}, {9, 8}, {17, 16}, {25, 24}};
+    static constexpr Sz Border[NumScales] = {{5, 4}, {9, 8}, {17, 16}, {25, 24}};
     static constexpr i32 BorderRadius[NumScales] = {5, 10, 20, 30};
     static constexpr f32 IconScale[NumScales] = {.25f, .5f, 1.f, 2.f};
 
@@ -739,11 +730,11 @@ public:
 
     Card(Element* parent, Position pos);
 
-    void draw(Renderer& r) override;
-    void refresh(Renderer&, bool full) override;
+    void draw() override;
+    void refresh(bool full) override;
 
 private:
-    void DrawChildren(Renderer& r);
+    void DrawChildren();
 };
 
 class pr::client::Arrow : public Widget {
@@ -762,7 +753,7 @@ public:
 
     Arrow(Element* parent, Position pos, vec2 direction = {1, 0}, i32 length = 50);
 
-    void draw(Renderer& r) override;
+    void draw() override;
 };
 
 /// A group of widgets, arranged horizontally or vertically.
@@ -848,21 +839,21 @@ public:
     /// Swap two elements of the group.
     void swap(Widget* a, Widget* b);
 
-    void draw(Renderer& r) override;
+    void draw() override;
     auto hovered_child(xy rel_pos) -> HoverResult override;
-    void refresh(Renderer&, bool full) override;
+    void refresh(bool full) override;
     auto selected_child(xy rel_pos) -> SelectResult override;
 
 private:
-    void ComputeDefaultLayout(Renderer& r);
-    void FinishLayout(Renderer& r);
+    void ComputeDefaultLayout();
+    void FinishLayout();
     auto HoverSelectHelper(
         xy rel_pos,
         auto (Widget::*accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
     void StartAnimation(chr::milliseconds duration = 500ms);
-    void RecomputeLayout(Renderer& r);
+    void RecomputeLayout();
 };
 
 /// A group of widgets, each of which are a stack of cards
@@ -916,8 +907,8 @@ public:
         void make_active(bool active);
         void push(CardId card);
 
-        void draw(Renderer& r) override;
-        void refresh(Renderer&, bool full) override;
+        void draw() override;
+        void refresh(bool full) override;
 
         /// Validation API.
         bool stack_is_locked() const { return locked; }
@@ -990,7 +981,7 @@ public:
     }
 
     auto selected_child(xy rel_pos) -> SelectResult override;
-    void refresh(Renderer&, bool full) override;
+    void refresh(bool full) override;
 };
 
 template <>

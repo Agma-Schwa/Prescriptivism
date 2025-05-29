@@ -28,7 +28,7 @@ DrawableTexture::DrawableTexture(
     GLenum unit,
     bool tile
 ) : Texture(data, width, height, format, type, target, unit, tile) {
-    vao.add_buffer(create_vertices(Size{width, height}), GL_TRIANGLE_STRIP);
+    vao.add_buffer(create_vertices(Sz{width, height}), GL_TRIANGLE_STRIP);
 }
 
 auto DrawableTexture::LoadFromFile(fs::PathRef path) -> DrawableTexture {
@@ -58,7 +58,7 @@ auto DrawableTexture::MakeVerts(f32 wd, f32 ht, f32 u, f32 v) -> std::array<vec4
     };
 }
 
-auto DrawableTexture::create_vertices(Size size) const -> std::array<vec4, 4> {
+auto DrawableTexture::create_vertices(Sz size) const -> std::array<vec4, 4> {
     return MakeVerts(size.wd, size.ht, f32(size.wd) / width, f32(size.ht) / height);
 }
 

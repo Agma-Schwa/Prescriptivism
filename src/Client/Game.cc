@@ -44,12 +44,12 @@ CardPreview::CardPreview(Screen* parent, Position p) : Widget(parent), card{this
     card.scale = Card::Preview;
 }
 
-void CardPreview::draw(Renderer& r) {
-    auto _ = PushTransform(r);
-    card.draw(r);
+void CardPreview::draw() {
+    auto _ = PushTransform();
+    card.draw();
 }
 
-void CardPreview::refresh(Renderer& r, bool) {
+void CardPreview::refresh(bool) {
     // Always refresh this element.
     needs_refresh = true;
 
@@ -64,7 +64,7 @@ void CardPreview::refresh(Renderer& r, bool) {
     visible = true;
     card.id = s.hovered_element->as<Card>().id;
     if (card.needs_refresh) {
-        card.refresh(r, true);
+        card.refresh(true);
         UpdateBoundingBox(card.bounding_box.size());
     }
 }
@@ -91,7 +91,7 @@ public:
         c.visible = false;
         card.id = c.id;
         card.scale = Card::Preview;
-        card.refresh(g.client.renderer, true);
+        card.refresh(true);
         start_pos = c.absolute_position();
         end_pos = Position::VCenter(150).resolve(g.bounding_box, EndSize);
         waiting = true;
@@ -105,8 +105,8 @@ public:
         scale = lerp_smooth(StartSize.ht / f32(EndSize.ht), 1.f, t);
     }
 
-    void draw(Renderer& r) override {
-        card.draw_absolute(r, pos, scale);
+    void draw() override {
+        card.draw_absolute(pos, scale);
     }
 
     void on_done() override {
@@ -118,7 +118,7 @@ public:
 // =============================================================================
 // Play Confirmation Screen
 // =============================================================================
-ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(GameScreen& p): Screen(p.renderer), parent{p} {
+ConfirmPlaySelectedScreen::ConfirmPlaySelectedScreen(GameScreen& p): parent{p} {
     preview = &Create<Card>(Position::Center());
     preview->scale = Card::Preview;
 
@@ -152,7 +152,7 @@ void ConfirmPlaySelectedScreen::No() {
 // =============================================================================
 // Card Choice Challenge Screen
 // =============================================================================
-CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : Screen(p.renderer), parent{p} {
+CardChoiceChallengeScreen::CardChoiceChallengeScreen(GameScreen& p) : parent{p} {
     message = &Create<Label>("", FontSize::Medium, Position::HCenter(-150));
     cards = &Create<CardStacks>(Position::Center().anchor_to(Anchor::Center));
     cards->scale = Card::Hand;
@@ -233,7 +233,7 @@ void CardChoiceChallengeScreen::Confirm() { // clang-format off
 // =============================================================================
 // Negation Challenge Screen
 // =============================================================================
-NegationChallengeScreen::NegationChallengeScreen(GameScreen& p) : Screen(p.renderer), parent{p} {
+NegationChallengeScreen::NegationChallengeScreen(GameScreen& p) : parent{p} {
     auto& group = Create<Group>(Position::Center());
     auto& negation = group.create<Card>(Position());
     group.create<Arrow>(Position(), vec2{1, 0}, 200).thickness = 10;
@@ -266,7 +266,7 @@ void NegationChallengeScreen::enter(sc::PromptNegation p) {
 // =============================================================================
 // Helpers
 // =============================================================================
-GameScreen::GameScreen(Client& c) : Screen(c.renderer), client(c) {
+GameScreen::GameScreen(Client& c) : client(c) {
     // UI is set up in enter().
 }
 
@@ -681,7 +681,7 @@ void GameScreen::enter(sc::StartGame sg) {
     // Put our word in the center, but offset it upward to counteract the anchor,
     // which is there because we want additional cards to ‘hang’ from the top of
     // the word (i.e. cards added to a stack should go below the ‘baseline’).
-    us.word->pos = Position::HCenter(client.renderer.size().ht / 2 + Card::CardSize[us.word->scale].wd)
+    us.word->pos = Position::HCenter(Renderer::GetWindowSize().ht / 2 + Card::CardSize[us.word->scale].wd)
         .anchor_to(Anchor::North);
 
     // Position the other players’ words at the top of the screen.

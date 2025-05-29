@@ -101,7 +101,7 @@ public:
 
     // This takes an array instead of a span to force a specific word size.
     void enter(const constants::Word& word);
-    void on_refresh(Renderer& r) override;
+    void on_refresh() override;
     void tick(InputSystem& input) override;
 };
 
@@ -111,17 +111,9 @@ public:
 class pr::client::Client {
     LIBBASE_IMMOVABLE(Client);
 
-    struct InitRenderer {
-        InitRenderer(Renderer& r) { Renderer::SetThreadRenderer(r); }
-    };
-
 public:
-    /// The main renderer.
-    Renderer renderer;
-    InitRenderer _{renderer};
-
     /// The user input handler.
-    InputSystem input_system{renderer};
+    InputSystem input_system{};
 
     /// Screens.
     MenuScreen menu_screen{*this};
@@ -141,7 +133,7 @@ private:
     /// Screens that are currently open.
     std::vector<Screen*> screen_stack;
 
-    explicit Client(Renderer r);
+    explicit Client();
 
 public:
     /// Run the client for ever.
@@ -174,7 +166,7 @@ public:
 #undef X
 
 private:
-    static auto Startup() -> Renderer;
+    static void Startup();
 
     void RunGame();
     void Tick();

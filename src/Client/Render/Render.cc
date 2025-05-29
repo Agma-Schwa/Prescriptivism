@@ -16,6 +16,9 @@
 
 // clang-format off
 // Include order matters here!
+#include <Client/UI/UI.hh>
+
+
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <freetype/tttables.h>
@@ -26,6 +29,9 @@ using namespace pr;
 using namespace pr::client;
 using namespace base;
 
+// =============================================================================
+//  Error handling helpers
+// =============================================================================
 #define check SDLCallImpl{}->*
 struct SDLCallImpl {
     void operator->*(bool cond) {
@@ -46,6 +52,58 @@ struct FTCallImpl {
     }
 };
 
+// =============================================================================
+//  Renderer implementation
+// =============================================================================
+/// A renderer that renders to a window.
+struct Renderer::Impl {
+    LIBBASE_MOVE_ONLY(Impl);
+
+public:
+    friend AssetLoader;
+
+    SDLWindowHandle window;
+    SDLGLContextStateHandle context;
+    ShaderProgram primitive_shader;
+    ShaderProgram text_shader;
+    ShaderProgram image_shader;
+    ShaderProgram throbber_shader;
+    ShaderProgram rect_shader;
+    FontData font_data;
+    std::unordered_map<Cursor, SDL_Cursor*> cursor_cache;
+    Cursor active_cursor = Cursor::Default;
+    Cursor requested_cursor = Cursor::Default;
+    std::vector<mat4> matrix_stack;
+
+    Impl(int initial_wd, int initial_ht);
+
+    void draw_arrow(xy start, xy end, i32 thickness, Colour c);
+    void draw_line(xy start, xy end, Colour c);
+    void draw_outline_rect(AABB box, Sz thickness, Colour c, i32 border_radius);
+    void draw_rect(xy pos, Sz size, Colour c, i32 border_radius);
+    void draw_text(const Text& text, xy pos, Colour);
+    void draw_texture(const DrawableTexture& tex, xy pos);
+    void draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale);
+    void draw_texture_sized(const DrawableTexture& tex, AABB box);
+    void draw_throbber(xy pos, f32 radius, f32 rate);
+    auto get_font(FontSize size, TextStyle style ) -> Font&;
+    auto frame() -> Frame { return Frame(); }
+    void frame_end();
+    void frame_start();
+    auto push_matrix(xy translate, f32 scale) -> MatrixRAII;
+    void reload_shaders();
+    auto sdl_window() -> SDL_Window* { return window.get(); }
+    void update_cursor();
+    void use(ShaderProgram& shader, xy position);
+};
+
+namespace {
+LateInit<Renderer::Impl> global_renderer;
+}
+
+// =============================================================================
+//  Assets
+// =============================================================================
 constexpr char DefaultFontRegular[]{
 #embed "Fonts/Regular.ttf"
 };
@@ -152,12 +210,12 @@ auto Font::atlas_height() const -> i32 {
 
 auto Font::bold() -> Font& {
     if (style & TextStyle::Bold) return *this;
-    return renderer.font(size, style | TextStyle::Bold);
+    return Renderer::GetFont(size, style | TextStyle::Bold);
 }
 
 auto Font::italic() -> Font& {
     if (style & TextStyle::Italic) return *this;
-    return renderer.font(size, style | TextStyle::Italic);
+    return Renderer::GetFont(size, style | TextStyle::Italic);
 }
 void Font::use() const { atlas.bind(); }
 
@@ -176,7 +234,7 @@ auto Font::AllocBuffer() -> hb_buffer_t* {
 
 Text::Text()
     : _align{TextAlign::SingleLine},
-      _font{&Renderer::current().font(FontSize::Normal, TextStyle::Regular)} {}
+      _font{&Renderer::GetFont(FontSize::Normal, TextStyle::Regular)} {}
 
 Text::Text(Font& font, std::u32string content, TextAlign align)
     : _align{align}, _content{std::move(content)}, _font{&font} {}
@@ -215,7 +273,7 @@ void Text::set_content(std::u32string new_value) {
 
 void Text::set_font_size(FontSize new_size) {
     if (_font->size == new_size) return;
-    _font = &Renderer::current().font(new_size, _font->style);
+    _font = &Renderer::GetFont(new_size, _font->style);
     vertices = std::nullopt;
 }
 
@@ -227,7 +285,7 @@ void Text::set_reflow(Reflow new_value) {
 
 void Text::set_style(TextStyle new_value) {
     if (_font->style == new_value) return;
-    _font = &Renderer::current().font(_font->size, new_value);
+    _font = &Renderer::GetFont(_font->size, new_value);
     vertices = std::nullopt;
 }
 
@@ -667,25 +725,22 @@ void Font::shape(const Text& text, std::vector<TextCluster>* clusters) {
 // =============================================================================
 //  Initialisation
 // =============================================================================
-Renderer::Renderer(int initial_wd, int initial_ht, bool set_active) {
-    static std::once_flag GlobalInit;
-    std::call_once(GlobalInit, [] {
-        check SDL_Init(SDL_INIT_VIDEO);
-        std::atexit(SDL_Quit);
+Renderer::Impl::Impl(int initial_wd, int initial_ht) {
+    check SDL_Init(SDL_INIT_VIDEO);
+    std::atexit(SDL_Quit);
 
-        // OpenGL 3.3, core profile.
-        check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-        check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-        check SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    // OpenGL 3.3, core profile.
+    check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    check SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    check SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-        // Enable double buffering, 24-bit depth buffer, and 8-bit stencil buffer.
-        check SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        check SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        check SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    // Enable double buffering, 24-bit depth buffer, and 8-bit stencil buffer.
+    check SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    check SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    check SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
-        // Enable multisampling.
-        check SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    });
+    // Enable multisampling.
+    check SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
 
     // We want to set the sample count to the maximum value the GPU supports,
     // but to query the value, we need to create a window first! In conclusion,
@@ -767,42 +822,36 @@ Renderer::Renderer(int initial_wd, int initial_ht, bool set_active) {
     glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Make this the current renderer.
-    if (set_active) SetThreadRenderer(*this);
-
     // Push initial matrix.
     matrix_stack.push_back(mat4(1.f));
 }
 
-/// The currently active renderer; this exists because while we still
-/// may want to have multiple renderers eventually, a lot of the program
-/// state is implicitly tied to the OpenGL context / renderer, and we
-/// don’t want to store it everywhere.
-thread_local Renderer* ThreadRenderer = nullptr;
-
-auto Renderer::current() -> Renderer& {
-    Assert(ThreadRenderer, "Thread renderer not set!");
-    return *ThreadRenderer;
+void Renderer::Initialise(int initial_wd, int initial_ht) {
+    global_renderer.init(initial_wd, initial_ht);
 }
 
-void Renderer::SetThreadRenderer(Renderer& r) {
-    ThreadRenderer = &r;
-}
+Frame::Frame() { global_renderer->frame_start(); }
+Frame::~Frame() { global_renderer->frame_end(); }
 
-Renderer::Frame::Frame(Renderer& r) : r(r) { r.frame_start(); }
-Renderer::Frame::~Frame() { r.frame_end(); }
+MatrixRAII::~MatrixRAII() {
+    global_renderer->matrix_stack.pop_back();
+}
 
 // =============================================================================
 //  Drawing
 // =============================================================================
-void Renderer::clear(Colour c) {
-    auto [sx, sy] = size();
+void Renderer::Clear(Colour c) {
+    auto [sx, sy] = GetWindowSize();
     glViewport(0, 0, sx, sy);
     glClearColor(c.r, c.g, c.b, c.a);
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
-void Renderer::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
+void Renderer::DrawArrow(xy start, xy end, i32 thickness, Colour c) {
+    global_renderer->draw_arrow(start, end, thickness, c);
+}
+
+void Renderer::Impl::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
     use(primitive_shader, {});
     primitive_shader.uniform("in_colour", c.vec4());
 
@@ -823,8 +872,8 @@ void Renderer::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
     auto end = end_pos.vec();
     auto dir = glm::normalize(end - start);
     auto head_end = end;
-    auto n1 = glm::vec2(-dir.y, dir.x);
-    auto n2 = glm::vec2(dir.y, -dir.x);
+    auto n1 = vec2(-dir.y, dir.x);
+    auto n2 = vec2(dir.y, -dir.x);
     auto h1 = end + n1 * (thickness * HeadSz) - dir * (thickness * HeadSz);
     auto h2 = end + n2 * (thickness * HeadSz) - dir * (thickness * HeadSz);
     end -= dir * (thickness * HeadSz);
@@ -836,19 +885,29 @@ void Renderer::draw_arrow(xy start_pos, xy end_pos, i32 thickness, Colour c) {
     auto a3 = end + n2 * (thickness / 2.f);
     auto a4 = end + n1 * (thickness / 2.f);
     VertexArrays vao{VertexLayout::Position2D};
-    vec2 verts[] {
+    vec2 verts[]{
         // start -> end
-        a1, a2, a3,
-        a3, a4, a1,
+        a1,
+        a2,
+        a3,
+        a3,
+        a4,
+        a1,
         // head
-        head_end, h1, h2,
+        head_end,
+        h1,
+        h2,
     };
 
     vao.add_buffer(verts, GL_TRIANGLES);
     vao.draw_vertices();
 }
 
-void Renderer::draw_line(xy start, xy end, Colour c) {
+void Renderer::DrawLine(xy start, xy end, Colour c) {
+    global_renderer->draw_line(start, end, c);
+}
+
+void Renderer::Impl::draw_line(xy start, xy end, Colour c) {
     glLineWidth(1);
     use(primitive_shader, {});
     primitive_shader.uniform("in_colour", c.vec4());
@@ -858,9 +917,13 @@ void Renderer::draw_line(xy start, xy end, Colour c) {
     vao.draw_vertices();
 }
 
-void Renderer::draw_outline_rect(
+void Renderer::DrawOutlineRect(AABB box, Sz thickness, Colour c, i32 border_radius) {
+    return global_renderer->draw_outline_rect(box, thickness, c, border_radius);
+}
+
+void Renderer::Impl::draw_outline_rect(
     AABB box,
-    Size thickness,
+    Sz thickness,
     Colour c,
     i32 border_radius
 ) {
@@ -921,7 +984,11 @@ void Renderer::draw_outline_rect(
     vao.draw_vertices();
 }
 
-void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
+void Renderer::DrawRect(xy pos, Sz size, Colour c, i32 border_radius) {
+    return global_renderer->draw_rect(pos, size, c, border_radius);
+}
+
+void Renderer::Impl::draw_rect(xy pos, Sz size, Colour c, i32 border_radius) {
     use(rect_shader, pos);
     rect_shader.uniform("in_colour", c.vec4());
     rect_shader.uniform("size", size.vec());
@@ -937,7 +1004,11 @@ void Renderer::draw_rect(xy pos, Size size, Colour c, i32 border_radius) {
     vao.draw_vertices();
 }
 
-void Renderer::draw_text(
+void Renderer::DrawText(const Text& text, xy pos, Colour c) {
+    global_renderer->draw_text(text, pos, c);
+}
+
+void Renderer::Impl::draw_text(
     const Text& text,
     xy pos,
     Colour colour
@@ -956,7 +1027,11 @@ void Renderer::draw_text(
     text.draw_vertices();
 }
 
-void Renderer::draw_texture(
+void Renderer::DrawTexture(const DrawableTexture& tex, xy pos) {
+    global_renderer->draw_texture(tex, pos);
+}
+
+void Renderer::Impl::draw_texture(
     const DrawableTexture& tex,
     xy pos
 ) {
@@ -964,7 +1039,11 @@ void Renderer::draw_texture(
     tex.draw_vertices();
 }
 
-void Renderer::draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale) {
+void Renderer::DrawTextureScaled(const DrawableTexture& tex, xy pos, f32 scale) {
+    global_renderer->draw_texture_scaled(tex, pos, scale);
+}
+
+void Renderer::Impl::draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale) {
     use(image_shader, pos);
     tex.bind();
     VertexArrays vao{VertexLayout::PositionTexture4D};
@@ -972,7 +1051,11 @@ void Renderer::draw_texture_scaled(const DrawableTexture& tex, xy pos, f32 scale
     vao.draw_vertices();
 }
 
-void Renderer::draw_texture_sized(const DrawableTexture& tex, AABB box) {
+void Renderer::DrawTextureSized(const DrawableTexture& tex, AABB box) {
+    global_renderer->draw_texture_sized(tex, box);
+}
+
+void Renderer::Impl::draw_texture_sized(const DrawableTexture& tex, AABB box) {
     use(image_shader, box.origin());
     tex.bind();
     VertexArrays vao{VertexLayout::PositionTexture4D};
@@ -980,13 +1063,41 @@ void Renderer::draw_texture_sized(const DrawableTexture& tex, AABB box) {
     vao.draw_vertices();
 }
 
-void Renderer::frame_end() {
+void Renderer::DrawThrobber(xy pos, f32 radius, f32 rate) {
+    global_renderer->draw_throbber(pos, radius, rate);
+}
+
+void Renderer::Impl::draw_throbber(xy pos, f32 radius, f32 rate) {
+    VertexArrays vao(VertexLayout::Position2D);
+    vec2 verts[]{
+        {-radius, -radius},
+        {-radius, radius},
+        {radius, -radius},
+        {radius, radius}
+    };
+    vao.add_buffer(verts, GL_TRIANGLE_STRIP);
+
+    auto rads = f32(glm::radians(fmod(360 * rate - SDL_GetTicks(), 360 * rate) / rate));
+    auto xfrm = glm::identity<mat4>();
+    xfrm = translate(xfrm, vec3(radius, radius, 0));
+    xfrm = rotate(xfrm, rads, vec3(0, 0, 1));
+
+    use(throbber_shader, {});
+    throbber_shader.uniform("position", pos.vec());
+    throbber_shader.uniform("rotation", xfrm);
+    throbber_shader.uniform("r", radius);
+
+    vao.draw_vertices();
+}
+
+
+void Renderer::Impl::frame_end() {
     // Swap buffers.
     check SDL_GL_SwapWindow(*window);
 }
 
-void Renderer::frame_start() {
-    clear(DefaultBGColour);
+void Renderer::Impl::frame_start() {
+    Clear(DefaultBGColour);
 
     // Disable mouse capture if the debugger is running.
     if (libassert::is_debugger_present()) {
@@ -997,12 +1108,12 @@ void Renderer::frame_start() {
     // Set the active cursor if it has changed.
     if (requested_cursor != active_cursor) {
         active_cursor = requested_cursor;
-        SetCursorImpl();
+        update_cursor();
     }
 }
 
-void Renderer::use(ShaderProgram& shader, xy position) {
-    auto [sx, sy] = size();
+void Renderer::Impl::use(ShaderProgram& shader, xy position) {
+    auto [sx, sy] = GetWindowSize();
     shader.use_shader_program_dont_call_this_directly();
 
     auto m = matrix_stack.back();
@@ -1015,7 +1126,11 @@ void Renderer::use(ShaderProgram& shader, xy position) {
 // =============================================================================
 //  Creating Objects
 // =============================================================================
-auto Renderer::font(FontSize size, TextStyle style) -> Font& {
+auto Renderer::GetFont(FontSize size, TextStyle style) -> Font& {
+    return global_renderer->get_font(size, style);
+}
+
+auto Renderer::Impl::get_font(FontSize size, TextStyle style) -> Font& {
     // Make sure the font exists.
     auto it = font_data.fonts.find({+size, style});
     Assert(
@@ -1030,17 +1145,23 @@ auto Renderer::font(FontSize size, TextStyle style) -> Font& {
     return it->second;
 }
 
-auto Renderer::frame() -> Frame { return Frame(*this); }
+auto Renderer::PushMatrix(xy translate, f32 scale) -> MatrixRAII {
+    return global_renderer->push_matrix(translate, scale);
+}
 
-auto Renderer::push_matrix(xy translate, f32 scale) -> MatrixRAII {
+auto Renderer::Impl::push_matrix(xy translate, f32 scale) -> MatrixRAII {
     auto m = matrix_stack.back();
     m = glm::translate(m, {translate.x, translate.y, 0});
     m = glm::scale(m, {scale, scale, 1});
     matrix_stack.push_back(m);
-    return MatrixRAII{*this};
+    return MatrixRAII{};
 }
 
-void Renderer::reload_shaders() {
+void Renderer::ReloadAllShaders() {
+    global_renderer->reload_shaders();
+}
+
+void Renderer::Impl::reload_shaders() {
     auto ReloadImpl = [&](ShaderProgram& program, std::string_view shader_name) -> Result<> {
         auto vert = Try(File::Read(std::format("./assets/Shaders/{}.vert", shader_name)));
         auto frag = Try(File::Read(std::format("./assets/Shaders/{}.frag", shader_name)));
@@ -1061,31 +1182,39 @@ void Renderer::reload_shaders() {
     Reload(rect_shader, "Rectangle");
 }
 
-void Renderer::set_cursor(Cursor c) {
+void Renderer::SetActiveCursor(Cursor c) {
     // Rather than actually setting the cursor, we register the
     // change and set it at the start of the next frame; this allows
     // us to avoid flicker in case a cursor change is requested multiple
     // times per frame and thus also makes that possible as a pattern.
-    requested_cursor = c;
+    global_renderer->requested_cursor = c;
 }
 
-bool Renderer::should_render() {
-    return not (SDL_GetWindowFlags(window.get()) & SDL_WINDOW_MINIMIZED);
+bool Renderer::ShouldRender() {
+    return not(SDL_GetWindowFlags(global_renderer->window.get()) & SDL_WINDOW_MINIMIZED);
 }
 
-auto Renderer::text(
+void Renderer::ShutdownRenderer() {
+    global_renderer.reset();
+}
+
+auto Renderer::StartFrame() -> Frame {
+    return global_renderer->frame();
+}
+
+auto Renderer::GetText(
     std::u32string value,
     FontSize size,
     TextStyle style,
     TextAlign align,
     std::vector<TextCluster>* clusters
 ) -> Text {
-    Text t{font(size, style), std::move(value), align};
+    Text t{GetFont(size, style), std::move(value), align};
     t.font.shape(t, clusters);
     return t;
 }
 
-void Renderer::SetCursorImpl() {
+void Renderer::Impl::update_cursor() {
     auto it = cursor_cache.find(active_cursor);
     if (it != cursor_cache.end()) {
         check SDL_SetCursor(it->second);
@@ -1100,14 +1229,14 @@ void Renderer::SetCursorImpl() {
 // =============================================================================
 //  Querying State
 // =============================================================================
-bool Renderer::blink_cursor() {
-    return SDL_GetTicks() % 1'500 < 750;
+auto Renderer::GetWindowSize() -> Sz {
+    i32 wd, ht;
+    check SDL_GetWindowSize(*global_renderer->window, &wd, &ht);
+    return {wd, ht};
 }
 
-auto Renderer::size() -> Size {
-    i32 wd, ht;
-    check SDL_GetWindowSize(*window, &wd, &ht);
-    return {wd, ht};
+bool Renderer::ShouldBlinkCursor() {
+    return SDL_GetTicks() % 1'500 < 750;
 }
 
 // =============================================================================
@@ -1168,14 +1297,19 @@ void AssetLoader::load(std::stop_token stop) {
 }
 
 /// Finish loading assets.
-void AssetLoader::finalise(Renderer& r) {
+void AssetLoader::finalise() {
     // Move resources.
-    r.font_data = std::move(font_data);
+    global_renderer->font_data = std::move(font_data);
 
     // Build font textures.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    for (auto& f : r.font_data.fonts | vws::values) {
-        f._renderer = &r;
+    for (auto& f : global_renderer->font_data.fonts | vws::values)
         f.atlas_width = Texture::MaxSize();
-    }
+}
+
+void InputSystem::update_selection(bool is_element_selected) {
+    if (was_selected == is_element_selected) return;
+    was_selected = is_element_selected;
+    if (is_element_selected) SDL_StartTextInput(global_renderer->sdl_window());
+    else SDL_StopTextInput(global_renderer->sdl_window());
 }

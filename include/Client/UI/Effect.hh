@@ -132,7 +132,7 @@ protected:
 
 public:
     /// Render the animation.
-    virtual void draw(Renderer&) {}
+    virtual void draw() {}
 
 private:
     /// This is static because it, unlike MakeTicker(), is called before the Animation
