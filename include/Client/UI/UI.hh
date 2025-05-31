@@ -781,31 +781,6 @@ class pr::client::Group : public Widget
     /// are centered on the axis on which they are laid out.
     Property(i32, alignment, Position::Centered);
 
-    /// Animation that handles a card being removed.
-    class InterpolateGroupPositions final : public Animation {
-        struct Token {};
-        friend Group;
-        Group& g;
-
-        /// Interpolation data for the child positions.
-        struct InterpData {
-            Position start;
-            Position end;
-        };
-
-        HashMap<Widget*, InterpData> positions;
-
-        void tick();
-        void on_done() override;
-        void ComputeEndPositions();
-
-    public:
-        explicit InterpolateGroupPositions(Group& g, chr::milliseconds duration, Token = {});
-    };
-
-    /// The animation that is currently controlling this group.
-    InterpolateGroupPositions* animation = nullptr;
-
 public:
     /// Whether this group should animate elements being added or removed.
     bool animate = false;
@@ -852,7 +827,6 @@ private:
         auto (Widget::*accessor)(xy)->SelectResult,
         Selectable Widget::* property
     ) -> SelectResult;
-    void StartAnimation(chr::milliseconds duration = 500ms);
     void RecomputeLayout();
 };
 

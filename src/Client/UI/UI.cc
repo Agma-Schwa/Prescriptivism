@@ -246,62 +246,6 @@ TRIVIAL_CACHING_SETTER(Image, DrawableTexture*, texture);
 // =============================================================================
 //  Group
 // =============================================================================
-Group::InterpolateGroupPositions::InterpolateGroupPositions(
-    Group& g,
-    chr::milliseconds duration,
-    Token
-) : Animation(&InterpolateGroupPositions::tick, duration), g{g} {
-    blocking = true;
-    prevent_user_input = true;
-
-    // Save the current positions.
-    for (auto& w : g.widgets) positions[&w].start = w.pos;
-
-    // Compute where everything should be and save those positions too.
-    ComputeEndPositions();
-    g.animation = this;
-}
-
-void Group::InterpolateGroupPositions::ComputeEndPositions() {
-    g.ComputeDefaultLayout();
-    for (auto& w : g.widgets) positions[&w].end = w.pos;
-    g.FinishLayout(); // Recompute BB.
-}
-
-void Group::InterpolateGroupPositions::on_done() {
-    g.needs_refresh = true;
-    g.animation = nullptr;
-}
-
-void Group::InterpolateGroupPositions::tick() {
-    // Another widget was added or removed.
-    if (g.needs_refresh) {
-        // Refresh the group in case a derived class needs to set
-        // any properties on the widget that was just added (e.g.
-        // the scale in case of a card stack).
-        g.refresh(true);
-
-        // Add the start positions of elements that were added.
-        for (auto& w : g.widgets)
-            if (not positions.contains(&w))
-                positions[&w].start = w.pos;
-
-        // And recompute the final layout.
-        ComputeEndPositions();
-    }
-
-    // Interpolate the elements’ positions.
-    auto t = timer.dt();
-    for (auto& w : g.widgets) {
-        auto pos = positions.get(&w);
-        if (not pos) continue;
-        w.pos = lerp_smooth(pos->start, pos->end, t);
-    }
-
-    // Refresh our children.
-    for (auto& c : g.widgets) g.RefreshElement(c);
-}
-
 void Group::ComputeDefaultLayout() {
     // Reset our bounding box to our parent’s before refreshing the
     // children; otherwise, nested groups can get stuck at a smaller
@@ -403,11 +347,6 @@ auto Group::HoverSelectHelper(
     return gap < 0 ? Get(children() | vws::reverse) : Get(children());
 }
 
-void Group::StartAnimation(chr::milliseconds duration) {
-    if (not animate or animation) return;
-    parent_screen().Queue(std::make_unique<InterpolateGroupPositions>(*this, duration));
-}
-
 void Group::RecomputeLayout() {
     ComputeDefaultLayout();
     FinishLayout();
@@ -429,10 +368,7 @@ auto Group::hovered_child(xy rel_pos) -> SelectResult {
 
 void Group::refresh(bool full) {
     if (widgets.empty()) return;
-
-    // If we’re in an animation, then our layout is controlled
-    // by it; don’t do anything here in that case.
-    if (not animation) RecomputeLayout();
+    RecomputeLayout();
 }
 
 auto Group::selected_child(xy rel_pos) -> SelectResult {
@@ -441,17 +377,14 @@ auto Group::selected_child(xy rel_pos) -> SelectResult {
 
 void Group::remove(u32 idx) {
     WidgetHolder::remove(idx);
-    StartAnimation();
 }
 
 void Group::remove(Widget& s) {
     WidgetHolder::remove(s);
-    StartAnimation();
 }
 
 void Group::swap(Widget* a, Widget* b) {
     widgets.swap_indices(widgets.index_of(*a).value(), widgets.index_of(*b).value());
-    StartAnimation(350ms);
 }
 
 void Group::make_selectable(Selectable new_value) {
